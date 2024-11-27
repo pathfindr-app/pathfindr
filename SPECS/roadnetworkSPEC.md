@@ -3,7 +3,7 @@
 ## System Overview
 
 ### Purpose
-Create an efficient road network graph system using Online Maps' OSM integration that mimics HONZAAPREF's optimized approach while leveraging Unity-specific optimizations.
+Create an efficient road network graph system using Online Maps' OSM integration that combines HONZAAPREF's optimized graph creation with our extended feature requirements.
 
 ### Online Maps Integration Points
 - OSM Overpass API Integration
@@ -18,82 +18,109 @@ Create an efficient road network graph system using Online Maps' OSM integration
   - Background tile loading
   - Memory optimization
 
-- Drawing System
-  - OnlineMaps.Drawing API for path rendering
-  - Built-in coordinate conversion
-  - Efficient line drawing
-  - Custom marker support
-
 ## Core Systems
 
 ### OSM Data Processing
 
-#### Query Optimization
+#### Graph Creation (HONZAAPREF Method)
+- Initial Data Fetch
+  - Use OnlineMapsOSMAPIQuery with minimal query:
+    ```
+    way[highway][highway!="footway"][highway!="pedestrian"]
+    [highway!="steps"][highway!="path"][highway!="track"]
+    ```
+  - Fetch in skeleton mode
+  - Minimal node data
+  - Clean filtering upfront
+
+- Node Processing
+  1. First Pass - Way Analysis:
+     - Collect nodes that are part of multiple ways (intersections)
+     - Identify end nodes of ways (dead ends)
+     - Mark important shape nodes (significant curves)
+     - Calculate node importance
+
+  2. Node Reduction:
+     - Keep intersection nodes
+     - Keep dead ends
+     - Keep critical shape points
+     - Remove redundant geometry
+     - Maintain connectivity
+
+  3. Graph Building:
+     - Create nodes only for kept points
+     - Connect nodes directly if part of same way
+     - Calculate edge weights using geographic distance
+     - Maintain minimal metadata
+
+#### Extended Features
 Goals:
-- Fetch minimal required data
-- Filter unwanted road types upfront
-- Reduce memory footprint
-- Enable quick processing
+- Maintain HONZAAPREF's efficient graph while supporting:
+  - Background pre-calculation of graph
+  - Location-based optimization
+  - Unity-specific features
 
-Technical Implementation:
-- Custom Overpass Query:
-  - Use OnlineMapsOSMAPIQuery.Find
-  - Filter highways during query
-  - Request skeleton data only
-  - Implement rate limiting
 
-#### Data Reduction Strategy
-Based on HONZAAPREF approach:
-- First Pass (Way Analysis)
-  - Collect intersection nodes
-  - Identify dead ends
-  - Mark shape points
-  - Calculate importance
-
-- Second Pass (Node Reduction)
-  - Keep only critical nodes
-  - Preserve road shapes
-  - Remove redundant points
-  - Maintain connectivity
-
-### Graph Construction
+### Graph Structure (HONZAAPREF Style)
 
 #### Node System
-Goals:
-- Minimal memory footprint
-- Fast spatial lookups
-- Efficient pathfinding support
-- Unity-optimized data structures
+Essential Data Only:
+- ID (number)
+- Latitude/Longitude (OnlineMapsVector2d)
+- Edges array
+- Basic pathfinding data:
+  - Distance from start
+  - Distance to end
+  - Parent reference
+- Visited flag
 
 Implementation:
-- Node Structure
-  - Geographic coordinates (OnlineMapsVector2d)
-  - Connection references
-  - Minimal metadata
-  - Pooled instances
+- Unity object pooling wrapper
+- Thread-safe operations
+- Memory optimization
+- Quick spatial lookups
 
 #### Edge System
-Goals:
-- Accurate road representation
-- Efficient traversal
-- Memory optimization
-- Quick visual access
+Minimal Structure:
+- Node1/Node2 references
+- Visited flag
+- Weight (direct distance calculation)
+- Essential Unity requirements
 
 Implementation:
-- Edge Structure
-  - Start/end node references
-  - Distance calculation using OnlineMaps utilities
-  - Road type data
-  - Pooled instances
+- Direct node connections
+- Simple weight calculations
+- Memory pooling
+- Quick traversal
 
-### Performance Optimization
+### Location Mode Support
+Goals:
+- Support ~30sq mile local mode
+- Enable global mode
+- Maintain graph efficiency
+- Optimize performance
 
-#### Memory Management
+Implementation:
+Local Mode:
+- Pre-loaded adjacent areas
+- Background updates
+- Optimized for quick access
+- Memory efficient storage
+
+Global Mode:
+- Dynamic loading strategy
+- Memory-efficient storage
+- Clean cleanup system
+- Resource management
+
+## Performance Optimization
+
+### Memory Management
 - Object Pooling
   - Node pool
   - Edge pool
-  - Visualization elements
   - Event handlers
+  - Resource management
 
 - Cache Strategy
   - Leverage OnlineMapsCache
@@ -101,48 +128,29 @@ Implementation:
   - Tile-aligned data storage
   - Memory pressure handling
 
-#### Threading Model
+### Threading Model
 - Main Thread
   - Unity lifecycle
   - User input
-  - Visualization updates
   - State management
+  - Critical operations
 
 - Background Processing
   - Graph construction
   - Data reduction
-  - Path calculation
   - Cache management
-
-### Visualization Layer
-
-#### Road Network Rendering
-Goals:
-- Efficient line rendering
-- Accurate road representation
-- Mobile optimization
-- Debug support
-
-Implementation:
-- Drawing System
-  - OnlineMaps.Drawing for paths
-  - Custom line renderer for debug
-  - Efficient update batching
-  - View frustum culling
 
 ## Performance Targets
 
 ### Memory Usage
-- Graph Structure: < 50MB
-- Visualization: < 25MB
-- Cache: < 25MB
-- Total: < 100MB
+- Graph Structure: TBD BASED ON TESTING
+- Cache: TBD BASED ON TESTING
+- Total: TBD BASED ON TESTING
 
 ### Processing Times
-- Initial graph creation: < 2s
-- Node reduction: < 500ms
-- Path calculation: < 100ms
-- Visualization update: < 16ms
+- Initial graph creation: TBD
+- Node reduction: TBD
+
 
 ## Technical Requirements
 
@@ -160,16 +168,15 @@ Implementation:
 
 ## Implementation Phases
 
-### Phase 1: Core Integration
-- Online Maps setup
-- OSM query system
-- Basic data structures
-- Initial visualization
+### Phase 1: Core Graph
+- HONZAAPREF graph implementation
+- Online Maps integration
+- Basic Unity support
+- Essential features
 
-### Phase 2: Graph Optimization
-- Node reduction system
-- Edge optimization
-- Memory pooling
+### Phase 2: Extended Features
+- Location modes
+- Memory optimization
 - Cache implementation
 
 ### Phase 3: Performance
@@ -177,3 +184,115 @@ Implementation:
 - Memory optimization
 - Battery efficiency
 - Debug tools
+
+## Development Tools
+Goals:
+- Graph visualization
+- Performance monitoring
+- Testing frameworks
+- Development utilities
+
+Implementation:
+- Memory usage tracking
+- Graph analysis tools
+- Debug visualization
+
+## Metrics
+- Node Statistics
+  - Count per viewport
+  - Urban vs rural density
+  - Post-reduction ratios
+  - Memory per node
+
+- Edge Statistics
+  - Count per viewport
+  - Memory per edge
+  - Connection density
+  - Weight distributions
+
+- Performance Metrics
+  - Graph creation time
+  - Node reduction time
+  - Memory usage patterns
+
+
+
+  ## HONZAAPREF Graph Creation Method
+
+### Core Data Structures
+1. Node Class:
+```javascript
+constructor(id, latitude, longitude) {
+    this.edges = [];
+    this.id = id;
+    this.latitude = latitude;
+    this.longitude = longitude;
+    this.visited = false;
+    this.distanceFromStart = 0;
+    this.distanceToEnd = 0;
+    this.parent = null;
+}
+```
+
+2. Edge Class:
+```javascript
+constructor(node1, node2) {
+    this.node1 = node1;
+    this.node2 = node2;
+    this.visited = false;
+}
+
+get weight() {
+    return Math.hypot(this.node1.latitude - this.node2.latitude, 
+                      this.node1.longitude - this.node2.longitude);
+}
+```
+
+3. Graph Class:
+```javascript
+constructor() {
+    this.startNode = null;
+    this.nodes = new Map();
+}
+```
+
+### Key OSM Query Optimization
+```javascript
+const highWayExclude = ["footway", "street_lamp", "steps", "pedestrian", "track", "path"];
+const query = `
+[out:json];(
+    way[highway]${exclusion}[footway!="*"]
+    (${boundingBox});
+    node(w);
+);
+out skel;`;
+```
+
+### Graph Building Process
+1. Node Collection:
+```javascript
+for(const element of elements) {
+    if(element.type === "node") {
+        const node = graph.addNode(element.id, element.lat, element.lon);
+    }
+}
+```
+
+2. Edge Creation:
+```javascript
+if(element.type === "way") {
+    if(!element.nodes || element.nodes.length < 2) continue;
+    for(let i = 0; i < element.nodes.length - 1; i++) {
+        const node1 = graph.getNode(element.nodes[i]);
+        const node2 = graph.getNode(element.nodes[i + 1]);
+        if(!node1 || !node2) continue;
+        node1.connectTo(node2);
+    }
+}
+```
+
+Key Benefits:
+- Minimal data storage
+- Simple, efficient connections
+- Clean node reduction
+- Allows for Fast path calculations
