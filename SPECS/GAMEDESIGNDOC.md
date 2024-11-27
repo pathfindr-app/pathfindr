@@ -1,235 +1,178 @@
-Pathfindr - Game Design Document
-Game Overview
+# Pathfindr - Game Design Document
+
+## Game Overview
 A geolocation-based pathfinding puzzle game where players compete against algorithms to find optimal routes while collecting rewards, leveraging real-world map data to create unique local experiences.
-Core Gameplay Loop
-1. Route Selection
 
+## Core Gameplay
 
-graph LR
-    A[Player Start] --> B[Location Selection]
-    B --> C[Manual Search]
-    B --> D[GPS Location]
-    C --> E[Route Setup]
-    D --> E
-    E --> F[Start/End Markers]
+### Round Structure
+- Each round is one pathfinding challenge (5-30 seconds)
+- Background caching of multiple pre-calculated paths
+- Seamless transitions between rounds
+- Round difficulty determined by visualization speed and route complexity
+- Failed/incomplete paths result in zero points
 
+### Difficulty System
+- Easy: Slow visualization, relaxed gameplay
+- Medium: Standard visualization speed
+- Hard: Fast visualization, challenging gameplay
+- Visualization speed tied directly to difficulty
+- Route complexity scales with difficulty
 
-Automatic geolocation or manual location search
-Smart POI suggestions based on player preferences
-Dynamic difficulty scaling based on route complexity
+### Location Modes
+- Local Mode (~30sq mile radius)
+  - Geolocation-based start points
+  - Smart POI suggestions (user prefs, seasonal, business hours)
+  - Dynamic route generation
+  - Background path calculation
+- Global Mode (scope TBD)
 
+### Input System
+- Cross-platform support (touch/mouse/controller)
+- Consistent experience across devices
+- Real-time path validation
+- Visual/audio feedback
+- Platform-specific optimizations
 
+## Technical Architecture
 
-graph TD
-    A[Draw Mode] --> B[Touch Input]
-    A --> C[Mouse/Controller Input]
-    B --> D[Path Validation]
-    C --> D
-    D --> E[Real-time Feedback]
-    E --> F[Score Calculation]
+### Map System
+- Dynamic tile loading/caching
+- Custom marker management
+- Road network overlay system
+- POI filtering and visualization
+- LOD system for road networks
+- Connected graph maintenance
+- Max 5-10 second loading time for new areas
+- Poor map data filtering
 
+### Game States
+- Exploration
+- Route Setup
+- Path Drawing
+- Algorithm Visualization
+- Results
+- Practice
 
+### Road Network
+- Geometric accuracy prioritized
+- Traffic rules/directions ignored initially
+- Dynamic loading based on viewport
+- Network simplification
+- Path validation
+- Intersection detection
 
+### Performance Targets
+- Minimal loading times
+- Smooth visualization playback
+- Efficient memory usage
+- Battery optimization
+- Background processing
 
+## Features
 
+### Algorithm Visualization
+- Multiple pathfinding algorithms (A*, Dijkstra's, etc.)
+- Unique shader effects per algorithm
+- Sound design integration
+- Speed controls
+- Route replay system
+- Educational overlays (lower priority)
+- Performance-optimized effects
 
+### Scoring System
+Base Formula: (Path Accuracy × 0.6) + (Time Bonus × 0.3) + (Collectibles × 0.1)
+- Route complexity bonus
+- Algorithm comparison
+- Achievement multipliers
+- To be refined through testing
 
-Multi-input support (touch/mouse/controller)
-Real-time path validation against road network
-Visual feedback for valid/invalid paths
-Timer-based scoring system
+### POI System
+Categories:
+- Standard (Restaurants, Museums, etc.)
+- Seasonal/Events
+- User-generated
+- Time-based
+- Rarity tiers
+- Dynamic spawning
+- Category-based rewards
 
+### Online/Offline Features
+- Cloud save synchronization
+- Local/Global leaderboards
+- Daily challenges
+- Social features
+- Progress sync
+- Offline support (TBD based on data requirements)
 
+## Monetization
+### Free Version
+- Daily path limits
+- Geographic restrictions
+- Ad-supported features
+- Basic algorithms
 
-Algorithm Visualization
-Multiple pathfinding algorithms:
-A with different heuristics
-Dijkstra's
-Custom aesthetic variants
-Educational overlays explaining algorithm behavior
-Stylized visualization effects
-Speed controls for visualization playback
+### Premium Features
+- Unlimited paths
+- Global access
+- Custom themes
+- Advanced algorithms
+- Ad-free experience
+- Monthly subscription or one-time purchase (TBD)
 
+## Development Phases
 
- Scoring & Rewards
-Weighted scoring system:
-  Final Score = (Path Accuracy × 0.6) + (Time Bonus × 0.3) + (Collectibles × 0.1)
-- POI-based collectible system
-Achievement system
-Local/Global leaderboards
+### Phase 1: Core Mechanics
+- Map integration
+- Path drawing
+- Basic visualization
+- Scoring system
+- Simple tutorial video
 
+### Phase 2: Enhanced Features
+- Multiple algorithms
+- POI implementation
+- Collectibles
+- Advanced visualization
+- Achievement system
+- Leaderboards
 
-Technical Architecture
-Core Systems
-Map System (Online Maps Integration)
+### Phase 3: Polish & Social
+- UI/UX refinement
+- Social features
+- Cloud save
+- Cross-platform support
+- Performance optimization
 
+## Future Considerations
+- User profile system
+- Friend/social features
+- Challenge creation/sharing
+- Analytics integration
+- Anti-cheat measures
+- Accessibility options
+- Legal/Privacy compliance
+- Safety guidelines
+- Battery usage optimization
+- Bandwidth management
+- Cache strategy
+- Maximum concurrent players
 
-public class MapManager : MonoBehaviour
-{
-    #region Map States
-    public enum MapState
-    {
-        Exploration,
-        RouteSetup,
-        PathDrawing,
-        AlgorithmVisualization,
-        Results
-    }
-    #endregion
+## Technical Requirements
+- Minimum: Android 7.0+, iOS 12.0+
+- Recommended: Android 10.0+, iOS 14.0+
+- Performance optimizations
+- Tile caching
+- Network compression
+- Efficient rendering
 
-    #region Cache Management
-    [SerializeField] private bool m_EnableOfflineCache = true;
-    private OnlineMapsCache m_Cache;
-    #endregion
-}
-
-Dynamic tile loading/caching
-Custom marker management
-Road network overlay system
-POI filtering and visualization
-
-
-Game State Management
-public class GameStateManager : MonoBehaviour
-{
-    #region Game Modes
-    public enum GameMode
-    {
-        SinglePlayer,
-        GlobalChallenge,
-        DailyPuzzle,
-        Practice
-    }
-    #endregion
-}
-
-
-State machine for game flow
-Session persistence
-Player progression system
-Settings management
-
-
-Road Network System
-
-public class RoadNetworkManager : MonoBehaviour
-{
-    #region Network Loading
-    private void LoadRoadNetwork(Bounds viewportBounds)
-    {
-        // Dynamic loading based on viewport
-        // Network simplification for gameplay
-        // Path validation system
-    }
-    #endregion
-}
-
-
-Dynamic loading based on viewport
-Network simplification
-Path validation
-Intersection detection
-Platform Support
-Mobile Optimization
-Target Specifications:
-Minimum: Android 7.0+, iOS 12.0+
-Recommended: Android 10.0+, iOS 14.0+
-Performance optimizations:
-Tile caching
-Network data compression
-Efficient path rendering
-Input System
-public class InputManager : MonoBehaviour
-{
-    #region Input Modes
-    public enum InputMode
-    {
-        Touch,
-        MouseKeyboard,
-        Controller
-    }
-    
-    [SerializeField] private float m_TouchSensitivity = 1.0f;
-    [SerializeField] private float m_ControllerSensitivity = 1.0f;
-    #endregion
-}
-ouch input with gesture recognition
-Mouse/keyboard support
-Controller support with reticle movement
-Input switching based on last used device
-Online/Offline Functionality
-Online Features
-Real-time leaderboards
-Daily challenges
-Social features
-Cloud save synchronization
-Offline Support (Optional)
-Leveraging Online Maps caching system
-Local leaderboards
-Preset challenges
-Progress synchronization when online
-POI and Collectibles System
-POI Categories
-
-public enum POICategory
-{
-    Restaurants,
-    Museums,
-    MusicVenues,
-    Historical,
-    Shopping,
-    Entertainment
-}
-Collectible Generation
-Dynamic spawning based on POI locations
-Category-based rewards
-Time-based refresh system
-Rarity tiers
-Algorithm Visualization System
-Supported Algorithms
-public enum PathfindingAlgorithm
-{
-    AStar,
-    Dijkstra,
-    BreadthFirst,
-    CustomAesthetic,
-    DailySpecial
-}
-
-
-public enum PathfindingAlgorithm
-{
-    AStar,
-    Dijkstra,
-    BreadthFirst,
-    CustomAesthetic,
-    DailySpecial
-}
-Visualization Features
-Custom shader effects
-Animated path progression
-Educational overlays
-Performance optimization for mobile
-Development Priorities
-Phase 1: Core Mechanics
-Basic map integration
-Path drawing system
-Simple algorithm visualization
-Basic scoring system
-Phase 2: Enhanced Features
-Multiple algorithms
-POI system
-Collectibles
-Advanced visualization
-Phase 3: Polish & Social
-UI/UX refinement
-Leaderboards
-Daily challenges
-Social features
-Questions for Future Development
-Should we implement a tutorial system?
-How should we handle areas with poor map data?
-What's the monetization strategy?
-Should we implement a level/difficulty system?
-
-
+## Outstanding Questions
+- Tutorial system complexity
+- Poor map data handling
+- Monetization model refinement
+- Difficulty system expansion
+- Social feature scope
+- Seasonal event implementation
+- User-generated content moderation
+- Anti-cheat measures
+- Privacy/safety considerations
