@@ -27,45 +27,41 @@ Defines the integration points, features, and management systems between Online 
 
 ## Cache Management
 
-### Hierarchy
-1. Active Viewport Cache (RAM)
-   - Current visible tiles
-   - Adjacent tiles for smooth scrolling
-   - Maximum memory allocation: [TBD]
+### Integration with Global Cache
+- Utilizes Tier 1 RAM Cache (128MB allocation)
+- Implements Tier 2 Storage (512MB for tiles)
+- Follows global LRU invalidation policy
+- Adheres to centralized cache management
 
-2. Local Storage Cache
-   - Recently visited areas
-   - Frequently accessed regions
-   - Cache size limits per device
-   - Cache invalidation rules
+### Active Viewport Management
+- Current visible tiles (≤64MB)
+- Adjacent tiles (≤32MB)
+- Prediction buffer (≤32MB)
+- Dynamic quality scaling
 
-3. Background Download Queue
-   - Priority-based loading
-   - Network bandwidth management
-   - Battery usage considerations
-
-### Coordination Strategy
-- Shared cache access between systems
-- Cache invalidation triggers
-- Memory pressure handling
-- Background cleanup processes
+### Background Operations
+- Follows global queue priority system
+- Respects 32MB working memory limit
+- Implements battery optimization
+- Coordinates with other systems
 
 ## Performance Requirements
 
 ### Loading Times
-- Initial map load: < 3 seconds
+- Initial map load: < 3 seconds (per global spec)
 - Tile swap time: < 100ms
-- Maximum concurrent downloads: [TBD]
+- Maximum concurrent downloads: 4
 
 ### Memory Management
-- Maximum tile cache size: [TBD MB]
-- Active memory threshold: [TBD MB]
-- Background memory usage: [TBD MB]
+- Maximum tile cache: 128MB (RAM)
+- Active viewport: 64MB
+- Background operations: 32MB
+- Adheres to global garbage collection triggers
 
 ### Battery & Network
-- Maximum battery usage: [X]% per hour
-- Network bandwidth caps
-- Offline mode capabilities
+- Network bandwidth: ≤500KB/s
+- Background usage: ≤2% battery/hour
+- Offline mode: 100MB max storage
 
 ## Integration Points
 

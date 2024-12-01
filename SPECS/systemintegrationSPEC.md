@@ -1,256 +1,159 @@
 # System Integration Technical Specification
 
-## Overview
+## Global Cache Hierarchy
 
-### Purpose
-Define the central integration and communication framework between all systems while maximizing Online Maps' capabilities, ensuring efficient round management, and maintaining optimal performance.
+### Tier 1: Active Memory Cache (RAM)
+- Maximum Allocation: 256MB total
+  - Online Maps: 128MB
+  - Path Calculation: 64MB
+  - Road Network: 32MB
+  - Visualization: 32MB
+- Garbage Collection Threshold: 75% usage
+- Priority: Immediate access
 
-### Core Systems
-- Online Maps Core (v3.9.5+)
-  - Primary map functionality
-  - Event system backbone
-  - Built-in threading model
-  - Base cache system
+### Tier 2: Local Storage Cache
+- Maximum Allocation: 1GB total
+  - Map Tiles: 512MB
+  - Path Results: 256MB
+  - Road Data: 256MB
+- Invalidation: LRU (Least Recently Used)
+- Compression: Enabled for all stored data
 
-- Road Network System
-  - Graph and path management
-  - OSM data processing
-  - Path pre-calculation
-  - Spatial data handling
+### Tier 3: Background Processing Queue
+- Maximum Queue Size: 100 items
+- Priority Levels: Immediate, High, Normal, Low
+- Memory Budget: 32MB working memory
+- Battery Impact: < 5% per hour
 
-- State Management System
-  - Game state control
-  - UI coordination
-  - Input management
-  - State persistence
+### Cache Coordination
+- Centralized Cache Manager
+- Cross-System Memory Monitoring
+- Shared Resource Allocation
+- Unified Cleanup Protocol
 
-- Round Management System
-  - Round lifecycle
-  - Timing control
-  - Score management
-  - Transition handling
+## Performance Standards
 
-## Cache Hierarchy
+### Memory Thresholds
+- Mobile Devices
+  - Low End: 256MB total
+  - Mid Range: 512MB total
+  - High End: 1GB total
 
-### Primary Cache System (OnlineMapsCache)
-Core Management:
-- Tile Data
-  - Active viewport tiles
-  - Adjacent area preparation
-  - Background loading
-  - Memory pressure handling
+### Loading Times
+- Initial Load: < 3 seconds
+- State Transitions: < 1 second
+- Background Operations: < 100ms impact
 
-- Graph Data
-  - Current graph state
-  - Path calculation results
-  - Node/edge optimizations
-  - Spatial indices
+### Frame Rates
+- Target: 60 FPS
+- Minimum: 30 FPS
+- Loading: > 24 FPS
 
-- Round Data
-  - Active round state
-  - Pre-calculated paths
-  - Visualization data
-  - Score data
+## Error Handling Protocol
 
-### Cache Ownership
-System Responsibilities:
-1. Online Maps Core
-   - Tile management
-   - Base map data
-   - Coordinate systems
-   - Raw OSM data
+### Severity Levels
+1. Critical - System Crash Risk
+2. Major - Feature Blocking
+3. Minor - Performance Impact
+4. Info - Logging Only
 
-2. Road Network System
-   - Graph structures
-   - Path calculations
-   - Spatial indices
-   - OSM processing results
+### Recovery Actions
+1. Memory Pressure
+   - Clear non-essential caches
+   - Reduce quality settings
+   - Force garbage collection
+   
+2. Network Failure
+   - Use cached data
+   - Reduce update frequency
+   - Queue reconnection attempts
 
-3. State Management System
-   - Game state data
-   - UI resources
-   - Input states
-   - Persistence data
+3. Performance Issues
+   - Reduce visual quality
+   - Limit background processes
+   - Decrease cache sizes
 
-4. Round Management System
-   - Active round data
-   - Score calculations
-   - Transition states
-   - Historical data
+## Integration Points
 
-## Event System Architecture
+### System Dependencies
+```mermaid
+graph TD
+    A[Online Maps] --> B[Road Network]
+    B --> C[Path Calculation]
+    C --> D[Visualization]
+    D --> E[State Management]
+    E --> F[Round Management]
+```
 
-### Core Events (Online Maps)
-Primary Events:
-- OnStart: System initialization
-- OnChangePosition: Map updates
-- OnUpdateBefore: Frame preparation
-- OnUpdateAfter: Cleanup operations
-- OnMapUpdated: Data synchronization
-
-### Event Priority System
-1. Critical Events (Immediate)
-   - State transitions
-   - User input
-   - Error conditions
-   - Resource failures
-
-2. Gameplay Events (Next Frame)
-   - Path updates
-   - Score changes
-   - UI updates
-   - Cache notifications
-
-3. Background Events (Queued)
-   - Data preparation
-   - Resource cleanup
-   - Cache management
-   - Analytics
-
-### Event Flow Control
-Management Strategy:
-- Event Queue System
-  - Priority-based processing
-  - Queue size limits
-  - Overflow handling
-  - Event cancellation
-
-- Event Propagation
-  - System boundaries
-  - Error handling
-  - State validation
-  - Performance monitoring
-
-## Resource Management
-
-### Memory Allocation
-System Budgets:
-- Online Maps Core
-  - Tile cache
-  - Base functionality
-  - Event system
-  - Threading resources
-
-- Road Network System
-  - Graph data
-  - Path cache
-  - Spatial indices
-  - Calculation resources
-
-- State/Round Systems
-  - Game state
-  - Round data
-  - UI resources
-  - Transition cache
-
-### Thread Management
-Main Thread Operations:
-- UI updates
-- Input processing
-- State transitions
-- Critical game flow
-
-Background Processing:
-1. High Priority
-   - Path calculations
-   - State preparation
-   - Critical resources
-   - Error recovery
-
-2. Medium Priority
-   - Cache management
-   - Data optimization
-   - Resource cleanup
-   - Analytics
-
-3. Low Priority
-   - Background loading
-   - Data preparation
-   - Historical cleanup
-   - Analytics processing
-
-## Error Handling Framework
-
-### Error Detection
-System Monitoring:
-- Network Status
-  - Connection state
-  - Request failures
-  - Timeout handling
-  - Recovery attempts
-
-- Resource Status
-  - Memory usage
-  - Thread status
-  - Cache state
-  - Performance metrics
-
-### Recovery Protocol
-Error Levels:
-1. Critical Errors
-   - State corruption
-   - Resource exhaustion
-   - System failure
-   - Data loss
-
-2. Non-Critical Errors
-   - Network timeout
-   - Cache misses
-   - Performance drops
-   - Resource warnings
-
-Recovery Actions:
-- State preservation
-- Resource cleanup
-- System reset
-- User notification
-
-## Performance Framework
-
-### Monitoring System
-Core Metrics:
-- System Performance
-  - Frame times
-  - Memory usage
-  - Thread utilization
-  - Cache efficiency
-
-- Game Metrics
-  - Round timing
-  - State transitions
-  - Resource usage
-  - User experience
-
-### Optimization Strategy
-Performance Targets:
-- Frame Rate: Stable 60 FPS
-- Memory: TBD from testing
-- Load Times: < 1s transitions
-- Network: Efficient caching
-
-Resource Management:
-- Dynamic allocation
-- Predictive loading
-- Efficient cleanup
-- Performance scaling
+### Cross-System Events
+- MemoryWarning
+- NetworkStateChange
+- PerformanceDrop
+- StateTransition
+- RoundComplete
 
 ## Implementation Phases
 
-### Phase 1: Core Integration
-- Event system implementation
-- Basic cache hierarchy
-- Resource management
+### Phase 1: Foundation (Week 1-2)
+- Basic system integration
+- Memory management
 - Error handling
+- Event system
 
-### Phase 2: Enhanced Features
-- Advanced event handling
-- Optimized caching
-- Performance monitoring
-- System coordination
+### Phase 2: Enhancement (Week 3-4)
+- Advanced caching
+- Performance optimization
+- Cross-system coordination
+- Testing framework
 
-### Phase 3: Optimization
+### Phase 3: Polish (Week 5-6)
+- Edge case handling
 - Performance tuning
-- Resource optimization
-- Advanced error handling
-- System predictions
+- Documentation
+- Final testing
+
+## Memory Management Framework
+
+### Memory Profiling Requirements
+- Active memory tracking
+- Memory growth monitoring
+- Leak detection systems
+- GC impact analysis
+- Cache efficiency metrics
+- Device-specific profiling
+
+### Resource Allocation Strategy
+- Dynamic allocation based on device capability
+- Adaptive cache sizing
+- Proactive cleanup triggers
+- Performance-based scaling
+- Device tier detection
+
+### Memory Thresholds
+To be determined through testing:
+- Baseline memory requirements
+- Growth patterns during gameplay
+- Algorithm memory impact
+- Cache size optimization
+- Device-specific limits
+- Performance vs memory tradeoffs
+
+### Memory Optimization Priorities
+1. Gameplay Smoothness
+   - Maintain target FPS
+   - Minimize GC spikes
+   - Optimize asset loading
+   - Manage state transitions
+
+2. Resource Efficiency
+   - Smart cache management
+   - Asset pooling strategies
+   - Background load balancing
+   - Memory defragmentation
+
+3. Device Compatibility
+   - Low-end device support
+   - High-end optimization
+   - Platform-specific tuning
+   - Scalable quality settings
 

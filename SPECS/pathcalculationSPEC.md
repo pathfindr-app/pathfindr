@@ -102,29 +102,35 @@ public class PathPreCalculationManager
 ## Performance Requirements
 
 ### Calculation Times
-- A*: <TBD UPON TESTING
-- Dijkstra: < TBD UPON TESTING
-- Bidirectional: < TBD UPON TESTING
-- Greedy: < TBD UPON TESTING
+- A*: < 100ms for local paths
+- Dijkstra: < 200ms for area coverage
+- Bidirectional: < 150ms for long paths
+- Greedy: < 50ms for quick estimates
 
 ### Memory Usage
-- Active Calculation: < TBD UPON TESTING
-- Cached Results: < TBD UPON TESTING
-- Pre-Calculation Queue: < TBD UPON TESTING
-- Total System: < TBD UPON TESTING
+- Active Calculation: < 64MB (per global spec)
+- Cached Results: < 256MB (Tier 2 storage)
+- Pre-Calculation Queue: < 32MB (background)
+- Total System: < 352MB
+
+### Cache Integration
+- Utilizes Tier 1 RAM Cache (64MB allocation)
+- Implements Tier 2 Storage (256MB for results)
+- Follows global LRU invalidation policy
+- Coordinates with Online Maps cache
 
 ### Threading Model
 1. **Main Thread**
-- Path request handling
-- Result delivery
-- State management
-- Critical updates
+- Path request handling (< 5ms)
+- Result delivery (< 2ms)
+- State management (< 1ms)
+- Critical updates (< 1ms)
 
 2. **Background Threads**
-- Pre-calculations
-- Cache management
-- Resource cleanup
-- Performance monitoring
+- Pre-calculations (≤ 2 threads)
+- Cache management (shared thread)
+- Resource cleanup (shared thread)
+- Performance monitoring (shared thread)
 
 ## Integration Points
 
