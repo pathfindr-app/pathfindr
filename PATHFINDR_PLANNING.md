@@ -1,33 +1,35 @@
 # PATHFINDR - Game Design Document
 
 ## Overview
-PATHFINDR is a competitive pathfinding game where players race against AI algorithms to find the shortest route between locations on real-world maps sourced from OpenStreetMap.
+PATHFINDR is a route prediction game where players guess the optimal path between locations, then watch beautiful algorithm visualizations reveal the actual shortest route on real-world maps sourced from OpenStreetMap.
 
 ## Core Game Concept
 
-### Game Loop
-1. Player sees start/end markers on real city map
-2. Countdown timer (3-2-1-GO!)
-3. Player draws path simultaneously while AI algorithms race
-4. Score based on route accuracy, completion time, and algorithm difficulty
+### Game Flow
+1. **Route Prediction**: Player sees start/end markers and draws their best guess route
+2. **Dual Visualization Reward**: Player's guessed route traces out first, followed by pathfinding algorithm exploration revealing the optimal path
+3. **Visual Comparison**: See how player's intuition compares to algorithmic optimization
+4. **Scoring**: Simple accuracy based on how close player route is to optimal distance
+
+*Note: Future expansion may include a second game loop for additional gameplay variety*
 
 ### Target Platform
-- **Primary**: Mobile/iPad (touch-first design)
-- **Secondary**: Desktop web
+- **Primary**: Desktop web (for POC development and testing)
+- **Future**: Mobile/iPad (touch-first design after web POC is validated)
 
 ## Current Technical Foundation
 
 ### Existing Strengths
 - **4 pathfinding algorithms** with step-by-step visualization
-  - A* (Smart Speedster)
-  - Dijkstra (Methodical Explorer) 
-  - Greedy (Reckless Rusher)
-  - Bidirectional (Twin Hunter)
+  - A* (The Efficient Explorer)
+  - Dijkstra (The Thorough Investigator) 
+  - Greedy (The Impulsive Sprinter)
+  - Bidirectional (The Twin Forces)
 - **High-performance Deck.GL** rendering
 - **Real OSM integration** via MapService
-- **Sophisticated timing system** for competitive mechanics
+- **Sophisticated timing system** for visualization control
 - **17 pre-configured major cities**
-- **Speed controls** (1-10x) for difficulty scaling
+- **Speed controls** (1-10x) for visualization pacing
 - **React + Vite** modern development stack
 
 ### Current Tech Stack
@@ -43,39 +45,36 @@ PATHFINDR is a competitive pathfinding game where players race against AI algori
 
 ## Game Mechanics Design
 
-### Algorithm Challengers
-Each algorithm becomes a unique "competitor":
+### Algorithm Visualization Characters
+Each algorithm provides unique visual experiences:
 
-- **A\* - "Smart Speedster"**
-  - Fast, efficient pathfinding
-  - Hard difficulty (high speed multiplier)
+- **A\* - "The Efficient Explorer"**
+  - Smart, direct pathfinding with heuristic guidance
+  - Beautiful focused exploration pattern
   - Green visualization trail
 
-- **Dijkstra - "Methodical Explorer"**  
-  - Thorough but slower exploration
-  - Medium difficulty
+- **Dijkstra - "The Thorough Investigator"**  
+  - Systematic exploration in all directions
+  - Mesmerizing radial search pattern
   - Blue visualization trail
 
-- **Greedy - "Reckless Rusher"**
-  - Fast but suboptimal paths
-  - Easy difficulty 
+- **Greedy - "The Impulsive Sprinter"**
+  - Always heads toward target, sometimes gets stuck
+  - Fast but potentially flawed exploration
   - Yellow visualization trail
 
-- **Bidirectional - "Twin Hunter"**
-  - Dramatic converging paths from both ends
-  - Boss mode difficulty
+- **Bidirectional - "The Twin Forces"**
+  - Dramatic converging search from both ends
+  - Most visually spectacular when paths meet
   - Red dual-trail visualization
 
-### Competitive Racing
-- **Simultaneous gameplay** - player draws while algorithms explore
-- **Real-time progress tracking** - see who's ahead
-- **Speed pressure** - algorithms get faster with difficulty
-- **Multiple victory conditions**:
-  - First to complete (speed bonus)
-  - Most accurate route (precision bonus)
-  - Style points (smooth drawing, minimal nodes)
+### Core Interaction
+- **Player draws first** - thoughtful route planning without time pressure
+- **Dual visualization reward** - player's route displays first, then algorithm exploration begins
+- **Visual drama** - see where player intuition aligns with or differs from algorithmic optimization
+- **Learning experience** - understand why the algorithm chose a different route
 
-## Mobile-First Touch Interface
+## Mobile-First Touch Interface (Future Phase)
 
 ### Touch Interaction States
 
@@ -134,7 +133,7 @@ controller={{
 - Shader-based lighting effects
 - Lightning/energy effects when paths converge
 - Emissive materials for algorithm trails  
-- Dynamic camera movements during races
+- Dynamic camera movements during visualization
 
 #### Level 3: Cinematic Experience
 - Automatic camera following for dramatic views
@@ -145,11 +144,11 @@ controller={{
 ## Game Progression & Features
 
 ### Core Features (MVP)
-- [ ] Mobile touch path drawing system
-- [ ] Simultaneous player vs algorithm racing
-- [ ] Basic scoring system (time + accuracy)
+- [ ] Path drawing system (web-based with mouse/click input)
+- [ ] Algorithm visualization spectacle
+- [ ] Simple accuracy scoring system  
 - [ ] 3-5 city locations
-- [ ] 2-3 algorithm difficulties
+- [ ] 2-3 algorithm types for variety
 
 ### Enhanced Features
 - [ ] Player progression/levels
@@ -191,25 +190,31 @@ controller={{
 
 ## Implementation Phases
 
-### Phase 1: Core Game Mechanics
-- Mobile touch interface for path drawing
-- Simultaneous racing system
-- Basic scoring and feedback
-- 3 algorithms, 5 cities
+### Phase 1: Core Game Mechanics (Web POC)
+- Web-based path drawing interface (mouse/click input)
+- Sequential gameplay (guess route → watch player route trace → watch algorithm find optimal path)
+- Basic accuracy scoring and feedback
+- 2-3 algorithms, 3-5 cities
 
-### Phase 2: Visual Polish
+### Phase 2: Visual Polish & Validation
 - Enhanced visual effects
-- Improved mobile UX
 - Performance optimization
 - Sound design integration
+- User testing and feedback collection
 
-### Phase 3: Social & Competitive
+### Phase 3: Mobile Adaptation
+- Touch-first interface design
+- Mobile gesture handling
+- Responsive mobile UX
+- Mobile performance optimization
+
+### Phase 4: Social & Competitive
 - User accounts and progression  
 - Leaderboards and challenges
 - Social features and sharing
 - Advanced analytics
 
-### Phase 4: Monetization
+### Phase 5: Monetization
 - Premium content system
 - Payment integration
 - Advanced features unlock
@@ -218,10 +223,10 @@ controller={{
 ## Technical Considerations
 
 ### Performance
-- Mobile GPU optimization
+- Mobile GPU optimization (future phase)
 - Efficient pathfinding visualization
 - Memory management for large maps
-- Battery usage optimization
+- Battery usage optimization (mobile phase)
 
 ### Scalability  
 - Cloud-based user data
@@ -231,16 +236,25 @@ controller={{
 
 ### Accessibility
 - Colorblind-friendly palettes
-- Touch target sizing
+- Touch target sizing (mobile phase)
 - Screen reader compatibility
 - Multiple input methods
 
-## Next Steps
-1. Implement mobile touch drawing system
-2. Create simultaneous racing mechanics
-3. Enhance visual effects and polish
-4. Design user progression system
-5. Build monetization infrastructure
+## Immediate Next Steps
+1. **2-Hour Game Prototype**: Add basic game flow to existing visualization
+   - Player draws route with mouse clicks
+   - Show player's route tracing out first
+   - Follow with algorithm finding optimal path
+   - Display simple accuracy score
+2. Test if core concept is engaging on web
+3. Enhance visual effects and sound
+4. Validate POC before mobile development
+5. Design progression and monetization
+
+## During-Visualization Mini-Games (Future)
+- **Path Prediction**: Guess where algorithm will go next
+- **Route Commentary**: Mark mistakes on your own path
+- **Visual Reactions**: Interactive elements during the show
 
 ---
 

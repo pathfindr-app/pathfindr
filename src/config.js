@@ -15,6 +15,7 @@ export const INITIAL_COLORS = {
     endNodeBorder: [0, 0, 0],
     path: [70, 183, 128],
     route: [165, 13, 32],
+    player: [255, 165, 0], // Orange for player route
 };
 
 export const LOCATIONS = [

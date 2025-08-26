@@ -28,6 +28,12 @@ function Map() {
     const [loading, setLoading] = useState(false);
     const [settings, setSettings] = useState({ algorithm: "astar", radius: 4, speed: 5 });
     const [colors, setColors] = useState(INITIAL_COLORS);
+    // Game mode state
+    const [gameMode, setGameMode] = useState(false);
+    const [playerRoute, setPlayerRoute] = useState([]);
+    const [drawingRoute, setDrawingRoute] = useState(false);
+    const [playerScore, setPlayerScore] = useState(null);
+    const [gamePhase, setGamePhase] = useState("setup"); // setup, drawing, player-animation, algorithm-animation, complete
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
     const ui = useRef();
     const fadeRadius = useRef();
@@ -35,6 +41,7 @@ function Map() {
     const previousTimeRef = useRef();
     const timer = useRef(0);
     const waypoints = useRef([]);
+    const playerWaypoints = useRef([]);
     const state = useRef(new PathfindingState());
     const traceNode = useRef(null);
     const traceNode2 = useRef(null);
@@ -42,6 +49,11 @@ function Map() {
 
     async function mapClick(e, info, radius = null) {
         if(started && !animationEnded) return;
+
+        // Handle game mode route drawing
+        if(gameMode && gamePhase === "drawing") {
+            return handlePlayerRouteClick(e, info);
+        }
 
         setFadeRadiusReverse(false);
         fadeRadius.current = true;
@@ -152,6 +164,183 @@ function Map() {
         traceNode.current = null;
         traceNode2.current = null;
         setAnimationEnded(false);
+        
+        // Only clear game state if not in game mode
+        if(!gameMode) {
+            playerWaypoints.current = [];
+            setPlayerRoute([]);
+            setPlayerScore(null);
+        }
+    }
+
+    // Game mode functions
+    async function handlePlayerRouteClick(e, info) {
+        if(e.layer?.id !== "selection-radius") {
+            ui.current.showSnack("Please click inside the radius to draw your route.", "info");
+            return;
+        }
+
+        const node = await getNearestNode(e.coordinate[1], e.coordinate[0]);
+        if(!node) {
+            ui.current.showSnack("No path found at this location.", "error");
+            return;
+        }
+
+        const newRoute = [...playerRoute, node];
+        setPlayerRoute(newRoute);
+
+        // Check if we're close to the end node (within reasonable distance)
+        if(endNode) {
+            const distanceToEnd = Math.sqrt(
+                Math.pow(node.lat - endNode.lat, 2) + 
+                Math.pow(node.lon - endNode.lon, 2)
+            );
+            
+            // If close enough to end node, finish the route
+            if(distanceToEnd < 0.001 || node.id === endNode.id) { // About 100m tolerance
+                const finalRoute = [...newRoute, endNode];
+                setPlayerRoute(finalRoute);
+                finishPlayerRoute(finalRoute);
+                ui.current.showSnack("Route completed! Watch the animations.", "success");
+            }
+        }
+    }
+
+    function finishPlayerRoute(route) {
+        setGamePhase("player-animation");
+        createPlayerWaypoints(route);
+        animatePlayerRoute();
+    }
+
+    function createPlayerWaypoints(route) {
+        playerWaypoints.current = [];
+        let currentTime = 0;
+        
+        for(let i = 0; i < route.length - 1; i++) {
+            const from = route[i];
+            const to = route[i + 1];
+            const distance = Math.sqrt(Math.pow(to.lat - from.lat, 2) + Math.pow(to.lon - from.lon, 2));
+            const duration = distance * 50000; // Similar to algorithm timing
+            
+            playerWaypoints.current.push({
+                path: [[from.lon, from.lat], [to.lon, to.lat]],
+                timestamps: [currentTime, currentTime + duration],
+                color: "player"
+            });
+            
+            currentTime += duration;
+        }
+        
+        timer.current = Math.max(timer.current, currentTime);
+    }
+
+    function animatePlayerRoute() {
+        setStarted(true);
+        setTime(0);
+        setAnimationEnded(false);
+        
+        // Calculate when player animation should end
+        const playerAnimationDuration = Math.max(...playerWaypoints.current.map(w => w.timestamps[1]));
+        
+        // After player animation ends, start algorithm
+        setTimeout(() => {
+            setTime(0);
+            setGamePhase("algorithm-animation");
+            // Reset algorithm state but keep player data
+            setStarted(false);
+            state.current.reset();
+            waypoints.current = [];
+            timer.current = 0;
+            previousTimeRef.current = null;
+            traceNode.current = null;
+            traceNode2.current = null;
+            setAnimationEnded(false);
+            
+            console.log("Starting algorithm animation with player route:", playerRoute.length, "points");
+            startPathfinding();
+        }, playerAnimationDuration / 1000 + 1500); // Wait for player animation + 1.5 seconds
+    }
+
+    function calculateScore() {
+        if(!playerRoute.length || !state.current.endNode) {
+            console.log("Score calculation failed: missing route or endNode", { 
+                playerRouteLength: playerRoute.length, 
+                hasEndNode: !!state.current.endNode 
+            });
+            return null;
+        }
+        
+        // Calculate player route distance
+        let playerDistance = 0;
+        for(let i = 0; i < playerRoute.length - 1; i++) {
+            const from = playerRoute[i];
+            const to = playerRoute[i + 1];
+            if(from && to && from.lat !== undefined && from.lon !== undefined) {
+                playerDistance += Math.sqrt(Math.pow(to.lat - from.lat, 2) + Math.pow(to.lon - from.lon, 2));
+            }
+        }
+        
+        // Calculate optimal route distance
+        let optimalDistance = 0;
+        let optimalPath = [];
+        let node = state.current.endNode;
+        
+        // Build the optimal path
+        while(node && node.parent) {
+            const parent = node.parent;
+            optimalPath.unshift(node); // Add to beginning
+            if(parent.lat !== undefined && parent.lon !== undefined) {
+                optimalDistance += Math.sqrt(Math.pow(node.lat - parent.lat, 2) + Math.pow(node.lon - parent.lon, 2));
+            }
+            node = parent;
+        }
+        if(node) optimalPath.unshift(node); // Add start node
+        
+        console.log("Score calculation:", { 
+            playerDistance, 
+            optimalDistance, 
+            playerRouteLength: playerRoute.length,
+            optimalPathLength: optimalPath.length,
+            algorithmFinished: state.current.finished
+        });
+        
+        // If no optimal path was found, show player route as reference
+        if(optimalDistance === 0) {
+            return {
+                efficiency: 100, // Give full points if algorithm didn't complete
+                playerDistance: Math.round(playerDistance * 111139),
+                optimalDistance: Math.round(playerDistance * 111139), // Use player distance as reference
+                note: "Algorithm path not found - showing your route distance"
+            };
+        }
+        
+        // Avoid division by zero for player distance
+        if(playerDistance === 0) {
+            return { efficiency: 0, playerDistance: 0, optimalDistance: Math.round(optimalDistance * 111139) };
+        }
+        
+        // Score as percentage efficiency
+        const efficiency = Math.min(100, Math.round((optimalDistance / playerDistance) * 100));
+        return {
+            efficiency: efficiency || 0,
+            playerDistance: Math.round(playerDistance * 111139), // Convert to meters
+            optimalDistance: Math.round(optimalDistance * 111139)
+        };
+    }
+
+    function toggleGameMode() {
+        setGameMode(!gameMode);
+        setGamePhase("setup");
+        clearPath();
+    }
+
+    function startGameRound() {
+        if(!startNode || !endNode) {
+            ui.current.showSnack("Please place start and end points first.", "info");
+            return;
+        }
+        setGamePhase("drawing");
+        ui.current.showSnack("Draw your route by clicking points on the map!", "info");
     }
 
     // Progress animation by one step
@@ -229,7 +418,7 @@ function Map() {
         ];
 
         timer.current += timeAdd;
-        setTripsData(() => waypoints.current);
+        setTripsData(() => [...playerWaypoints.current, ...waypoints.current]);
     }
 
     function changeLocation(location) {
@@ -279,6 +468,23 @@ function Map() {
         setColors(items.colors);
     }, []);
 
+    // Calculate score when game animation ends
+    useEffect(() => {
+        if(gameMode && animationEnded && gamePhase === "algorithm-animation") {
+            console.log("Calculating score:", { 
+                gameMode, 
+                animationEnded, 
+                gamePhase, 
+                playerRouteLength: playerRoute.length,
+                hasEndNode: !!state.current.endNode 
+            });
+            const score = calculateScore();
+            console.log("Score result:", score);
+            setPlayerScore(score);
+            setGamePhase("complete");
+        }
+    }, [animationEnded, gameMode, gamePhase, playerRoute]);
+
     return (
         <>
             <div onContextMenu={(e) => { e.preventDefault(); }}>
@@ -315,7 +521,7 @@ function Map() {
                         //     return color.map(c => Math.max((c * 1.6) - delta * 0.1, c));
                         // }}
                         updateTriggers={{
-                            getColor: [colors.path, colors.route]
+                            getColor: [colors.path, colors.route, colors.player]
                         }}
                     />
                     <ScatterplotLayer 
@@ -323,6 +529,12 @@ function Map() {
                         data={[
                             ...(startNode ? [{ coordinates: [startNode.lon, startNode.lat], color: colors.startNodeFill, lineColor: colors.startNodeBorder }] : []),
                             ...(endNode ? [{ coordinates: [endNode.lon, endNode.lat], color: colors.endNodeFill, lineColor: colors.endNodeBorder }] : []),
+                            ...(gameMode ? playerRoute.map((node, index) => ({ 
+                                coordinates: [node.lon, node.lat], 
+                                color: colors.player, 
+                                lineColor: [255, 255, 255],
+                                id: `player-${index}`
+                            })) : []),
                         ]}
                         pickable={true}
                         opacity={1}
@@ -368,6 +580,15 @@ function Map() {
                 placeEnd={placeEnd}
                 setPlaceEnd={setPlaceEnd}
                 changeRadius={changeRadius}
+                gameMode={gameMode}
+                gamePhase={gamePhase}
+                playerScore={playerScore}
+                playerRoute={playerRoute}
+                endNode={endNode}
+                toggleGameMode={toggleGameMode}
+                startGameRound={startGameRound}
+                finishPlayerRoute={finishPlayerRoute}
+                setPlayerRoute={setPlayerRoute}
             />
             <div className="attrib-container"><summary className="maplibregl-ctrl-attrib-button" title="Toggle attribution" aria-label="Toggle attribution"></summary><div className="maplibregl-ctrl-attrib-inner">© <a href="https://carto.com/about-carto/" target="_blank" rel="noopener">CARTO</a>, © <a href="http://www.openstreetmap.org/about/" target="_blank">OpenStreetMap</a> contributors</div></div>
         </>

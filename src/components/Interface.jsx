@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "re
 import { INITIAL_COLORS, LOCATIONS } from "../config";
 import { arrayToRgb, rgbToArray } from "../helpers";
 
-const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation }, ref) => {
+const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, gameMode, gamePhase, playerScore, playerRoute, endNode, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, toggleGameMode, startGameRound, finishPlayerRoute, setPlayerRoute }, ref) => {
     const [sidebar, setSidebar] = useState(false);
     const [snack, setSnack] = useState({
         open: false,
@@ -124,6 +124,58 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
             </div>
 
             <div className={`nav-right ${cinematic ? "cinematic" : ""}`}>
+                <Tooltip title={gameMode ? "Switch to Visualization Mode" : "Switch to Game Mode"}>
+                    <Button 
+                        onClick={toggleGameMode} 
+                        variant={gameMode ? "contained" : "outlined"}
+                        style={{ 
+                            marginRight: 8,
+                            backgroundColor: gameMode ? "#FF6B35" : "transparent", 
+                            color: "#fff",
+                            borderColor: "#FF6B35"
+                        }}
+                        size="small"
+                    >
+                        {gameMode ? "Game" : "Explore"}
+                    </Button>
+                </Tooltip>
+                
+                {gameMode && gamePhase === "setup" && (
+                    <Button 
+                        onClick={startGameRound} 
+                        variant="contained"
+                        disabled={!canStart}
+                        style={{ 
+                            marginRight: 8,
+                            backgroundColor: canStart ? "#46B780" : "#666", 
+                            color: "#fff"
+                        }}
+                        size="small"
+                    >
+                        {canStart ? "Start Round" : "Place Start & End"}
+                    </Button>
+                )}
+                
+                {gameMode && gamePhase === "drawing" && playerRoute.length > 1 && (
+                    <Button 
+                        onClick={() => {
+                            // Force finish route with current path + direct line to end
+                            const finalRoute = [...playerRoute, { lat: endNode.lat, lon: endNode.lon, id: endNode.id }];
+                            setPlayerRoute(finalRoute);
+                            finishPlayerRoute(finalRoute);
+                        }} 
+                        variant="contained"
+                        style={{ 
+                            marginRight: 8,
+                            backgroundColor: "#FF6B35", 
+                            color: "#fff"
+                        }}
+                        size="small"
+                    >
+                        Finish Route
+                    </Button>
+                )}
+                
                 <Tooltip title="Open settings">
                     <IconButton onClick={() => {setSidebar(true);}} style={{ backgroundColor: "#2A2B37", width: 36, height: 36 }} size="large">
                         <Settings style={{ color: "#fff", width: 24, height: 24 }} fontSize="inherit" />
@@ -135,6 +187,53 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     </IconButton>
                 </Tooltip>
             </div>
+
+            {gameMode && (
+                <div className="game-status" style={{
+                    position: "fixed",
+                    top: 20,
+                    left: 20,
+                    background: "rgba(42, 43, 55, 0.9)",
+                    color: "#fff",
+                    padding: "15px",
+                    borderRadius: "8px",
+                    backdropFilter: "blur(10px)",
+                    zIndex: 1000
+                }}>
+                    <Typography variant="h6" style={{ marginBottom: "8px" }}>
+                        Route Prediction Game
+                    </Typography>
+                    <Typography variant="body2" style={{ marginBottom: "4px" }}>
+                        Phase: {gamePhase === "setup" ? "Place Start & End" : 
+                              gamePhase === "drawing" ? "Draw Your Route" :
+                              gamePhase === "player-animation" ? "Your Route" :
+                              gamePhase === "algorithm-animation" ? "Optimal Path" : "Complete"}
+                    </Typography>
+                    {playerRoute.length > 0 && (
+                        <Typography variant="body2" style={{ marginBottom: "4px" }}>
+                            Route Points: {playerRoute.length}
+                        </Typography>
+                    )}
+                    {playerScore && (
+                        <div style={{ marginTop: "8px", padding: "8px", backgroundColor: "rgba(70, 183, 128, 0.2)", borderRadius: "4px" }}>
+                            <Typography variant="body1" style={{ fontWeight: "bold" }}>
+                                Efficiency: {playerScore.efficiency}%
+                            </Typography>
+                            <Typography variant="body2">
+                                Your distance: {playerScore.playerDistance}m
+                            </Typography>
+                            <Typography variant="body2">
+                                {playerScore.note ? "Reference" : "Optimal"}: {playerScore.optimalDistance}m
+                            </Typography>
+                            {playerScore.note && (
+                                <Typography variant="caption" style={{ fontStyle: "italic", opacity: 0.8 }}>
+                                    {playerScore.note}
+                                </Typography>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="loader-container">
                 <Fade
