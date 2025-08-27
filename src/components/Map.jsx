@@ -5,13 +5,15 @@ import { PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { FlyToInterpolator } from "deck.gl";
 import { TripsLayer } from "@deck.gl/geo-layers";
 import { createGeoJSONCircle } from "../helpers";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getBoundingBoxFromPolygon, getMapGraph, getNearestNode } from "../services/MapService";
 import PathfindingState from "../models/PathfindingState";
 import AStar from "../models/algorithms/AStar";
 import Interface from "./Interface";
-import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE } from "../config";
+import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE, LOCATIONS } from "../config";
 import useSmoothStateChange from "../hooks/useSmoothStateChange";
+
+// Note: TripsLayer is a class component, can't use React.memo
 
 function Map() {
     const [startNode, setStartNode] = useState(null);
@@ -46,6 +48,12 @@ function Map() {
     const state = useRef(new PathfindingState());
     const traceNode = useRef(null);
     const traceNode2 = useRef(null);
+    const clickDebounceRef = useRef(null);
+    // Background algorithm state for Phase 1
+    const backgroundAlgorithmState = useRef(new PathfindingState());
+    const backgroundWaypoints = useRef([]);
+    const backgroundTimer = useRef(0);
+    const [algorithmReady, setAlgorithmReady] = useState(false);
     const selectionRadiusOpacity = useSmoothStateChange(0, 0, 1, 400, fadeRadius.current, fadeRadiusReverse);
 
     async function mapClick(e, info, radius = null) {
@@ -175,20 +183,51 @@ function Map() {
     }
 
     // Game mode functions
-    async function handlePlayerRouteClick(e, info) {
+    function handlePlayerRouteClick(e, info) {
+        // Clear previous timeout
+        if (clickDebounceRef.current) {
+            clearTimeout(clickDebounceRef.current);
+        }
+        
+        // Debounce rapid clicks
+        clickDebounceRef.current = setTimeout(() => {
+            processWaypointClick(e, info);
+        }, 50); // 50ms debounce
+    }
+
+    async function processWaypointClick(e, info) {
+        const startTime = performance.now();
+        console.log("Processing debounced waypoint click");
+        
         if(e.layer?.id !== "selection-radius") {
             ui.current.showSnack("Please click inside the radius to draw your route.", "info");
             return;
         }
 
+        const nodeSearchStart = performance.now();
         const node = await getNearestNode(e.coordinate[1], e.coordinate[0]);
+        const nodeSearchEnd = performance.now();
+        console.log(`Node search took ${nodeSearchEnd - nodeSearchStart}ms`);
+        
         if(!node) {
             ui.current.showSnack("No path found at this location.", "error");
             return;
         }
 
-        const newRoute = [...playerRoute, node];
-        setPlayerRoute(newRoute);
+        const stateUpdateStart = performance.now();
+        // Batch state updates to reduce re-renders
+        React.startTransition(() => {
+            const newRoute = [...playerRoute, node];
+            setPlayerRoute(newRoute);
+            
+            // Only trigger background algorithm on first waypoint
+            if (newRoute.length === 1) {
+                console.log("First waypoint placed, starting background algorithm");
+                runAlgorithmSilently();
+            }
+        });
+        const stateUpdateEnd = performance.now();
+        console.log(`State update took ${stateUpdateEnd - stateUpdateStart}ms`);
 
         // Check if we're close to the end node (within reasonable distance)
         if(endNode) {
@@ -212,6 +251,9 @@ function Map() {
                 ui.current.showSnack("Route completed! Watch the animations.", "success");
             }
         }
+        
+        const endTime = performance.now();
+        console.log(`Waypoint processing took ${endTime - startTime}ms`);
     }
 
     function finishPlayerRoute(route) {
@@ -279,60 +321,127 @@ function Map() {
         }
     }
 
+    function runAlgorithmSilently() {
+        console.log("Starting silent background algorithm");
+        
+        // Reset background state
+        backgroundAlgorithmState.current.reset();
+        backgroundWaypoints.current = [];
+        backgroundTimer.current = 0;
+        
+        // Start algorithm without UI updates
+        backgroundAlgorithmState.current.graph = state.current.graph;
+        backgroundAlgorithmState.current.endNode = endNode;
+        backgroundAlgorithmState.current.start(settings.algorithm);
+        
+        // Run to completion silently
+        const runStep = () => {
+            if (backgroundAlgorithmState.current.finished) {
+                console.log("Background algorithm completed");
+                setAlgorithmReady(true);
+                return;
+            }
+            
+            const updatedNodes = backgroundAlgorithmState.current.nextStep();
+            
+            // Generate waypoints silently (no UI updates)
+            for (const node of updatedNodes) {
+                if (node.visited && node.parent) {
+                    const refererNode = node.parent;
+                    const distance = Math.hypot(
+                        node.longitude - refererNode.longitude,
+                        node.latitude - refererNode.latitude
+                    );
+                    const timeAdd = distance * 50000 * 1;
+                    
+                    backgroundWaypoints.current.push({
+                        path: [[refererNode.longitude, refererNode.latitude], [node.longitude, node.latitude]],
+                        timestamps: [backgroundTimer.current, backgroundTimer.current + timeAdd],
+                        color: "route"
+                    });
+                    
+                    backgroundTimer.current += timeAdd;
+                }
+            }
+            
+            setTimeout(runStep, 0);
+        };
+        
+        runStep();
+    }
+
     function animatePlayerRoute(completeRoute = null) {
         setGamePhase("algorithm-animation");
         
-        // Use the passed route or fall back to playerRoute state
         const routeToUse = completeRoute || playerRoute;
-        console.log("Starting simultaneous animation with player route:", routeToUse.length, "points");
+        console.log("Starting animation with pre-calculated algorithm results");
+        console.log("Algorithm ready:", algorithmReady);
+        console.log("Background waypoints:", backgroundWaypoints.current.length);
         
-        // Store the current player route to prevent it from being cleared
-        const savedPlayerRoute = [...routeToUse];
-        console.log("Saved player route:", savedPlayerRoute.map(r => r.id));
-        console.log("Expected end node:", endNode?.id);
-        console.log("Route ends with correct node?", savedPlayerRoute[savedPlayerRoute.length - 1]?.id === endNode?.id);
-        
-        // Start algorithm without clearing game state
-        setFadeRadiusReverse(true);
-        setTimeout(() => {
-            // Reset only algorithm state, preserve player state
-            setStarted(false);
-            setTime(0);
-            state.current.reset();
-            waypoints.current = [];
-            timer.current = 0;
-            previousTimeRef.current = null;
-            traceNode.current = null;
-            traceNode2.current = null;
-            setAnimationEnded(false);
-            
-            // Start algorithm
-            state.current.start(settings.algorithm);
-            setStarted(true);
-            
-            // Restore player route after any potential clearing
-            setPlayerRoute(savedPlayerRoute);
-            
-            // Wait for algorithm to generate waypoints then synchronize
-            let checkCount = 0;
-            const checkComplete = () => {
-                checkCount++;
-                console.log(`Check ${checkCount}: waypoints: ${waypoints.current.length}, timer: ${timer.current}, finished: ${state.current.finished}`);
+        if (!algorithmReady) {
+            console.warn("Algorithm not ready, falling back to original method");
+            // Fall back to original synchronous method
+            setFadeRadiusReverse(true);
+            setTimeout(() => {
+                // Reset only algorithm state, preserve player state
+                setStarted(false);
+                setTime(0);
+                state.current.reset();
+                waypoints.current = [];
+                timer.current = 0;
+                previousTimeRef.current = null;
+                traceNode.current = null;
+                traceNode2.current = null;
+                setAnimationEnded(false);
                 
-                if(waypoints.current.length > 0 && timer.current > 0) {
-                    console.log("Algorithm generated waypoints, synchronizing...");
-                    // Use the saved route for synchronization
-                    synchronizeAnimationTiming(savedPlayerRoute);
-                } else if(checkCount > 25) { // 5 second timeout
-                    console.log("Timeout waiting for algorithm, using fallback");
-                    synchronizeAnimationTiming(savedPlayerRoute);
-                } else {
-                    setTimeout(checkComplete, 200);
-                }
-            };
-            
-            setTimeout(checkComplete, 500);
-        }, 400);
+                // Start algorithm
+                state.current.start(settings.algorithm);
+                setStarted(true);
+                
+                // Restore player route after any potential clearing
+                const savedPlayerRoute = [...routeToUse];
+                setPlayerRoute(savedPlayerRoute);
+                
+                // Wait for algorithm to generate waypoints then synchronize
+                let checkCount = 0;
+                const checkComplete = () => {
+                    checkCount++;
+                    console.log(`Check ${checkCount}: waypoints: ${waypoints.current.length}, timer: ${timer.current}, finished: ${state.current.finished}`);
+                    
+                    if(waypoints.current.length > 0 && timer.current > 0) {
+                        console.log("Algorithm generated waypoints, synchronizing...");
+                        synchronizeAnimationTiming(savedPlayerRoute);
+                    } else if(checkCount > 25) {
+                        console.log("Timeout waiting for algorithm, using fallback");
+                        synchronizeAnimationTiming(savedPlayerRoute);
+                    } else {
+                        setTimeout(checkComplete, 200);
+                    }
+                };
+                
+                setTimeout(checkComplete, 500);
+            }, 400);
+            return;
+        }
+        
+        // Use pre-calculated results
+        const savedPlayerRoute = [...routeToUse];
+        
+        // Copy background results to main animation state
+        waypoints.current = [...backgroundWaypoints.current];
+        timer.current = backgroundTimer.current;
+        
+        // Create synchronized player waypoints
+        const algorithmDuration = backgroundTimer.current;
+        createPlayerWaypoints(savedPlayerRoute, algorithmDuration);
+        
+        // Start synchronized animation immediately
+        setTripsData([...playerWaypoints.current, ...waypoints.current]);
+        setStarted(true);
+        setTime(0);
+        setAnimationEnded(false);
+        
+        console.log("Instant animation start with background results");
     }
     
     function synchronizeAnimationTiming(savedPlayerRoute = null) {
@@ -601,6 +710,11 @@ function Map() {
         setGameMode(!gameMode);
         setGamePhase("setup");
         clearPath();
+        
+        // Reset background algorithm state
+        setAlgorithmReady(false);
+        backgroundWaypoints.current = [];
+        backgroundTimer.current = 0;
     }
 
     function startGameRound() {
@@ -608,10 +722,86 @@ function Map() {
             ui.current.showSnack("Please place start and end points first.", "info");
             return;
         }
+        
+        // Reset background algorithm state for new round
+        setAlgorithmReady(false);
+        backgroundWaypoints.current = [];
+        backgroundTimer.current = 0;
+        
         // Initialize player route with start node
         setPlayerRoute([startNode]);
         setGamePhase("drawing");
         ui.current.showSnack("Draw your route by clicking waypoints to the destination!", "info");
+    }
+
+    function startNewGameRound() {
+        setGamePhase("setup");
+        setPlayerRoute([]);
+        setPlayerScore(null);
+        setAlgorithmReady(false);
+        backgroundWaypoints.current = [];
+        backgroundTimer.current = 0;
+        
+        // Clear animation state
+        setStarted(false);
+        setTripsData([]);
+        setTime(0);
+        waypoints.current = [];
+        timer.current = 0;
+        setAnimationEnded(false);
+    }
+
+    function tryAgain() {
+        console.log("Starting new round - same location");
+        
+        // Keep same start/end nodes and graph
+        // Reset only game state
+        setGamePhase("setup");
+        setPlayerRoute([]);
+        setPlayerScore(null);
+        setAlgorithmReady(false);
+        backgroundWaypoints.current = [];
+        backgroundTimer.current = 0;
+        
+        // Clear animation state
+        setStarted(false);
+        setTripsData([]);
+        setTime(0);
+        waypoints.current = [];
+        timer.current = 0;
+        setAnimationEnded(false);
+        
+        console.log("Ready for new route drawing");
+    }
+
+    function newLocation() {
+        console.log("Changing to new location");
+        
+        // Full reset including map location
+        tryAgain(); // Reset game state first
+        
+        // Trigger new location selection or random location
+        const randomLocation = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+        changeLocation(randomLocation);
+        
+        // Clear nodes so user has to place new start/end
+        setStartNode(null);
+        setEndNode(null);
+        setSelectionRadius([]);
+        
+        console.log("New location loaded:", randomLocation.name);
+    }
+
+    function skipToResults() {
+        console.log("Skipping animation to results");
+        setAnimationEnded(true);
+        setTime(timer.current); // Jump to end
+        setGamePhase("complete");
+        
+        // Calculate final score immediately
+        setTimeout(() => {
+            calculateScore(); // Trigger score calculation
+        }, 100);
     }
 
     // Progress animation by one step
@@ -689,7 +879,11 @@ function Map() {
         ];
 
         timer.current += timeAdd;
-        setTripsData(() => [...playerWaypoints.current, ...waypoints.current]);
+        
+        // Only update visual state if not in active drawing phase
+        if (gamePhase !== "drawing") {
+            setTripsData(() => [...playerWaypoints.current, ...waypoints.current]);
+        }
     }
 
     function changeLocation(location) {
@@ -859,6 +1053,9 @@ function Map() {
                 playerScore={playerScore}
                 playerRoute={playerRoute}
                 endNode={endNode}
+                onSkipToResults={skipToResults}
+                onTryAgain={tryAgain}
+                onNewLocation={newLocation}
                 toggleGameMode={toggleGameMode}
                 startGameRound={startGameRound}
                 finishPlayerRoute={finishPlayerRoute}

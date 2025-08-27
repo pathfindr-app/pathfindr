@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "re
 import { INITIAL_COLORS, LOCATIONS } from "../config";
 import { arrayToRgb, rgbToArray } from "../helpers";
 
-const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, gameMode, gamePhase, playerScore, playerRoute, endNode, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, toggleGameMode, startGameRound, finishPlayerRoute, setPlayerRoute }, ref) => {
+const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, time, maxTime, settings, colors, loading, timeChanged, cinematic, placeEnd, gameMode, gamePhase, playerScore, playerRoute, endNode, onSkipToResults, onTryAgain, onNewLocation, changeRadius, changeAlgorithm, setPlaceEnd, setCinematic, setSettings, setColors, startPathfinding, toggleAnimation, clearPath, changeLocation, toggleGameMode, startGameRound, finishPlayerRoute, setPlayerRoute }, ref) => {
     const [sidebar, setSidebar] = useState(false);
     const [snack, setSnack] = useState({
         open: false,
@@ -212,6 +212,27 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                               gamePhase === "player-animation" ? "Animation Starting..." :
                               gamePhase === "algorithm-animation" ? "Route Comparison" : "Complete"}
                     </Typography>
+                    {gamePhase === "algorithm-animation" && (
+                        <div className="animation-controls">
+                            <Button 
+                                className="skip-button"
+                                onClick={() => onSkipToResults && onSkipToResults()}
+                                variant="contained"
+                                size="small"
+                                style={{
+                                    background: "#4CAF50",
+                                    color: "white",
+                                    border: "none",
+                                    padding: "8px 16px",
+                                    borderRadius: "4px",
+                                    marginTop: "10px",
+                                    fontSize: "0.8em"
+                                }}
+                            >
+                                Skip to Results →
+                            </Button>
+                        </div>
+                    )}
                     {playerRoute.length > 0 && (
                         <Typography variant="body2" style={{ marginBottom: "4px" }}>
                             Route Points: {playerRoute.length}
@@ -241,6 +262,55 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                                     {playerScore.note}
                                 </Typography>
                             )}
+                        </div>
+                    )}
+                    {gamePhase === "complete" && playerScore && (
+                        <div className="restart-controls">
+                            <div className="score-summary" style={{ marginBottom: "12px" }}>
+                                <Typography variant="h6" style={{ textAlign: "center", color: "#4CAF50" }}>
+                                    Efficiency: {playerScore.efficiency}%
+                                </Typography>
+                                <Typography variant="body2" style={{ textAlign: "center" }}>
+                                    Coverage: {playerScore.coverageEfficiency}% | Bonus: +{playerScore.granularityBonus}%
+                                </Typography>
+                            </div>
+                            <div className="restart-buttons" style={{ display: "flex", gap: "8px" }}>
+                                <Button 
+                                    className="try-again-button"
+                                    onClick={() => onTryAgain && onTryAgain()}
+                                    variant="contained"
+                                    size="small"
+                                    style={{
+                                        background: "#FF5722",
+                                        color: "white",
+                                        border: "none",
+                                        padding: "12px 20px",
+                                        borderRadius: "4px",
+                                        fontSize: "0.85em",
+                                        fontWeight: "bold",
+                                        flex: 1
+                                    }}
+                                >
+                                    Try Again 🎯
+                                </Button>
+                                <Button 
+                                    className="new-location-button"
+                                    onClick={() => onNewLocation && onNewLocation()}
+                                    variant="contained"
+                                    size="small"
+                                    style={{
+                                        background: "#9C27B0",
+                                        color: "white",
+                                        border: "none",
+                                        padding: "12px 20px",
+                                        borderRadius: "4px",
+                                        fontSize: "0.85em",
+                                        flex: 1
+                                    }}
+                                >
+                                    New Location 🗺️
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </div>
