@@ -200,9 +200,13 @@ function Map() {
             // If close enough to end node, finish the route
             if(distanceToEnd < 0.001 || node.id === endNode.id) { // About 100m tolerance
                 // Ensure route ends exactly at the end node
-                const finalRoute = newRoute[newRoute.length - 1].id === endNode.id 
-                    ? newRoute 
-                    : [...newRoute, endNode];
+                const endsWithCorrectNode = newRoute[newRoute.length - 1].id === endNode.id;
+                console.log("Finishing route - ends with correct node?", endsWithCorrectNode);
+                console.log("Last node in route:", newRoute[newRoute.length - 1].id, "Expected:", endNode.id);
+                
+                const finalRoute = endsWithCorrectNode ? newRoute : [...newRoute, endNode];
+                console.log("Final route:", finalRoute.map(n => n.id));
+                
                 setPlayerRoute(finalRoute);
                 finishPlayerRoute(finalRoute);
                 ui.current.showSnack("Route completed! Watch the animations.", "success");
@@ -213,7 +217,7 @@ function Map() {
     function finishPlayerRoute(route) {
         setGamePhase("player-animation");
         createPlayerWaypoints(route);
-        animatePlayerRoute();
+        animatePlayerRoute(route); // Pass the complete route directly
     }
 
     function createPlayerWaypoints(route, targetDuration = null) {
@@ -237,7 +241,8 @@ function Map() {
                 const from = route[i];
                 const to = route[i + 1];
                 
-                console.log(`Player segment ${i}: ${from.id} -> ${to.id}, time: ${currentTime}-${currentTime + segmentDuration}`);
+                console.log(`Player segment ${i}: ${from.id} -> ${to.id}, time: ${currentTime.toFixed(0)}-${(currentTime + segmentDuration).toFixed(0)}`);
+                console.log(`  Coords: [${from.lon.toFixed(4)}, ${from.lat.toFixed(4)}] -> [${to.lon.toFixed(4)}, ${to.lat.toFixed(4)}]`);
                 
                 playerWaypoints.current.push({
                     path: [[from.lon, from.lat], [to.lon, to.lat]],
@@ -247,6 +252,8 @@ function Map() {
                 
                 currentTime += segmentDuration;
             }
+            
+            console.log(`Created ${playerWaypoints.current.length} player segments, final time: ${currentTime.toFixed(0)}, target: ${targetDuration.toFixed(0)}`);
             
             timer.current = targetDuration; // Set exact duration, don't use Math.max
         } else {
@@ -272,29 +279,65 @@ function Map() {
         }
     }
 
-    function animatePlayerRoute() {
+    function animatePlayerRoute(completeRoute = null) {
         setGamePhase("algorithm-animation");
-        console.log("Starting simultaneous animation with player route:", playerRoute.length, "points");
         
-        // Use existing startPathfinding but wait for completion
-        startPathfinding();
+        // Use the passed route or fall back to playerRoute state
+        const routeToUse = completeRoute || playerRoute;
+        console.log("Starting simultaneous animation with player route:", routeToUse.length, "points");
         
-        // Wait for algorithm to complete then synchronize
-        const checkComplete = () => {
-            console.log("Checking for waypoints:", waypoints.current.length, "timer:", timer.current);
+        // Store the current player route to prevent it from being cleared
+        const savedPlayerRoute = [...routeToUse];
+        console.log("Saved player route:", savedPlayerRoute.map(r => r.id));
+        console.log("Expected end node:", endNode?.id);
+        console.log("Route ends with correct node?", savedPlayerRoute[savedPlayerRoute.length - 1]?.id === endNode?.id);
+        
+        // Start algorithm without clearing game state
+        setFadeRadiusReverse(true);
+        setTimeout(() => {
+            // Reset only algorithm state, preserve player state
+            setStarted(false);
+            setTime(0);
+            state.current.reset();
+            waypoints.current = [];
+            timer.current = 0;
+            previousTimeRef.current = null;
+            traceNode.current = null;
+            traceNode2.current = null;
+            setAnimationEnded(false);
             
-            if(waypoints.current.length > 0 && timer.current > 0) {
-                console.log("Algorithm generated waypoints, synchronizing...");
-                synchronizeAnimationTiming();
-            } else {
-                setTimeout(checkComplete, 200);
-            }
-        };
-        
-        setTimeout(checkComplete, 1000); // Give time for algorithm to start
+            // Start algorithm
+            state.current.start(settings.algorithm);
+            setStarted(true);
+            
+            // Restore player route after any potential clearing
+            setPlayerRoute(savedPlayerRoute);
+            
+            // Wait for algorithm to generate waypoints then synchronize
+            let checkCount = 0;
+            const checkComplete = () => {
+                checkCount++;
+                console.log(`Check ${checkCount}: waypoints: ${waypoints.current.length}, timer: ${timer.current}, finished: ${state.current.finished}`);
+                
+                if(waypoints.current.length > 0 && timer.current > 0) {
+                    console.log("Algorithm generated waypoints, synchronizing...");
+                    // Use the saved route for synchronization
+                    synchronizeAnimationTiming(savedPlayerRoute);
+                } else if(checkCount > 25) { // 5 second timeout
+                    console.log("Timeout waiting for algorithm, using fallback");
+                    synchronizeAnimationTiming(savedPlayerRoute);
+                } else {
+                    setTimeout(checkComplete, 200);
+                }
+            };
+            
+            setTimeout(checkComplete, 500);
+        }, 400);
     }
     
-    function synchronizeAnimationTiming() {
+    function synchronizeAnimationTiming(savedPlayerRoute = null) {
+        const routeToUse = savedPlayerRoute || playerRoute;
+        
         // Calculate algorithm path duration (this is our target)
         let algorithmDuration = 0;
         for(const waypoint of waypoints.current) {
@@ -303,9 +346,10 @@ function Map() {
         
         console.log("Synchronization check:", {
             algorithmWaypoints: waypoints.current.length,
-            algorithmDuration,
-            timerCurrent: timer.current,
-            playerRoute: playerRoute.length
+            algorithmDuration: Math.round(algorithmDuration),
+            timerCurrent: Math.round(timer.current),
+            routeToUse: routeToUse.length,
+            playerWaypointsBefore: playerWaypoints.current.length
         });
         
         if(algorithmDuration === 0) {
@@ -315,7 +359,8 @@ function Map() {
         
         // Recreate player waypoints with algorithm duration to ensure perfect sync
         console.log("Recreating player waypoints with target duration:", algorithmDuration);
-        createPlayerWaypoints(playerRoute, algorithmDuration);
+        console.log("Using route for synchronization:", routeToUse.map(r => r.id));
+        createPlayerWaypoints(routeToUse, algorithmDuration);
         
         // Update timer and start synchronized animation
         timer.current = algorithmDuration;
