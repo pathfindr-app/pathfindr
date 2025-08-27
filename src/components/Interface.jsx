@@ -159,8 +159,10 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                 {gameMode && gamePhase === "drawing" && playerRoute.length > 1 && (
                     <Button 
                         onClick={() => {
-                            // Force finish route with current path + direct line to end
-                            const finalRoute = [...playerRoute, { lat: endNode.lat, lon: endNode.lon, id: endNode.id }];
+                            // Force finish route with current path + end node
+                            const finalRoute = playerRoute[playerRoute.length - 1].id === endNode.id 
+                                ? playerRoute 
+                                : [...playerRoute, endNode];
                             setPlayerRoute(finalRoute);
                             finishPlayerRoute(finalRoute);
                         }} 
@@ -191,14 +193,15 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
             {gameMode && (
                 <div className="game-status" style={{
                     position: "fixed",
-                    top: 20,
+                    bottom: 20,
                     left: 20,
                     background: "rgba(42, 43, 55, 0.9)",
                     color: "#fff",
                     padding: "15px",
                     borderRadius: "8px",
                     backdropFilter: "blur(10px)",
-                    zIndex: 1000
+                    zIndex: 1000,
+                    maxWidth: "300px"
                 }}>
                     <Typography variant="h6" style={{ marginBottom: "8px" }}>
                         Route Prediction Game
@@ -206,8 +209,8 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                     <Typography variant="body2" style={{ marginBottom: "4px" }}>
                         Phase: {gamePhase === "setup" ? "Place Start & End" : 
                               gamePhase === "drawing" ? "Draw Your Route" :
-                              gamePhase === "player-animation" ? "Your Route" :
-                              gamePhase === "algorithm-animation" ? "Optimal Path" : "Complete"}
+                              gamePhase === "player-animation" ? "Animation Starting..." :
+                              gamePhase === "algorithm-animation" ? "Route Comparison" : "Complete"}
                     </Typography>
                     {playerRoute.length > 0 && (
                         <Typography variant="body2" style={{ marginBottom: "4px" }}>
@@ -219,11 +222,19 @@ const Interface = forwardRef(({ canStart, started, animationEnded, playbackOn, t
                             <Typography variant="body1" style={{ fontWeight: "bold" }}>
                                 Efficiency: {playerScore.efficiency}%
                             </Typography>
+                            {playerScore.coverageEfficiency !== undefined && (
+                                <Typography variant="body2" style={{ fontSize: "0.8em" }}>
+                                    Coverage: {playerScore.coverageEfficiency}% | Granularity: +{playerScore.granularityBonus}%
+                                </Typography>
+                            )}
                             <Typography variant="body2">
-                                Your distance: {playerScore.playerDistance}m
+                                Your waypoints: {playerScore.waypoints || playerRoute.length} points
                             </Typography>
                             <Typography variant="body2">
-                                {playerScore.note ? "Reference" : "Optimal"}: {playerScore.optimalDistance}m
+                                Optimal nodes hit: {playerScore.nodesHit || 0} / {playerScore.optimalNodes || "?"}
+                            </Typography>
+                            <Typography variant="body2">
+                                {playerScore.note ? "Reference" : "Optimal"} distance: {playerScore.optimalDistance}m
                             </Typography>
                             {playerScore.note && (
                                 <Typography variant="caption" style={{ fontStyle: "italic", opacity: 0.8 }}>

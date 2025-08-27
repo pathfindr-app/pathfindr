@@ -8,6 +8,7 @@ import { createGeoJSONCircle } from "../helpers";
 import { useEffect, useRef, useState } from "react";
 import { getBoundingBoxFromPolygon, getMapGraph, getNearestNode } from "../services/MapService";
 import PathfindingState from "../models/PathfindingState";
+import AStar from "../models/algorithms/AStar";
 import Interface from "./Interface";
 import { INITIAL_COLORS, INITIAL_VIEW_STATE, MAP_STYLE } from "../config";
 import useSmoothStateChange from "../hooks/useSmoothStateChange";
@@ -198,7 +199,10 @@ function Map() {
             
             // If close enough to end node, finish the route
             if(distanceToEnd < 0.001 || node.id === endNode.id) { // About 100m tolerance
-                const finalRoute = [...newRoute, endNode];
+                // Ensure route ends exactly at the end node
+                const finalRoute = newRoute[newRoute.length - 1].id === endNode.id 
+                    ? newRoute 
+                    : [...newRoute, endNode];
                 setPlayerRoute(finalRoute);
                 finishPlayerRoute(finalRoute);
                 ui.current.showSnack("Route completed! Watch the animations.", "success");
@@ -212,53 +216,210 @@ function Map() {
         animatePlayerRoute();
     }
 
-    function createPlayerWaypoints(route) {
+    function createPlayerWaypoints(route, targetDuration = null) {
         playerWaypoints.current = [];
-        let currentTime = 0;
         
-        for(let i = 0; i < route.length - 1; i++) {
-            const from = route[i];
-            const to = route[i + 1];
-            const distance = Math.sqrt(Math.pow(to.lat - from.lat, 2) + Math.pow(to.lon - from.lon, 2));
-            const duration = distance * 50000; // Similar to algorithm timing
+        console.log("Creating player waypoints:", {
+            routeLength: route.length,
+            startNode: route[0]?.id,
+            endNode: route[route.length - 1]?.id,
+            targetDuration,
+            fullRoute: route.map(r => r.id)
+        });
+        
+        // If we have a target duration, distribute time evenly across segments
+        if(targetDuration && targetDuration > 0) {
+            const segmentCount = route.length - 1;
+            const segmentDuration = targetDuration / segmentCount;
+            let currentTime = 0;
             
-            playerWaypoints.current.push({
-                path: [[from.lon, from.lat], [to.lon, to.lat]],
-                timestamps: [currentTime, currentTime + duration],
-                color: "player"
-            });
+            for(let i = 0; i < segmentCount; i++) {
+                const from = route[i];
+                const to = route[i + 1];
+                
+                console.log(`Player segment ${i}: ${from.id} -> ${to.id}, time: ${currentTime}-${currentTime + segmentDuration}`);
+                
+                playerWaypoints.current.push({
+                    path: [[from.lon, from.lat], [to.lon, to.lat]],
+                    timestamps: [currentTime, currentTime + segmentDuration],
+                    color: "player"
+                });
+                
+                currentTime += segmentDuration;
+            }
             
-            currentTime += duration;
+            timer.current = targetDuration; // Set exact duration, don't use Math.max
+        } else {
+            // Original timing calculation for initial creation
+            let currentTime = 0;
+            
+            for(let i = 0; i < route.length - 1; i++) {
+                const from = route[i];
+                const to = route[i + 1];
+                const distance = Math.sqrt(Math.pow(to.lat - from.lat, 2) + Math.pow(to.lon - from.lon, 2));
+                const duration = distance * 50000;
+                
+                playerWaypoints.current.push({
+                    path: [[from.lon, from.lat], [to.lon, to.lat]],
+                    timestamps: [currentTime, currentTime + duration],
+                    color: "player"
+                });
+                
+                currentTime += duration;
+            }
+            
+            timer.current = Math.max(timer.current, currentTime);
         }
-        
-        timer.current = Math.max(timer.current, currentTime);
     }
 
     function animatePlayerRoute() {
+        setGamePhase("algorithm-animation");
+        console.log("Starting simultaneous animation with player route:", playerRoute.length, "points");
+        
+        // Use existing startPathfinding but wait for completion
+        startPathfinding();
+        
+        // Wait for algorithm to complete then synchronize
+        const checkComplete = () => {
+            console.log("Checking for waypoints:", waypoints.current.length, "timer:", timer.current);
+            
+            if(waypoints.current.length > 0 && timer.current > 0) {
+                console.log("Algorithm generated waypoints, synchronizing...");
+                synchronizeAnimationTiming();
+            } else {
+                setTimeout(checkComplete, 200);
+            }
+        };
+        
+        setTimeout(checkComplete, 1000); // Give time for algorithm to start
+    }
+    
+    function synchronizeAnimationTiming() {
+        // Calculate algorithm path duration (this is our target)
+        let algorithmDuration = 0;
+        for(const waypoint of waypoints.current) {
+            algorithmDuration = Math.max(algorithmDuration, waypoint.timestamps[1]);
+        }
+        
+        console.log("Synchronization check:", {
+            algorithmWaypoints: waypoints.current.length,
+            algorithmDuration,
+            timerCurrent: timer.current,
+            playerRoute: playerRoute.length
+        });
+        
+        if(algorithmDuration === 0) {
+            console.log("Algorithm duration is 0, using fallback timing");
+            algorithmDuration = 5000; // 5 second fallback
+        }
+        
+        // Recreate player waypoints with algorithm duration to ensure perfect sync
+        console.log("Recreating player waypoints with target duration:", algorithmDuration);
+        createPlayerWaypoints(playerRoute, algorithmDuration);
+        
+        // Update timer and start synchronized animation
+        timer.current = algorithmDuration;
+        
+        // Set trips data with both player and algorithm waypoints
+        setTripsData([...playerWaypoints.current, ...waypoints.current]);
+        
         setStarted(true);
         setTime(0);
         setAnimationEnded(false);
         
-        // Calculate when player animation should end
-        const playerAnimationDuration = Math.max(...playerWaypoints.current.map(w => w.timestamps[1]));
+        console.log("Perfect synchronization:", {
+            algorithmDuration: Math.round(algorithmDuration),
+            playerSegments: playerWaypoints.current.length,
+            algorithmSegments: waypoints.current.length,
+            bothFinishAt: Math.round(algorithmDuration),
+            totalTrips: playerWaypoints.current.length + waypoints.current.length
+        });
+    }
+
+    async function calculatePlayerRoadPath(waypoints) {
+        // Calculate actual road paths between player waypoints
+        let fullRoadPath = [];
+        let totalRoadDistance = 0;
         
-        // After player animation ends, start algorithm
-        setTimeout(() => {
-            setTime(0);
-            setGamePhase("algorithm-animation");
-            // Reset algorithm state but keep player data
-            setStarted(false);
-            state.current.reset();
-            waypoints.current = [];
-            timer.current = 0;
-            previousTimeRef.current = null;
-            traceNode.current = null;
-            traceNode2.current = null;
-            setAnimationEnded(false);
+        console.log("Calculating road paths between waypoints:", waypoints.map(w => w.id));
+        
+        for(let i = 0; i < waypoints.length - 1; i++) {
+            const startWaypoint = waypoints[i];
+            const endWaypoint = waypoints[i + 1];
             
-            console.log("Starting algorithm animation with player route:", playerRoute.length, "points");
-            startPathfinding();
-        }, playerAnimationDuration / 1000 + 1500); // Wait for player animation + 1.5 seconds
+            // Create a temporary pathfinding instance to find path between waypoints
+            const tempState = new PathfindingState();
+            tempState.graph = state.current.graph; // Use same graph
+            tempState.endNode = state.current.graph.getNode(endWaypoint.id);
+            
+            // Use A* to find shortest path between waypoints
+            const tempAlgorithm = new AStar();
+            tempState.algorithm = tempAlgorithm;
+            tempAlgorithm.start(state.current.graph.getNode(startWaypoint.id), tempState.endNode);
+            
+            // Run algorithm to completion with timeout protection
+            let steps = 0;
+            const maxSteps = 5000; // Reduce max steps for performance
+            console.log(`Finding path from ${startWaypoint.id} to ${endWaypoint.id}...`);
+            
+            while(!tempAlgorithm.finished && steps < maxSteps) {
+                tempAlgorithm.nextStep();
+                steps++;
+                
+                // Log progress for long calculations
+                if(steps % 1000 === 0) {
+                    console.log(`  Step ${steps}/${maxSteps} for waypoint ${i}->${i+1}`);
+                }
+            }
+            
+            console.log(`Path calculation completed: ${steps} steps, finished: ${tempAlgorithm.finished}`);
+            
+            if(tempAlgorithm.finished && tempState.endNode.parent) {
+                // Trace back the path
+                let pathSegment = [];
+                let segmentDistance = 0;
+                let node = tempState.endNode;
+                while(node && node.parent) {
+                    pathSegment.unshift(node);
+                    const parent = node.parent;
+                    if(parent.latitude !== undefined && parent.longitude !== undefined) {
+                        const stepDistance = Math.sqrt(
+                            Math.pow(node.latitude - parent.latitude, 2) + 
+                            Math.pow(node.longitude - parent.longitude, 2)
+                        );
+                        segmentDistance += stepDistance;
+                        totalRoadDistance += stepDistance;
+                    }
+                    node = parent;
+                }
+                if(node) pathSegment.unshift(node); // Add start node
+                
+                // Add to full path (avoid duplicating connection nodes)
+                if(i === 0) {
+                    fullRoadPath.push(...pathSegment);
+                } else {
+                    fullRoadPath.push(...pathSegment.slice(1)); // Skip first node (already in path)
+                }
+                
+                console.log(`Waypoint ${i}->${i+1}: ${pathSegment.length} nodes, ${Math.round(segmentDistance * 111139)}m`);
+            } else {
+                console.log(`Failed to find path between waypoint ${i} and ${i+1} (${steps} steps, finished: ${tempAlgorithm.finished})`);
+                // Return partial result for performance - don't fail the entire calculation
+                return {
+                    roadPath: fullRoadPath,
+                    totalDistance: totalRoadDistance,
+                    totalNodes: fullRoadPath.length,
+                    incomplete: true,
+                    failedSegment: `${i}->${i+1}`
+                };
+            }
+        }
+        
+        return {
+            roadPath: fullRoadPath,
+            totalDistance: totalRoadDistance,
+            totalNodes: fullRoadPath.length
+        };
     }
 
     function calculateScore() {
@@ -270,61 +431,124 @@ function Map() {
             return null;
         }
         
-        // Calculate player route distance
-        let playerDistance = 0;
-        for(let i = 0; i < playerRoute.length - 1; i++) {
-            const from = playerRoute[i];
-            const to = playerRoute[i + 1];
-            if(from && to && from.lat !== undefined && from.lon !== undefined) {
-                playerDistance += Math.sqrt(Math.pow(to.lat - from.lat, 2) + Math.pow(to.lon - from.lon, 2));
-            }
-        }
+        // Simple approach: Check if player waypoints "hit" optimal path nodes
+        console.log("Analyzing player waypoint coverage of optimal path...");
         
         // Calculate optimal route distance
         let optimalDistance = 0;
         let optimalPath = [];
         let node = state.current.endNode;
         
+        console.log("Tracing optimal path from endNode:", {
+            endNodeId: node?.id,
+            hasParent: !!node?.parent,
+            parentId: node?.parent?.id
+        });
+        
         // Build the optimal path
-        while(node && node.parent) {
+        let pathSteps = 0;
+        while(node && node.parent && pathSteps < 1000) { // Safety limit
             const parent = node.parent;
             optimalPath.unshift(node); // Add to beginning
-            if(parent.lat !== undefined && parent.lon !== undefined) {
-                optimalDistance += Math.sqrt(Math.pow(node.lat - parent.lat, 2) + Math.pow(node.lon - parent.lon, 2));
+            
+            // Debug node properties
+            if(pathSteps === 0) {
+                console.log("Node properties:", Object.keys(node));
+                console.log("Parent properties:", Object.keys(parent));
+                console.log("Node coords:", { lat: node.lat, lon: node.lon, x: node.x, y: node.y });
+                console.log("Parent coords:", { lat: parent.lat, lon: parent.lon, x: parent.x, y: parent.y });
+            }
+            
+            // Use correct property names: latitude/longitude
+            const nodeLat = node.latitude;
+            const nodeLon = node.longitude;  
+            const parentLat = parent.latitude;
+            const parentLon = parent.longitude;
+            
+            if(parentLat !== undefined && parentLon !== undefined && nodeLat !== undefined && nodeLon !== undefined) {
+                const segmentDistance = Math.sqrt(Math.pow(nodeLat - parentLat, 2) + Math.pow(nodeLon - parentLon, 2));
+                optimalDistance += segmentDistance;
+                if(pathSteps < 3) console.log(`Path step ${pathSteps}: ${parent.id} -> ${node.id}, distance: ${segmentDistance}`);
+            } else {
+                console.log(`Missing coordinates at step ${pathSteps}:`, { nodeLat, nodeLon, parentLat, parentLon });
             }
             node = parent;
+            pathSteps++;
         }
         if(node) optimalPath.unshift(node); // Add start node
         
+        console.log(`Optimal path built: ${pathSteps} steps, total distance: ${optimalDistance}`);
+        
         console.log("Score calculation:", { 
-            playerDistance, 
             optimalDistance, 
             playerRouteLength: playerRoute.length,
             optimalPathLength: optimalPath.length,
             algorithmFinished: state.current.finished
         });
         
-        // If no optimal path was found, show player route as reference
-        if(optimalDistance === 0) {
+        // Simple and efficient: Check waypoint coverage of optimal path
+        const optimalNodeCount = optimalPath.length;
+        const playerWaypointCount = playerRoute.length;
+        
+        // If no optimal path was found, show basic comparison
+        if(optimalDistance === 0 || optimalNodeCount === 0) {
             return {
-                efficiency: 100, // Give full points if algorithm didn't complete
-                playerDistance: Math.round(playerDistance * 111139),
-                optimalDistance: Math.round(playerDistance * 111139), // Use player distance as reference
-                note: "Algorithm path not found - showing your route distance"
+                efficiency: 100,
+                playerNodes: playerWaypointCount,
+                optimalNodes: optimalNodeCount,
+                playerDistance: 0,
+                optimalDistance: 0,
+                waypoints: playerWaypointCount,
+                note: "Algorithm path not found"
             };
         }
         
-        // Avoid division by zero for player distance
-        if(playerDistance === 0) {
-            return { efficiency: 0, playerDistance: 0, optimalDistance: Math.round(optimalDistance * 111139) };
+        // Check how many optimal nodes the player waypoints are close to
+        let nodesHit = 0;
+        const hitThreshold = 0.001; // ~100m tolerance in lat/lon degrees
+        
+        for(const optimalNode of optimalPath) {
+            for(const playerWaypoint of playerRoute) {
+                const distance = Math.sqrt(
+                    Math.pow(optimalNode.latitude - playerWaypoint.lat, 2) + 
+                    Math.pow(optimalNode.longitude - playerWaypoint.lon, 2)
+                );
+                if(distance <= hitThreshold) {
+                    nodesHit++;
+                    break; // Count each optimal node only once
+                }
+            }
         }
         
-        // Score as percentage efficiency
-        const efficiency = Math.min(100, Math.round((optimalDistance / playerDistance) * 100));
+        // Path coverage efficiency: how much of optimal path did player hit
+        const coverageEfficiency = Math.round((nodesHit / optimalNodeCount) * 100);
+        
+        // Granularity bonus: more waypoints = more detailed planning (up to reasonable limit)
+        const granularityBonus = Math.min(10, Math.round(playerWaypointCount / 2)); // Max 10% bonus
+        
+        // Final efficiency with granularity bonus
+        const finalEfficiency = Math.min(100, coverageEfficiency + granularityBonus);
+        
+        console.log("Waypoint coverage analysis:", {
+            playerWaypoints: playerWaypointCount,
+            optimalNodes: optimalNodeCount,
+            nodesHit,
+            coverageEfficiency: coverageEfficiency + "%",
+            granularityBonus: granularityBonus + "%",
+            finalEfficiency: finalEfficiency + "%",
+            optimalDistanceM: Math.round(optimalDistance * 111139)
+        });
+        
         return {
-            efficiency: efficiency || 0,
-            playerDistance: Math.round(playerDistance * 111139), // Convert to meters
-            optimalDistance: Math.round(optimalDistance * 111139)
+            efficiency: finalEfficiency,
+            coverageEfficiency,
+            granularityBonus,
+            playerNodes: playerWaypointCount,
+            optimalNodes: optimalNodeCount,
+            nodesHit,
+            playerDistance: 0, // Not calculating player distance anymore
+            optimalDistance: Math.round(optimalDistance * 111139),
+            waypoints: playerWaypointCount
         };
     }
 
@@ -339,8 +563,10 @@ function Map() {
             ui.current.showSnack("Please place start and end points first.", "info");
             return;
         }
+        // Initialize player route with start node
+        setPlayerRoute([startNode]);
         setGamePhase("drawing");
-        ui.current.showSnack("Draw your route by clicking points on the map!", "info");
+        ui.current.showSnack("Draw your route by clicking waypoints to the destination!", "info");
     }
 
     // Progress animation by one step
@@ -470,20 +696,23 @@ function Map() {
 
     // Calculate score when game animation ends
     useEffect(() => {
-        if(gameMode && animationEnded && gamePhase === "algorithm-animation") {
+        if(gameMode && animationEnded && gamePhase === "algorithm-animation" && state.current.finished) {
             console.log("Calculating score:", { 
                 gameMode, 
                 animationEnded, 
                 gamePhase, 
                 playerRouteLength: playerRoute.length,
-                hasEndNode: !!state.current.endNode 
+                hasEndNode: !!state.current.endNode,
+                algorithmFinished: state.current.finished
             });
+            
+            // Calculate score synchronously
             const score = calculateScore();
             console.log("Score result:", score);
             setPlayerScore(score);
             setGamePhase("complete");
         }
-    }, [animationEnded, gameMode, gamePhase, playerRoute]);
+    }, [animationEnded, gameMode, gamePhase, playerRoute, state.current.finished]);
 
     return (
         <>
