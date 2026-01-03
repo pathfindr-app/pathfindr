@@ -481,6 +481,8 @@ const SoundEngine = {
 
 const GameState = {
     map: null,
+    tileLayer: null,        // Reference to Leaflet tile layer for toggle
+    showCustomRoads: true,  // Toggle state for custom road view
     drawCanvas: null,
     drawCtx: null,
     vizCanvas: null,
@@ -510,9 +512,11 @@ const GameState = {
     startLabel: null,
     endLabel: null,
 
-    // User drawing
+    // User drawing - SINGLE SOURCE OF TRUTH
     isDrawing: false,
-    userPath: [],
+    userPathNodes: [],      // Array of node IDs (snapped to road network)
+    userDrawnPoints: [],    // Raw lat/lng points (actual mouse path for distance calc)
+    userDistance: 0,        // Distance in km (single value used everywhere)
     userPathLayer: null,
 
     // A* results
@@ -586,7 +590,14 @@ function initSoundListeners() {
         if (e.key === 'd' || e.key === 'D') {
             toggleDebugMode();
         }
+        // View toggle
+        if (e.key === 'v' || e.key === 'V') {
+            toggleMapView();
+        }
     });
+
+    // View toggle button
+    document.getElementById('toggle-view-btn').addEventListener('click', toggleMapView);
 }
 
 function initMap() {
@@ -599,9 +610,15 @@ function initMap() {
         dragging: true
     });
 
-    L.tileLayer(CONFIG.tileUrl, {
+    // Store tile layer reference for toggle functionality
+    GameState.tileLayer = L.tileLayer(CONFIG.tileUrl, {
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(GameState.map);
+
+    // Start with custom road view mode if enabled
+    if (GameState.showCustomRoads) {
+        document.getElementById('map-container').classList.add('custom-roads-mode');
+    }
 
     GameState.exploredLayer = L.layerGroup().addTo(GameState.map);
     GameState.optimalLayer = L.layerGroup().addTo(GameState.map);
@@ -609,10 +626,12 @@ function initMap() {
 
     GameState.map.on('move', () => {
         redrawUserPath();
+        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
     });
     GameState.map.on('zoom', () => {
         redrawUserPath();
+        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
     });
 }
@@ -738,7 +757,7 @@ async function loadRoadNetwork(location) {
         const query = `
             [out:json][timeout:30];
             (
-                way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|service|track"]
+                way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
                 (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
             );
             out body;
@@ -820,6 +839,11 @@ function processRoadData(data) {
 
     // Analyze graph connectivity
     analyzeGraphConnectivity();
+
+    // Draw road network if custom view is enabled
+    if (GameState.showCustomRoads) {
+        drawRoadNetwork();
+    }
 }
 
 // =============================================================================
@@ -1050,28 +1074,41 @@ function startDrawing(e) {
     GameState.drawCanvas.classList.add('drawing-active');
     GameState.map.dragging.disable();
 
-    const point = getLatLngFromEvent(e);
-    if (GameState.userPath.length === 0) {
+    // Always start from the start node
+    if (GameState.userPathNodes.length === 0) {
+        GameState.userPathNodes.push(GameState.startNode);
+        // Add start node position as first raw point
         const startPos = GameState.nodes.get(GameState.startNode);
-        GameState.userPath.push({ lat: startPos.lat, lng: startPos.lng });
+        if (startPos) {
+            GameState.userDrawnPoints.push({ lat: startPos.lat, lng: startPos.lng });
+        }
+        recalculateUserDistance();
+        updateAllDistanceDisplays();
     }
-    GameState.userPath.push(point);
+
+    // Add the clicked point (raw + snapped)
+    const point = getLatLngFromEvent(e);
+    GameState.userDrawnPoints.push({ lat: point.lat, lng: point.lng });
+    addPointToUserPath(point.lat, point.lng);
     redrawUserPath();
-    updateRouteInfo();
 }
 
 function draw(e) {
     if (!GameState.isDrawing) return;
 
     const point = getLatLngFromEvent(e);
-    const lastPoint = GameState.userPath[GameState.userPath.length - 1];
-    const dist = haversineDistance(lastPoint.lat, lastPoint.lng, point.lat, point.lng);
 
-    if (dist > 0.005) {
-        GameState.userPath.push(point);
+    // Store raw point for distance calculation
+    GameState.userDrawnPoints.push({ lat: point.lat, lng: point.lng });
+
+    // Add point to path (addPointToUserPath handles deduplication)
+    if (addPointToUserPath(point.lat, point.lng)) {
         redrawUserPath();
-        updateRouteInfo();
     }
+
+    // Update distance from raw drawn points
+    recalculateUserDistance();
+    updateAllDistanceDisplays();
 }
 
 function stopDrawing() {
@@ -1081,7 +1118,7 @@ function stopDrawing() {
         GameState.map.dragging.enable();
     }
 
-    if (GameState.userPath.length >= CONFIG.minRoutePoints) {
+    if (GameState.userPathNodes.length >= CONFIG.minRoutePoints) {
         document.getElementById('submit-btn').disabled = false;
     }
 }
@@ -1107,7 +1144,7 @@ function redrawUserPath() {
     const ctx = GameState.drawCtx;
     ctx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
 
-    if (GameState.userPath.length < 2) return;
+    if (GameState.userPathNodes.length < 2) return;
 
     ctx.shadowColor = CONFIG.colors.userRoute;
     ctx.shadowBlur = 12;
@@ -1117,9 +1154,12 @@ function redrawUserPath() {
     ctx.lineJoin = 'round';
 
     ctx.beginPath();
-    for (let i = 0; i < GameState.userPath.length; i++) {
-        const point = GameState.userPath[i];
-        const screenPoint = GameState.map.latLngToContainerPoint([point.lat, point.lng]);
+    for (let i = 0; i < GameState.userPathNodes.length; i++) {
+        const nodeId = GameState.userPathNodes[i];
+        const pos = GameState.nodes.get(nodeId);
+        if (!pos) continue;
+
+        const screenPoint = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
         if (i === 0) ctx.moveTo(screenPoint.x, screenPoint.y);
         else ctx.lineTo(screenPoint.x, screenPoint.y);
     }
@@ -1129,30 +1169,23 @@ function redrawUserPath() {
 }
 
 function clearUserPath() {
-    GameState.userPath = [];
-    GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
-    GameState.userPathLayer.clearLayers();
-    document.getElementById('submit-btn').disabled = true;
-    document.getElementById('distance-label').textContent = 'Drawing';
-    updateRouteInfo();
+    resetUserPath();
 }
 
 function undoLastSegment() {
-    if (GameState.userPath.length > 1) {
-        GameState.userPath.splice(-Math.min(10, GameState.userPath.length - 1));
+    if (GameState.userPathNodes.length > 1) {
+        // Remove last few nodes
+        GameState.userPathNodes.splice(-Math.min(5, GameState.userPathNodes.length - 1));
+        recalculateUserDistance();
+        updateAllDistanceDisplays();
         redrawUserPath();
-        updateRouteInfo();
-        if (GameState.userPath.length < CONFIG.minRoutePoints) {
+        if (GameState.userPathNodes.length < CONFIG.minRoutePoints) {
             document.getElementById('submit-btn').disabled = true;
         }
     }
 }
 
-function updateRouteInfo() {
-    const distance = calculatePathDistance(GameState.userPath);
-    document.getElementById('drawn-distance').textContent = distance.toFixed(2);
-    document.getElementById('drawn-points').textContent = GameState.userPath.length;
-}
+// updateRouteInfo() removed - replaced by updateAllDistanceDisplays()
 
 // =============================================================================
 // A* ALGORITHM
@@ -1262,8 +1295,12 @@ async function submitRoute() {
     disableDrawing();
     document.getElementById('submit-btn').disabled = true;
 
-    // Keep user path as line on map
-    const userLatLngs = GameState.userPath.map(p => [p.lat, p.lng]);
+    // Keep user path as line on map (convert node IDs to lat/lng)
+    const userLatLngs = GameState.userPathNodes
+        .map(nodeId => GameState.nodes.get(nodeId))
+        .filter(pos => pos !== undefined)
+        .map(pos => [pos.lat, pos.lng]);
+
     L.polyline(userLatLngs, {
         color: CONFIG.colors.userRoute,
         weight: 4,
@@ -1698,6 +1735,141 @@ function clearVisualization() {
     GameState.exploredLayer.clearLayers();
     GameState.optimalLayer.clearLayers();
     GameState.userPathLayer.clearLayers();
+
+    // Redraw road network if custom view is enabled
+    if (GameState.showCustomRoads) {
+        drawRoadNetwork();
+    }
+}
+
+// =============================================================================
+// PATH DISTANCE SYSTEM - Single Source of Truth
+// =============================================================================
+
+/**
+ * Add a point to the user's path by snapping to nearest road node.
+ * This is the ONLY way points should be added to the user path.
+ */
+function addPointToUserPath(lat, lng) {
+    const nodeId = findNearestNode(lat, lng);
+    if (nodeId === null) return false;
+
+    // Avoid duplicate consecutive nodes
+    const lastNode = GameState.userPathNodes[GameState.userPathNodes.length - 1];
+    if (nodeId === lastNode) return false;
+
+    GameState.userPathNodes.push(nodeId);
+    recalculateUserDistance();
+    updateAllDistanceDisplays();
+
+    // Auto-complete: if user reached (or is very close to) the end node
+    if (GameState.userPathNodes.length >= CONFIG.minRoutePoints) {
+        const endPos = GameState.nodes.get(GameState.endNode);
+        const nodePos = GameState.nodes.get(nodeId);
+
+        // Check if exact match OR within 30 meters of end node
+        const isAtEnd = nodeId === GameState.endNode ||
+            (endPos && nodePos && haversineDistance(nodePos.lat, nodePos.lng, endPos.lat, endPos.lng) < 0.03);
+
+        if (isAtEnd) {
+            // If close but not exactly at end, add endNode to complete the path
+            if (nodeId !== GameState.endNode) {
+                GameState.userPathNodes.push(GameState.endNode);
+                recalculateUserDistance();
+                updateAllDistanceDisplays();
+            }
+            // Small delay for visual feedback, then auto-submit
+            setTimeout(() => {
+                if (!GameState.vizState.active) {  // Don't submit if already processing
+                    submitRoute();
+                }
+            }, 150);
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Recalculate the user's path distance from raw drawn points.
+ * This measures the actual line the user drew, not snapped nodes.
+ */
+function recalculateUserDistance() {
+    GameState.userDistance = calculateDrawnDistance();
+}
+
+/**
+ * Calculate distance from raw drawn points (actual mouse path).
+ * This is what the user visually drew - simple and accurate.
+ */
+function calculateDrawnDistance() {
+    const points = GameState.userDrawnPoints;
+    if (!points || points.length < 2) return 0;
+
+    let total = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+        total += haversineDistance(
+            points[i].lat, points[i].lng,
+            points[i + 1].lat, points[i + 1].lng
+        );
+    }
+    return total;
+}
+
+/**
+ * Calculate the total distance of a path defined by node IDs.
+ * Used for A* optimal path calculation.
+ */
+function calculateNodePathDistance(nodeIds) {
+    if (!nodeIds || nodeIds.length < 2) return 0;
+
+    let total = 0;
+    for (let i = 0; i < nodeIds.length - 1; i++) {
+        const posA = GameState.nodes.get(nodeIds[i]);
+        const posB = GameState.nodes.get(nodeIds[i + 1]);
+        if (posA && posB) {
+            total += haversineDistance(posA.lat, posA.lng, posB.lat, posB.lng);
+        }
+    }
+    return total;
+}
+
+/**
+ * Update ALL distance displays from the single source of truth.
+ * This ensures consistency across the entire UI.
+ */
+function updateAllDistanceDisplays() {
+    const distStr = GameState.userDistance.toFixed(2);
+
+    // Sidebar display
+    const sidebarDist = document.getElementById('drawn-distance');
+    if (sidebarDist) sidebarDist.textContent = distStr;
+
+    // Bottom bar display (results panel)
+    const bottomDist = document.getElementById('user-distance');
+    if (bottomDist) bottomDist.textContent = `${distStr} km`;
+
+    // Debug panel (if visible)
+    const debugDist = document.getElementById('debug-user-dist');
+    if (debugDist) debugDist.textContent = `${distStr} km`;
+
+    // Points count
+    const pointsEl = document.getElementById('drawn-points');
+    if (pointsEl) pointsEl.textContent = GameState.userPathNodes.length;
+}
+
+/**
+ * Clear the user's path completely.
+ */
+function resetUserPath() {
+    GameState.userPathNodes = [];
+    GameState.userDrawnPoints = [];  // Reset raw drawn points
+    GameState.userDistance = 0;
+    GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+    GameState.userPathLayer.clearLayers();
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('distance-label').textContent = 'Distance';
+    updateAllDistanceDisplays();
 }
 
 // =============================================================================
@@ -1705,11 +1877,11 @@ function clearVisualization() {
 // =============================================================================
 
 function calculateAndShowScore() {
-    const snappedUserPath = snapPathToRoads(GameState.userPath);
-    const userDistance = calculateSnappedPathDistance(snappedUserPath);
-    const optimalDistance = calculateGraphPathDistance(GameState.optimalPath);
+    // User distance comes from the SINGLE SOURCE OF TRUTH
+    const userDistance = GameState.userDistance;
 
-    GameState.snappedUserPath = snappedUserPath;
+    // Calculate optimal distance using the same function
+    const optimalDistance = calculateNodePathDistance(GameState.optimalPath);
 
     let efficiency;
     if (optimalDistance === 0 || userDistance === 0) {
@@ -1721,24 +1893,16 @@ function calculateAndShowScore() {
     const roundScore = Math.round((efficiency / 100) * CONFIG.maxScore);
     GameState.totalScore += roundScore;
 
-    document.getElementById('user-distance').textContent = `${userDistance.toFixed(2)} km`;
+    // Update displays - user distance already shown via updateAllDistanceDisplays()
     document.getElementById('optimal-distance').textContent = `${optimalDistance.toFixed(2)} km`;
     document.getElementById('efficiency').textContent = `${efficiency.toFixed(1)}%`;
 
-    // Update sidebar to show snapped road distance (matching bottom bar)
-    document.getElementById('drawn-distance').textContent = userDistance.toFixed(2);
-    document.getElementById('distance-label').textContent = 'Road dist';
+    // Update debug panel optimal distance
+    const debugOptimal = document.getElementById('debug-optimal-dist');
+    if (debugOptimal) debugOptimal.textContent = `${optimalDistance.toFixed(3)} km`;
 
     document.getElementById('next-round-btn').textContent =
         GameState.currentRound >= CONFIG.totalRounds ? 'See Final Score' : 'Next Round';
-
-    // Update debug panel if visible
-    if (GameState.debug.enabled) {
-        const userDistEl = document.getElementById('debug-user-dist');
-        const optimalDistEl = document.getElementById('debug-optimal-dist');
-        if (userDistEl) userDistEl.textContent = `${userDistance.toFixed(3)} km`;
-        if (optimalDistEl) optimalDistEl.textContent = `${optimalDistance.toFixed(3)} km`;
-    }
 
     showResults();
 
@@ -1767,81 +1931,7 @@ async function animateScoreCountUp(targetScore) {
     headerScoreEl.textContent = GameState.totalScore;
 }
 
-function snapPathToRoads(path) {
-    if (path.length < 2) return [];
-
-    // Reset debug counters
-    GameState.debug.snapFailures = 0;
-    GameState.debug.snapSuccesses = 0;
-    GameState.debug.lastSnapDetails = [];
-
-    const visitedNodes = [];
-
-    for (let i = 0; i < path.length; i++) {
-        const point = path[i];
-        let nearestNode;
-
-        // Force first point to snap to start node, last point to snap to end node
-        if (i === 0) {
-            nearestNode = GameState.startNode;
-        } else if (i === path.length - 1) {
-            nearestNode = GameState.endNode;
-        } else {
-            nearestNode = findNearestNode(point.lat, point.lng);
-        }
-
-        if (nearestNode !== null) {
-            if (visitedNodes.length === 0 || visitedNodes[visitedNodes.length - 1] !== nearestNode) {
-                visitedNodes.push(nearestNode);
-            }
-        }
-    }
-
-    const fullPath = [];
-    let totalSegments = 0;
-    let failedSegments = 0;
-
-    for (let i = 0; i < visitedNodes.length - 1; i++) {
-        const fromNode = visitedNodes[i];
-        const toNode = visitedNodes[i + 1];
-
-        if (fromNode === toNode) continue;
-
-        totalSegments++;
-        const segment = findShortestPathBetween(fromNode, toNode);
-
-        if (segment.length > 0) {
-            // Valid path found
-            if (fullPath.length === 0) {
-                fullPath.push(...segment);
-            } else {
-                fullPath.push(...segment.slice(1));
-            }
-        } else {
-            // Path failed - nodes are disconnected
-            failedSegments++;
-            GameState.debug.lastSnapDetails.push({
-                from: fromNode,
-                to: toNode,
-                status: 'disconnected'
-            });
-
-            // Still need to add the destination node to maintain path continuity
-            // but mark this as a gap in the road network
-            if (fullPath.length === 0) {
-                fullPath.push(fromNode);
-            }
-            fullPath.push(toNode);
-        }
-    }
-
-    // Update debug panel if visible
-    if (GameState.debug.enabled) {
-        updateDebugPanel();
-    }
-
-    return fullPath;
-}
+// snapPathToRoads() removed - snapping now happens in real-time via addPointToUserPath()
 
 function findNearestNode(lat, lng) {
     let nearestNode = null;
@@ -1862,6 +1952,16 @@ function findNearestNode(lat, lng) {
     }
 
     return nearestNode;
+}
+
+/**
+ * Find a direct edge between two nodes if one exists.
+ * Returns the edge object { neighbor, weight } or null.
+ */
+function findEdgeBetween(nodeA, nodeB) {
+    const edges = GameState.edges.get(nodeA);
+    if (!edges) return null;
+    return edges.find(e => e.neighbor === nodeB) || null;
 }
 
 function findShortestPathBetween(startNode, endNode) {
@@ -1928,39 +2028,7 @@ function findShortestPathBetween(startNode, endNode) {
     return []; // Return empty array, NOT a fake path
 }
 
-function calculateSnappedPathDistance(nodeIds) {
-    if (nodeIds.length < 2) return 0;
-
-    let distance = 0;
-    for (let i = 0; i < nodeIds.length - 1; i++) {
-        const posA = GameState.nodes.get(nodeIds[i]);
-        const posB = GameState.nodes.get(nodeIds[i + 1]);
-        if (posA && posB) {
-            distance += haversineDistance(posA.lat, posA.lng, posB.lat, posB.lng);
-        }
-    }
-    return distance;
-}
-
-function calculatePathDistance(path) {
-    if (path.length < 2) return 0;
-    let distance = 0;
-    for (let i = 0; i < path.length - 1; i++) {
-        distance += haversineDistance(path[i].lat, path[i].lng, path[i + 1].lat, path[i + 1].lng);
-    }
-    return distance;
-}
-
-function calculateGraphPathDistance(nodeIds) {
-    if (nodeIds.length < 2) return 0;
-    let distance = 0;
-    for (let i = 0; i < nodeIds.length - 1; i++) {
-        const posA = GameState.nodes.get(nodeIds[i]);
-        const posB = GameState.nodes.get(nodeIds[i + 1]);
-        if (posA && posB) distance += haversineDistance(posA.lat, posA.lng, posB.lat, posB.lng);
-    }
-    return distance;
-}
+// Old distance functions removed - replaced by calculateNodePathDistance() in PATH DISTANCE SYSTEM section
 
 // =============================================================================
 // LOCATION SEARCH
@@ -2126,6 +2194,83 @@ function toRad(deg) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =============================================================================
+// CUSTOM ROAD NETWORK RENDERING
+// =============================================================================
+
+/**
+ * Draw the road network with cyberpunk neon aesthetic.
+ * Only shows roads that exist in our graph - what A* can actually use.
+ */
+function drawRoadNetwork() {
+    const ctx = GameState.vizCtx;
+    const width = GameState.vizCanvas.width;
+    const height = GameState.vizCanvas.height;
+
+    // Don't draw if visualization is active
+    if (GameState.vizState.active) return;
+
+    // Clear the canvas (background handled by CSS)
+    ctx.clearRect(0, 0, width, height);
+
+    if (GameState.edgeList.length === 0) return;
+
+    // Draw all edges with neon glow effect
+    ctx.strokeStyle = 'rgba(255, 140, 50, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#ff8c32';
+    ctx.shadowBlur = 6;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    for (const edge of GameState.edgeList) {
+        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+
+        // Skip edges completely off-screen
+        if (from.x < -100 && to.x < -100) continue;
+        if (from.x > width + 100 && to.x > width + 100) continue;
+        if (from.y < -100 && to.y < -100) continue;
+        if (from.y > height + 100 && to.y > height + 100) continue;
+
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+/**
+ * Clear the road network canvas.
+ */
+function clearRoadNetwork() {
+    const ctx = GameState.vizCtx;
+    ctx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
+}
+
+/**
+ * Toggle between custom road view and standard map view.
+ */
+function toggleMapView() {
+    GameState.showCustomRoads = !GameState.showCustomRoads;
+
+    const btn = document.getElementById('toggle-view-btn');
+    const text = document.getElementById('view-mode-text');
+    const mapContainer = document.getElementById('map-container');
+
+    if (GameState.showCustomRoads) {
+        mapContainer.classList.add('custom-roads-mode');
+        drawRoadNetwork();
+        if (text) text.textContent = 'Map View';
+        if (btn) btn.classList.add('active');
+    } else {
+        mapContainer.classList.remove('custom-roads-mode');
+        clearRoadNetwork();
+        if (text) text.textContent = 'Road View';
+        if (btn) btn.classList.remove('active');
+    }
 }
 
 // =============================================================================
@@ -2407,7 +2552,7 @@ function testAStarPath() {
     const { path, explored } = runAStar(GameState.startNode, GameState.endNode);
     const endTime = performance.now();
 
-    const distance = calculateGraphPathDistance(path);
+    const distance = calculateNodePathDistance(path);
 
     let message = `A* Test Results:\n\n`;
     message += `Time: ${(endTime - startTime).toFixed(2)}ms\n`;
