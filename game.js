@@ -18,7 +18,7 @@ const CONFIG = {
 
     tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     totalRounds: 5,
-    minRoutePoints: 5,
+    minRoutePoints: 2,
 
     // Visualization settings - OPTIMIZED for performance
     viz: {
@@ -679,13 +679,19 @@ function initEventListeners() {
     document.getElementById('submit-btn').addEventListener('click', submitRoute);
     document.getElementById('next-round-btn').addEventListener('click', nextRound);
     document.getElementById('play-again-btn').addEventListener('click', playAgain);
-    document.getElementById('search-btn').addEventListener('click', searchLocation);
-    document.getElementById('center-btn').addEventListener('click', centerOnRoute);
+    document.getElementById('mute-btn').addEventListener('click', toggleMute);
 
-    // Replay controls
-    document.getElementById('replay-btn').addEventListener('click', replayVisualization);
+    // Optional controls (may be hidden in new UI)
+    const searchBtn = document.getElementById('search-btn');
+    if (searchBtn) searchBtn.addEventListener('click', searchLocation);
 
-    // Speed buttons
+    const centerBtn = document.getElementById('center-btn');
+    if (centerBtn) centerBtn.addEventListener('click', centerOnRoute);
+
+    const replayBtn = document.getElementById('replay-btn');
+    if (replayBtn) replayBtn.addEventListener('click', replayVisualization);
+
+    // Speed buttons (optional, may not exist in new UI)
     document.querySelectorAll('.speed-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
@@ -694,9 +700,12 @@ function initEventListeners() {
         });
     });
 
-    document.getElementById('location-search').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchLocation();
-    });
+    const locationSearch = document.getElementById('location-search');
+    if (locationSearch) {
+        locationSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchLocation();
+        });
+    }
 
     // Wheel zoom passthrough
     GameState.drawCanvas.addEventListener('wheel', (e) => {
@@ -864,6 +873,16 @@ function nextRound() {
     clearVisualization();
     clearUserPath();
 
+    // Reset comparison bars for next round
+    const userBar = document.getElementById('user-bar');
+    const optimalBar = document.getElementById('optimal-bar');
+    if (userBar) userBar.style.width = '0%';
+    if (optimalBar) optimalBar.style.width = '0%';
+
+    // Reset round score display
+    const roundScore = document.getElementById('round-score');
+    if (roundScore) roundScore.textContent = '0';
+
     if (GameState.currentRound < CONFIG.totalRounds) {
         GameState.currentRound++;
         updateRoundDisplay();
@@ -878,12 +897,19 @@ function playAgain() {
     hideGameOver();
     GameState.currentRound = 1;
     GameState.totalScore = 0;
+    GameState.roundScores = []; // Reset round history
     updateScoreDisplay();
     updateRoundDisplay();
     clearVisualization();
     clearUserPath();
     selectRandomEndpoints();
     enableDrawing();
+
+    // Reset comparison bars
+    const userBar = document.getElementById('user-bar');
+    const optimalBar = document.getElementById('optimal-bar');
+    if (userBar) userBar.style.width = '0%';
+    if (optimalBar) optimalBar.style.width = '0%';
 }
 
 function selectRandomEndpoints() {
@@ -1056,7 +1082,8 @@ function placeMarkers() {
 function enableDrawing() {
     GameState.drawCanvas.classList.add('drawing-ready');
     GameState.drawCanvas.classList.remove('drawing-active');
-    document.getElementById('submit-btn').disabled = true;
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
     GameState.canDraw = true;
 }
 
@@ -1118,8 +1145,10 @@ function stopDrawing() {
         GameState.map.dragging.enable();
     }
 
+    // Enable submit button if enough points (for fallback, auto-submit handles most cases)
     if (GameState.userPathNodes.length >= CONFIG.minRoutePoints) {
-        document.getElementById('submit-btn').disabled = false;
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) submitBtn.disabled = false;
     }
 }
 
@@ -1180,7 +1209,8 @@ function undoLastSegment() {
         updateAllDistanceDisplays();
         redrawUserPath();
         if (GameState.userPathNodes.length < CONFIG.minRoutePoints) {
-            document.getElementById('submit-btn').disabled = true;
+            const submitBtn = document.getElementById('submit-btn');
+            if (submitBtn) submitBtn.disabled = true;
         }
     }
 }
@@ -1293,7 +1323,8 @@ class MinHeap {
 async function submitRoute() {
     SoundEngine.submit();
     disableDrawing();
-    document.getElementById('submit-btn').disabled = true;
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
 
     // Keep user path as line on map (convert node IDs to lat/lng)
     const userLatLngs = GameState.userPathNodes
@@ -1841,9 +1872,11 @@ function calculateNodePathDistance(nodeIds) {
 function updateAllDistanceDisplays() {
     const distStr = GameState.userDistance.toFixed(2);
 
-    // Sidebar display
-    const sidebarDist = document.getElementById('drawn-distance');
-    if (sidebarDist) sidebarDist.textContent = distStr;
+    // HUD display (new floating bar) - has nested km unit
+    const hudDist = document.getElementById('drawn-distance');
+    if (hudDist) {
+        hudDist.innerHTML = `${distStr}<span class="hud-unit">km</span>`;
+    }
 
     // Bottom bar display (results panel)
     const bottomDist = document.getElementById('user-distance');
@@ -1867,8 +1900,14 @@ function resetUserPath() {
     GameState.userDistance = 0;
     GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
     GameState.userPathLayer.clearLayers();
-    document.getElementById('submit-btn').disabled = true;
-    document.getElementById('distance-label').textContent = 'Distance';
+
+    // Handle hidden submit button gracefully
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    const distLabel = document.getElementById('distance-label');
+    if (distLabel) distLabel.textContent = 'Distance';
+
     updateAllDistanceDisplays();
 }
 
@@ -1893,42 +1932,94 @@ function calculateAndShowScore() {
     const roundScore = Math.round((efficiency / 100) * CONFIG.maxScore);
     GameState.totalScore += roundScore;
 
+    // Store round data for game-over summary
+    if (!GameState.roundScores) GameState.roundScores = [];
+    GameState.roundScores.push({
+        round: GameState.currentRound,
+        score: roundScore,
+        efficiency: efficiency,
+        userDistance: userDistance,
+        optimalDistance: optimalDistance
+    });
+
     // Update displays - user distance already shown via updateAllDistanceDisplays()
     document.getElementById('optimal-distance').textContent = `${optimalDistance.toFixed(2)} km`;
-    document.getElementById('efficiency').textContent = `${efficiency.toFixed(1)}%`;
+    document.getElementById('efficiency').textContent = `${efficiency.toFixed(0)}%`;
+
+    // Update result meta (round and total)
+    const resultRound = document.getElementById('result-round');
+    if (resultRound) resultRound.textContent = GameState.currentRound;
+
+    const resultTotal = document.getElementById('result-total');
+    if (resultTotal) resultTotal.textContent = GameState.totalScore;
+
+    // Update comparison bars (animate width based on distances)
+    const maxDist = Math.max(userDistance, optimalDistance);
+    const userBar = document.getElementById('user-bar');
+    const optimalBar = document.getElementById('optimal-bar');
+
+    if (userBar && optimalBar && maxDist > 0) {
+        // Delay bar animation for visual effect
+        setTimeout(() => {
+            userBar.style.width = `${(userDistance / maxDist) * 100}%`;
+            optimalBar.style.width = `${(optimalDistance / maxDist) * 100}%`;
+        }, 100);
+    }
 
     // Update debug panel optimal distance
     const debugOptimal = document.getElementById('debug-optimal-dist');
     if (debugOptimal) debugOptimal.textContent = `${optimalDistance.toFixed(3)} km`;
 
-    document.getElementById('next-round-btn').textContent =
-        GameState.currentRound >= CONFIG.totalRounds ? 'See Final Score' : 'Next Round';
+    // Update next button text
+    const nextBtn = document.getElementById('next-round-btn');
+    if (nextBtn) {
+        if (GameState.currentRound >= CONFIG.totalRounds) {
+            nextBtn.innerHTML = `<span>See Final Score</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>`;
+        } else {
+            nextBtn.innerHTML = `<span>Next Round</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>`;
+        }
+    }
 
     showResults();
 
     // Animate score count-up with ticks
-    animateScoreCountUp(roundScore);
+    animateScoreCountUp(roundScore, efficiency);
 }
 
-async function animateScoreCountUp(targetScore) {
+async function animateScoreCountUp(targetScore, targetEfficiency) {
     const scoreEl = document.getElementById('round-score');
     const headerScoreEl = document.getElementById('current-score');
+    const efficiencyEl = document.getElementById('efficiency');
     const previousTotal = GameState.totalScore - targetScore;
 
     let currentScore = 0;
-    const increment = Math.max(1, Math.ceil(targetScore / 30)); // ~30 ticks
+    let currentEfficiency = 0;
+    const scoreIncrement = Math.max(1, Math.ceil(targetScore / 30)); // ~30 ticks
+    const efficiencyIncrement = targetEfficiency / 30;
     const delay = 35; // ms between ticks
 
     while (currentScore < targetScore) {
-        currentScore = Math.min(currentScore + increment, targetScore);
+        currentScore = Math.min(currentScore + scoreIncrement, targetScore);
+        currentEfficiency = Math.min(currentEfficiency + efficiencyIncrement, targetEfficiency);
+
         scoreEl.textContent = currentScore;
         headerScoreEl.textContent = previousTotal + currentScore;
+        if (efficiencyEl) efficiencyEl.textContent = `${Math.round(currentEfficiency)}%`;
+
         SoundEngine.tick();
         await sleep(delay);
     }
 
+    // Final values
     scoreEl.textContent = targetScore;
     headerScoreEl.textContent = GameState.totalScore;
+    if (efficiencyEl) efficiencyEl.textContent = `${Math.round(targetEfficiency)}%`;
 }
 
 // snapPathToRoads() removed - snapping now happens in real-time via addPointToUserPath()
@@ -2115,7 +2206,10 @@ function hideResults() {
 
 function showGameOver() {
     SoundEngine.stopAmbient();
-    document.getElementById('final-score').textContent = GameState.totalScore;
+
+    // Animate the final score count-up
+    const finalScoreEl = document.getElementById('final-score');
+    animateFinalScore(GameState.totalScore, finalScoreEl);
 
     const maxPossible = CONFIG.totalRounds * CONFIG.maxScore;
     const percentage = (GameState.totalScore / maxPossible) * 100;
@@ -2128,7 +2222,35 @@ function showGameOver() {
     else message = "The optimal path remains elusive.";
 
     document.getElementById('rank-message').textContent = message;
+
+    // Generate round summary
+    const summaryContainer = document.getElementById('rounds-summary');
+    if (summaryContainer && GameState.roundScores) {
+        summaryContainer.innerHTML = GameState.roundScores.map(r => `
+            <div class="round-row">
+                <span class="round-row-label">Round ${r.round}</span>
+                <span class="round-row-efficiency">${r.efficiency.toFixed(0)}%</span>
+                <span class="round-row-score">${r.score}</span>
+            </div>
+        `).join('');
+    }
+
     document.getElementById('gameover-overlay').classList.remove('hidden');
+}
+
+async function animateFinalScore(targetScore, element) {
+    let currentScore = 0;
+    const increment = Math.max(1, Math.ceil(targetScore / 40));
+    const delay = 30;
+
+    while (currentScore < targetScore) {
+        currentScore = Math.min(currentScore + increment, targetScore);
+        element.textContent = currentScore;
+        SoundEngine.tick();
+        await sleep(delay);
+    }
+
+    element.textContent = targetScore;
 }
 
 function hideGameOver() {
@@ -2154,9 +2276,9 @@ function updateMuteButton(muted) {
                 <line x1="23" y1="9" x2="17" y2="15"/>
                 <line x1="17" y1="9" x2="23" y2="15"/>
             </svg>
-            <span>Muted</span>
         `;
         btn.classList.add('muted');
+        btn.title = 'Sound Off (M)';
     } else {
         btn.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2164,9 +2286,9 @@ function updateMuteButton(muted) {
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
                 <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
             </svg>
-            <span>Sound</span>
         `;
         btn.classList.remove('muted');
+        btn.title = 'Sound On (M)';
     }
 }
 

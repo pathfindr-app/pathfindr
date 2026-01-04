@@ -9,18 +9,56 @@
 </head>
 <body>
     <div id="app">
-        <!-- Header -->
-        <header id="header">
-            <h1>pathfindr</h1>
-            <div id="score-display">
-                <span>Score: <strong id="current-score">0</strong></span>
-                <span>Round: <strong id="current-round">1</strong>/5</span>
+        <!-- Floating Gameplay HUD -->
+        <div id="gameplay-hud">
+            <div class="hud-section hud-brand">
+                <span class="brand-name">pathfindr</span>
             </div>
-        </header>
+            <div class="hud-section hud-stats">
+                <div class="hud-stat">
+                    <span class="hud-label">Round</span>
+                    <span class="hud-value"><span id="current-round">1</span><span class="hud-dim">/5</span></span>
+                </div>
+                <div class="hud-divider"></div>
+                <div class="hud-stat">
+                    <span class="hud-label">Distance</span>
+                    <span class="hud-value" id="drawn-distance">0.00<span class="hud-unit">km</span></span>
+                </div>
+                <div class="hud-divider"></div>
+                <div class="hud-stat">
+                    <span class="hud-label">Score</span>
+                    <span class="hud-value hud-score" id="current-score">0</span>
+                </div>
+            </div>
+            <div class="hud-section hud-controls">
+                <button id="undo-btn" class="hud-btn" title="Undo (Ctrl+Z)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                    </svg>
+                </button>
+                <button id="clear-btn" class="hud-btn" title="Clear Route">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+                <button id="mute-btn" class="hud-btn" title="Toggle Sound (M)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
 
-        <!-- Game Container -->
+        <!-- Location Display (subtle, bottom-left) -->
+        <div id="location-display">
+            <span id="current-location">Downtown Seattle, WA</span>
+        </div>
+
+        <!-- Game Container (now full-screen map) -->
         <main id="game-container">
-            <!-- Map -->
             <div id="map-container">
                 <div id="map"></div>
                 <canvas id="draw-canvas"></canvas>
@@ -42,7 +80,7 @@
                             <li>You'll see a <span class="start-marker">START</span> and <span class="end-marker">END</span> point on the map</li>
                             <li>Draw what you think is the shortest path between them</li>
                             <li>Click and drag along the roads to draw your route</li>
-                            <li>Press <strong>Submit</strong> when done</li>
+                            <li>Reach the <span class="end-marker">END</span> point to submit your route</li>
                             <li>Watch the A* algorithm find the optimal path</li>
                             <li>Your score is based on how close your route is to optimal!</li>
                         </ol>
@@ -50,142 +88,97 @@
                     </div>
                 </div>
 
-                <!-- Game Over Overlay -->
+                <!-- Game Over Overlay - Celebration Mode -->
                 <div id="gameover-overlay" class="overlay hidden">
-                    <div class="overlay-content gameover">
-                        <h2>Game Over</h2>
-                        <div class="final-score">
-                            <span>Final Score</span>
-                            <strong id="final-score">0</strong>
+                    <div class="gameover-content">
+                        <div class="gameover-header">
+                            <span class="gameover-label">Final Score</span>
+                            <div class="gameover-score-container">
+                                <span class="gameover-score" id="final-score">0</span>
+                                <div class="score-glow"></div>
+                            </div>
                         </div>
-                        <p id="rank-message">Great job!</p>
-                        <button id="play-again-btn" class="btn btn-primary">Play Again</button>
+                        <div class="gameover-rounds">
+                            <div class="rounds-header">Round Summary</div>
+                            <div class="rounds-list" id="rounds-summary">
+                                <!-- Filled dynamically -->
+                            </div>
+                        </div>
+                        <p id="rank-message" class="gameover-rank">Great pathfinding!</p>
+                        <button id="play-again-btn" class="btn btn-glow">Play Again</button>
                     </div>
                 </div>
 
-                <!-- Results Panel (Bottom Slide-In) -->
+                <!-- Results Panel - Bottom Slide-Up -->
                 <div id="results-panel">
                     <div class="results-content">
-                        <!-- Stats -->
-                        <div class="results-stats">
-                            <div class="result-stat">
-                                <span class="label">Your Route</span>
-                                <span class="value" id="user-distance">0.00 km</span>
+                        <!-- Hero Score Section -->
+                        <div class="results-hero">
+                            <div class="hero-score-container">
+                                <span class="hero-label">Round Score</span>
+                                <span class="hero-score" id="round-score">0</span>
                             </div>
-                            <div class="result-stat">
-                                <span class="label">Optimal</span>
-                                <span class="value" id="optimal-distance">0.00 km</span>
-                            </div>
-                            <div class="result-stat efficiency">
-                                <span class="label">Efficiency</span>
-                                <span class="value" id="efficiency">0%</span>
-                            </div>
-                            <div class="result-stat highlight">
-                                <span class="label">Score</span>
-                                <span class="value" id="round-score">0</span>
+                            <div class="hero-efficiency">
+                                <span class="efficiency-value" id="efficiency">0%</span>
+                                <span class="efficiency-label">efficiency</span>
                             </div>
                         </div>
 
-                        <!-- Replay Controls -->
-                        <div class="replay-controls">
-                            <span class="label">Speed</span>
-                            <button class="speed-btn" data-speed="0.5">0.5x</button>
-                            <button class="speed-btn active" data-speed="1">1x</button>
-                            <button class="speed-btn" data-speed="2">2x</button>
-                            <button class="replay-btn" id="replay-btn">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                    <path d="M3 3v5h5"/>
-                                </svg>
-                                Replay
-                            </button>
+                        <!-- Route Comparison -->
+                        <div class="results-comparison">
+                            <div class="comparison-item yours">
+                                <div class="comparison-bar">
+                                    <div class="bar-fill" id="user-bar"></div>
+                                </div>
+                                <div class="comparison-data">
+                                    <span class="comparison-label">Your Route</span>
+                                    <span class="comparison-value" id="user-distance">0.00 km</span>
+                                </div>
+                            </div>
+                            <div class="comparison-item optimal">
+                                <div class="comparison-bar">
+                                    <div class="bar-fill" id="optimal-bar"></div>
+                                </div>
+                                <div class="comparison-data">
+                                    <span class="comparison-label">Optimal</span>
+                                    <span class="comparison-value" id="optimal-distance">0.00 km</span>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Actions -->
-                        <div class="results-actions">
-                            <button id="next-round-btn" class="btn btn-primary">Next Round</button>
+                        <!-- Progress & Total -->
+                        <div class="results-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">Round</span>
+                                <span class="meta-value"><span id="result-round">1</span>/5</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Total Score</span>
+                                <span class="meta-value meta-total" id="result-total">0</span>
+                            </div>
                         </div>
+
+                        <!-- Next Round Button -->
+                        <button id="next-round-btn" class="btn btn-next">
+                            <span>Next Round</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
-
-            <!-- Sidebar -->
-            <aside id="sidebar">
-                <div class="sidebar-section">
-                    <h3>Location</h3>
-                    <div id="location-info">
-                        <input type="text" id="location-search" placeholder="Search city..." />
-                        <button id="search-btn" class="btn btn-secondary">Go</button>
-                    </div>
-                    <p id="current-location">Downtown Seattle, WA</p>
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>Your Route</h3>
-                    <div id="route-info">
-                        <p><span id="distance-label">Distance</span>: <span id="drawn-distance">0.00</span> km</p>
-                        <p>Points: <span id="drawn-points">0</span></p>
-                    </div>
-                    <div class="button-group">
-                        <button id="clear-btn" class="btn btn-secondary">Clear</button>
-                        <button id="undo-btn" class="btn btn-secondary">Undo</button>
-                    </div>
-                    <button id="center-btn" class="btn btn-secondary">Center on Route</button>
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>Actions</h3>
-                    <button id="submit-btn" class="btn btn-primary btn-large" disabled>Submit Route</button>
-                </div>
-
-                <div class="sidebar-section sound-section">
-                    <h3>Sound</h3>
-                    <button id="mute-btn" class="mute-btn" onclick="toggleMute()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                        </svg>
-                        <span>Sound</span>
-                    </button>
-                    <p class="sound-hint">Press M to toggle</p>
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>View</h3>
-                    <button id="toggle-view-btn" class="btn btn-secondary active">
-                        <span id="view-mode-text">Map View</span>
-                    </button>
-                    <p class="sound-hint">Press V to toggle</p>
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>Legend</h3>
-                    <div class="legend">
-                        <div class="legend-item">
-                            <span class="legend-color start"></span>
-                            <span>Start Point</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color end"></span>
-                            <span>End Point</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color user-route"></span>
-                            <span>Your Route</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color explored"></span>
-                            <span>A* Explored</span>
-                        </div>
-                        <div class="legend-item">
-                            <span class="legend-color optimal"></span>
-                            <span>Optimal Path</span>
-                        </div>
-                    </div>
-                </div>
-            </aside>
         </main>
+
+        <!-- Hidden elements for compatibility -->
+        <button id="submit-btn" class="hidden" disabled></button>
+        <button id="search-btn" class="hidden"></button>
+        <input type="text" id="location-search" class="hidden" />
+        <button id="center-btn" class="hidden"></button>
+        <button id="toggle-view-btn" class="hidden"></button>
+        <span id="drawn-points" class="hidden">0</span>
+        <span id="distance-label" class="hidden">Distance</span>
+        <span id="view-mode-text" class="hidden">Map View</span>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
