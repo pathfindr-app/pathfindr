@@ -951,19 +951,9 @@ function nextRound() {
         GameState.currentRound++;
         updateRoundDisplay();
 
-        // Get a new random city for the next round (same mode)
-        if (GameState.locationMode !== 'local') {
-            const newCity = getRandomCity(GameState.locationMode);
-            GameState.currentCity = newCity;
-            updateLocationDisplay(newCity.name);
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            document.getElementById('loading-text').textContent = 'Loading new area...';
-            loadRoadNetwork(newCity);
-        } else {
-            // For local mode, just pick new endpoints in same area
-            selectRandomEndpoints();
-            enableDrawing();
-        }
+        // Stay in same city, just pick new endpoints with increased distance
+        selectRandomEndpoints();
+        enableDrawing();
     } else {
         showGameOver();
     }
@@ -1022,9 +1012,20 @@ function selectRandomEndpoints() {
 
     const nodesToUse = eligibleNodes.length >= 20 ? eligibleNodes : nodeIds;
 
+    // Scale distance based on round number (round 1 = short, round 5 = long)
+    const round = GameState.currentRound || 1;
+    const distanceScales = [
+        { min: 0.15, max: 0.4 },  // Round 1: short
+        { min: 0.25, max: 0.55 }, // Round 2
+        { min: 0.35, max: 0.7 },  // Round 3
+        { min: 0.45, max: 0.9 },  // Round 4
+        { min: 0.6, max: 1.2 }    // Round 5: longest
+    ];
+    const scale = distanceScales[Math.min(round - 1, 4)];
+
     let attempts = 0;
-    let minDistance = 0.15;
-    let maxDistance = 0.8;
+    let minDistance = scale.min;
+    let maxDistance = scale.max;
 
     do {
         const startIdx = Math.floor(Math.random() * nodesToUse.length);
