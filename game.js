@@ -1065,6 +1065,11 @@ const AmbientViz = {
         // Layer 5: Trace animation for user path clicks
         renderTraceAnimation(ctx);
 
+        // Layer 6: Animate user path with electricity (when drawing, not during A* viz)
+        if (GameState.gameStarted && !GameState.vizState.active && GameState.userPathNodes.length >= 2) {
+            redrawUserPath();
+        }
+
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
 
@@ -1653,6 +1658,13 @@ const GameState = {
         progress: 0,        // 0-1 animation progress
         startTime: 0,
         duration: 150,      // ms per segment
+    },
+
+    // User path electricity animation (continuous)
+    userPathElectricity: {
+        pulses: [],         // Energy pulses traveling along path
+        lastPulseTime: 0,   // For spawning new pulses
+        phase: 0,           // Animation phase for wobble
     },
 
     // A* results
@@ -2385,15 +2397,23 @@ function redrawUserPath() {
 
     if (points.length < 2) return;
 
+    // Get animation state
+    const elec = GameState.userPathElectricity;
+    const time = performance.now() * 0.001;
+    elec.phase = time;
+
+    // Organic flicker
+    const flicker = 0.85 + Math.sin(time * 25) * 0.05 + Math.sin(time * 7) * 0.05 + (Math.random() - 0.5) * 0.05;
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Use lighter composite for glow (no shadowBlur!)
+    // Use lighter composite for glow
     ctx.globalCompositeOperation = 'lighter';
 
-    // Glow layers
-    ctx.strokeStyle = 'rgba(255, 107, 53, 0.2)';
-    ctx.lineWidth = 12;
+    // Outer glow - warm orange with flicker
+    ctx.strokeStyle = `rgba(255, 107, 53, ${0.15 * flicker})`;
+    ctx.lineWidth = 14;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -2401,8 +2421,19 @@ function redrawUserPath() {
     }
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(255, 107, 53, 0.5)';
-    ctx.lineWidth = 6;
+    // Mid glow
+    ctx.strokeStyle = `rgba(255, 140, 80, ${0.35 * flicker})`;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.stroke();
+
+    // Inner glow - brighter
+    ctx.strokeStyle = `rgba(255, 180, 100, ${0.5 * flicker})`;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -2412,15 +2443,106 @@ function redrawUserPath() {
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // Core line
-    ctx.strokeStyle = CONFIG.colors.userRoute;
-    ctx.lineWidth = 3;
+    // Core line - bright with slight flicker
+    ctx.strokeStyle = `rgba(255, ${Math.floor(107 + 40 * flicker)}, 53, ${0.9 + 0.1 * flicker})`;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
         ctx.lineTo(points[i].x, points[i].y);
     }
     ctx.stroke();
+
+    // Energy pulses traveling along the path
+    renderUserPathPulses(ctx, points, time);
+}
+
+// Render energy pulses along user path
+function renderUserPathPulses(ctx, points, time) {
+    if (points.length < 2) return;
+
+    const elec = GameState.userPathElectricity;
+
+    // Spawn new pulses periodically
+    if (time - elec.lastPulseTime > 0.8) { // New pulse every 0.8 seconds
+        elec.pulses.push({
+            progress: 0,
+            speed: 0.4 + Math.random() * 0.2, // Vary speed slightly
+            size: 0.8 + Math.random() * 0.4,
+        });
+        elec.lastPulseTime = time;
+
+        // Limit pulse count
+        if (elec.pulses.length > 4) {
+            elec.pulses.shift();
+        }
+    }
+
+    // Calculate total path length for pulse positioning
+    let totalLength = 0;
+    const segmentLengths = [];
+    for (let i = 1; i < points.length; i++) {
+        const dx = points[i].x - points[i-1].x;
+        const dy = points[i].y - points[i-1].y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        segmentLengths.push(len);
+        totalLength += len;
+    }
+
+    if (totalLength === 0) return;
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Update and render each pulse
+    for (let p = elec.pulses.length - 1; p >= 0; p--) {
+        const pulse = elec.pulses[p];
+        pulse.progress += pulse.speed * 0.016; // Assuming ~60fps
+
+        if (pulse.progress > 1) {
+            elec.pulses.splice(p, 1);
+            continue;
+        }
+
+        // Find position along path
+        const targetDist = pulse.progress * totalLength;
+        let accDist = 0;
+        let pulseX = points[0].x;
+        let pulseY = points[0].y;
+
+        for (let i = 0; i < segmentLengths.length; i++) {
+            if (accDist + segmentLengths[i] >= targetDist) {
+                const segProgress = (targetDist - accDist) / segmentLengths[i];
+                pulseX = points[i].x + (points[i+1].x - points[i].x) * segProgress;
+                pulseY = points[i].y + (points[i+1].y - points[i].y) * segProgress;
+                break;
+            }
+            accDist += segmentLengths[i];
+        }
+
+        // Draw pulse glow
+        const pulseAlpha = Math.sin(pulse.progress * Math.PI); // Fade in/out
+        const size = 24 * pulse.size * (0.8 + 0.2 * pulseAlpha);
+
+        // Use sprite if available, otherwise gradient
+        const sprite = AmbientViz.sprites?.glowWhite;
+        if (sprite) {
+            ctx.globalAlpha = pulseAlpha * 0.7;
+            ctx.drawImage(sprite, pulseX - size/2, pulseY - size/2, size, size);
+        } else {
+            const gradient = ctx.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, size/2);
+            gradient.addColorStop(0, `rgba(255, 220, 180, ${pulseAlpha * 0.9})`);
+            gradient.addColorStop(0.5, `rgba(255, 140, 80, ${pulseAlpha * 0.5})`);
+            gradient.addColorStop(1, 'rgba(255, 107, 53, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(pulseX, pulseY, size/2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
 }
 
 function clearUserPath() {
@@ -3365,6 +3487,10 @@ function resetUserPath() {
     GameState.userDistance = 0;
     GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
     GameState.userPathLayer.clearLayers();
+
+    // Clear electricity animation state
+    GameState.userPathElectricity.pulses = [];
+    GameState.userPathElectricity.lastPulseTime = 0;
 
     // Handle hidden submit button gracefully
     const submitBtn = document.getElementById('submit-btn');
