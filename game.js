@@ -131,7 +131,13 @@ const CONFIG = {
     },
 
     maxScore: 1000,
-    overpassUrl: 'https://overpass-api.de/api/interpreter',
+    // Multiple Overpass servers for fallback reliability
+    overpassServers: [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+    ],
+    overpassUrl: 'https://overpass-api.de/api/interpreter', // Default, will rotate on failure
     nominatimUrl: 'https://nominatim.openstreetmap.org/search',
 };
 
@@ -1915,20 +1921,39 @@ function initEventListeners() {
 // ROAD NETWORK LOADING
 // =============================================================================
 
-async function loadRoadNetwork(location, retryCount = 0) {
-    const maxRetries = 3;
-    const baseDelay = 1500; // 1.5 seconds base delay
+async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
+    const maxRetries = 4; // More retries since we have multiple servers
+    const baseDelay = 1500;
+    const servers = CONFIG.overpassServers;
+
+    // Calming loading messages
+    const loadingMessages = [
+        'Mapping the streets...',
+        'Discovering routes...',
+        'Charting the city...',
+        'Building the network...'
+    ];
+
+    const retryMessages = [
+        'Still working on it...',
+        'Taking a moment...',
+        'Almost there...',
+        'Patience, pathfinder...'
+    ];
 
     if (retryCount === 0) {
-        showLoading('Loading road network...');
+        showLoading(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
     } else {
-        showLoading(`Retrying... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        showLoading(retryMessages[Math.min(retryCount - 1, retryMessages.length - 1)]);
     }
+
+    // Rotate through servers on retries
+    const currentServer = servers[serverIndex % servers.length];
 
     try {
         const bounds = GameState.map.getBounds();
         const query = `
-            [out:json][timeout:30];
+            [out:json][timeout:25];
             (
                 way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
                 (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
@@ -1938,11 +1963,17 @@ async function loadRoadNetwork(location, retryCount = 0) {
             out skel qt;
         `;
 
-        const response = await fetch(CONFIG.overpassUrl, {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+
+        const response = await fetch(currentServer, {
             method: 'POST',
             body: `data=${encodeURIComponent(query)}`,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
@@ -1960,18 +1991,34 @@ async function loadRoadNetwork(location, retryCount = 0) {
         showInstructions();
 
     } catch (error) {
-        console.error(`Error loading road network (attempt ${retryCount + 1}):`, error);
+        console.error(`Road network loading (server ${serverIndex + 1}, attempt ${retryCount + 1}):`, error);
 
         if (retryCount < maxRetries) {
-            // Exponential backoff: 1.5s, 3s, 6s
-            const delay = baseDelay * Math.pow(2, retryCount);
-            showLoading(`Connection failed. Retrying in ${(delay / 1000).toFixed(1)}s...`);
+            // Shorter delay, rotate servers
+            const delay = baseDelay + (Math.random() * 500); // 1.5-2s with jitter
+            const nextServer = (serverIndex + 1) % servers.length;
+
+            // Calming wait messages
+            const waitMessages = [
+                'Trying another route...',
+                'Good things take time...',
+                'Preparing your adventure...',
+                'One moment please...'
+            ];
+            showLoading(waitMessages[Math.floor(Math.random() * waitMessages.length)]);
 
             await new Promise(resolve => setTimeout(resolve, delay));
-            return loadRoadNetwork(location, retryCount + 1);
+            return loadRoadNetwork(location, retryCount + 1, nextServer);
         } else {
-            // Max retries exceeded - show error with retry button
-            showLoading(`Failed to load road data after ${maxRetries + 1} attempts. <button onclick="loadRoadNetwork(GameState.currentCity)" style="margin-left: 10px; padding: 5px 15px; cursor: pointer;">Retry</button>`);
+            // Max retries exceeded - friendly message with retry button
+            showLoading(`
+                <div style="text-align: center;">
+                    <div style="margin-bottom: 12px; opacity: 0.8;">The map servers are busy</div>
+                    <button onclick="loadRoadNetwork(GameState.currentCity, 0, ${(serverIndex + 1) % servers.length})" class="btn btn-primary" style="padding: 10px 24px; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `);
         }
     }
 }
@@ -3732,7 +3779,7 @@ async function searchLocation() {
     const query = document.getElementById('location-search').value.trim();
     if (!query) return;
 
-    showLoading('Searching location...');
+    showLoading('Finding your destination...');
 
     try {
         const response = await fetch(
@@ -3823,9 +3870,9 @@ function selectLocationMode(mode) {
     GameState.locationMode = mode;
     hideLocationSelector();
 
-    // Show loading overlay
+    // Show loading overlay with calming message
     document.getElementById('loading-overlay').classList.remove('hidden');
-    document.getElementById('loading-text').textContent = 'Finding location...';
+    document.getElementById('loading-text').textContent = 'Preparing your journey...';
 
     if (mode === 'local') {
         // Use browser geolocation

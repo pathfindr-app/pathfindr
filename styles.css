@@ -815,26 +815,49 @@ body::after {
 }
 
 /* =============================================================================
-   SPINNER - Loading Animation
+   SPINNER - Loading Animation (Calming)
    ============================================================================= */
 
+@keyframes gentle-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes breathe {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
+}
+
 .spinner {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border: 2px solid var(--elevated);
     border-top-color: var(--neon-pink);
     border-right-color: var(--sunset-warm);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-    box-shadow: 0 0 20px rgba(255, 107, 157, 0.25), 0 0 40px rgba(252, 152, 103, 0.1);
+    animation: gentle-spin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    margin: 0 auto 1.25rem;
+    box-shadow:
+        0 0 25px rgba(255, 107, 157, 0.2),
+        0 0 50px rgba(252, 152, 103, 0.08);
 }
 
 #loading-text {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+    animation: breathe 3s ease-in-out infinite;
+    line-height: 1.6;
+}
+
+/* Style for the retry button inside loading */
+#loading-text .btn {
+    margin-top: 0.5rem;
 }
 
 /* =============================================================================
