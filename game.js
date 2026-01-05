@@ -1903,8 +1903,15 @@ function initEventListeners() {
 // ROAD NETWORK LOADING
 // =============================================================================
 
-async function loadRoadNetwork(location) {
-    showLoading('Loading road network...');
+async function loadRoadNetwork(location, retryCount = 0) {
+    const maxRetries = 3;
+    const baseDelay = 1500; // 1.5 seconds base delay
+
+    if (retryCount === 0) {
+        showLoading('Loading road network...');
+    } else {
+        showLoading(`Retrying... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    }
 
     try {
         const bounds = GameState.map.getBounds();
@@ -1925,9 +1932,15 @@ async function loadRoadNetwork(location) {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
-        if (!response.ok) throw new Error('Failed to fetch road data');
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
         const data = await response.json();
+
+        // Validate we got actual data
+        if (!data.elements || data.elements.length === 0) {
+            throw new Error('No road data returned');
+        }
+
         processRoadData(data);
 
         document.getElementById('current-location').textContent = location.name;
@@ -1935,8 +1948,19 @@ async function loadRoadNetwork(location) {
         showInstructions();
 
     } catch (error) {
-        console.error('Error loading road network:', error);
-        showLoading('Error loading data. Please try again.');
+        console.error(`Error loading road network (attempt ${retryCount + 1}):`, error);
+
+        if (retryCount < maxRetries) {
+            // Exponential backoff: 1.5s, 3s, 6s
+            const delay = baseDelay * Math.pow(2, retryCount);
+            showLoading(`Connection failed. Retrying in ${(delay / 1000).toFixed(1)}s...`);
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return loadRoadNetwork(location, retryCount + 1);
+        } else {
+            // Max retries exceeded - show error with retry button
+            showLoading(`Failed to load road data after ${maxRetries + 1} attempts. <button onclick="loadRoadNetwork(GameState.currentCity)" style="margin-left: 10px; padding: 5px 15px; cursor: pointer;">Retry</button>`);
+        }
     }
 }
 
@@ -3631,8 +3655,13 @@ async function searchLocation() {
 // UI HELPERS
 // =============================================================================
 
-function showLoading(text) {
-    document.getElementById('loading-text').textContent = text;
+function showLoading(text, allowHtml = false) {
+    const loadingText = document.getElementById('loading-text');
+    if (allowHtml || text.includes('<')) {
+        loadingText.innerHTML = text;
+    } else {
+        loadingText.textContent = text;
+    }
     document.getElementById('loading-overlay').classList.remove('hidden');
 }
 
