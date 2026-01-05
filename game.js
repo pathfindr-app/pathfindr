@@ -84,7 +84,7 @@ const CONFIG = {
         batchSize: 4,               // nodes per batch (increased)
         nodeGlowRadius: 14,         // base glow radius (reduced)
         edgeWidth: 3,               // base edge width (reduced)
-        heatDecay: 0.988,           // faster decay for performance
+        heatDecay: 0.96,            // faster decay for sharper frontier
         pulseSpeed: 0.05,           // pulse animation speed
         particleCount: 25,          // reduced particle count
         pathTraceSpeed: 15,         // ms per path segment
@@ -109,6 +109,26 @@ const CONFIG = {
         end: '#ff2a6d'              // Neon pink
     },
 
+    // Round-specific colors for persistent visualization
+    roundColors: [
+        { r: 0, g: 240, b: 255, hex: '#00F0FF' },    // Round 1: Cyan
+        { r: 255, g: 42, b: 109, hex: '#FF2A6D' },   // Round 2: Magenta
+        { r: 184, g: 41, b: 221, hex: '#B829DD' },   // Round 3: Purple
+        { r: 77, g: 159, b: 255, hex: '#4D9FFF' },   // Round 4: Blue
+        { r: 255, g: 215, b: 0, hex: '#FFD700' },    // Round 5: Gold
+    ],
+
+    // Electricity effect settings
+    electricity: {
+        pulseCount: 8,              // traveling pulses per path
+        pulseSpeed: 0.003,          // pulse travel speed
+        flickerIntensity: 0.15,     // line flicker amount
+        arcFrequency: 0.02,         // chance of arc spark per frame
+        wobbleAmount: 1.5,          // pixel wobble from noise
+        idleIntensity: 0.35,        // brightness of idle rounds
+        activeIntensity: 1.0,       // brightness of active round
+    },
+
     maxScore: 1000,
     overpassUrl: 'https://overpass-api.de/api/interpreter',
     nominatimUrl: 'https://nominatim.openstreetmap.org/search',
@@ -125,6 +145,17 @@ const SoundEngine = {
     initialized: false,
     ambientNodes: null,
 
+    // Audio file buffers
+    buffers: {
+        scanning: null,
+        found: null,
+    },
+
+    // Active audio sources (so we can stop them)
+    activeSources: {
+        scanning: null,
+    },
+
     // Initialize AudioContext on first user interaction
     init() {
         if (this.initialized) return;
@@ -132,13 +163,114 @@ const SoundEngine = {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.masterGain = this.ctx.createGain();
         this.masterGain.connect(this.ctx.destination);
-        this.masterGain.gain.value = 0.5;
+        this.masterGain.gain.value = 1.0;  // Full volume
 
         // Load mute preference
         this.muted = localStorage.getItem('pathfindr_muted') === 'true';
         if (this.muted) this.masterGain.gain.value = 0;
 
+        // Load audio files
+        this.loadAudioFiles();
+
         this.initialized = true;
+    },
+
+    // Load external audio files
+    async loadAudioFiles() {
+        try {
+            const [scanningResponse, foundResponse] = await Promise.all([
+                fetch('Scanning1.wav'),
+                fetch('Found1.wav')
+            ]);
+
+            const [scanningData, foundData] = await Promise.all([
+                scanningResponse.arrayBuffer(),
+                foundResponse.arrayBuffer()
+            ]);
+
+            this.buffers.scanning = await this.ctx.decodeAudioData(scanningData);
+            this.buffers.found = await this.ctx.decodeAudioData(foundData);
+
+            console.log('Audio files loaded successfully');
+        } catch (e) {
+            console.warn('Could not load audio files:', e);
+        }
+    },
+
+    // Play scanning sound (for A* exploration)
+    scanning() {
+        if (!this.initialized || this.muted || !this.buffers.scanning) return;
+
+        // Stop any existing scanning sound first
+        this.stopScanning();
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.buffers.scanning;
+        source.loop = false;  // Ensure no looping
+
+        // Full volume - no attenuation
+        source.connect(this.masterGain);
+        source.start();
+
+        // Track so we can stop it
+        this.activeSources.scanning = { source };
+
+        // Auto-cleanup when done
+        source.onended = () => {
+            this.activeSources.scanning = null;
+        };
+    },
+
+    // Stop scanning sound
+    stopScanning() {
+        if (this.activeSources.scanning) {
+            try {
+                this.activeSources.scanning.source.stop();
+            } catch (e) { /* already stopped */ }
+            this.activeSources.scanning = null;
+        }
+    },
+
+    // Play path found sound
+    pathFound() {
+        if (!this.initialized || this.muted || !this.buffers.found) return;
+
+        // Stop scanning sound when path is found
+        this.stopScanning();
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.buffers.found;
+        source.loop = false;  // Ensure no looping
+
+        // Full volume - no attenuation
+        source.connect(this.masterGain);
+        source.start();
+    },
+
+    // Tiny crackle for electricity arcs
+    crackle() {
+        if (!this.initialized || this.muted) return;
+
+        const now = this.ctx.currentTime;
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(0.03);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 3000 + Math.random() * 2000;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialDecayTo = 0.001;
+        gain.gain.setTargetAtTime(0.001, now + 0.01, 0.005);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+
+        noise.start(now);
+        noise.stop(now + 0.03);
     },
 
     // Toggle mute state
@@ -148,7 +280,7 @@ const SoundEngine = {
 
         if (this.initialized) {
             this.masterGain.gain.setTargetAtTime(
-                this.muted ? 0 : 0.5,
+                this.muted ? 0 : 1.0,
                 this.ctx.currentTime,
                 0.1
             );
@@ -512,7 +644,30 @@ const SoundEngine = {
         lfo.start(now);
         noise.start(now);
 
-        this.ambientNodes = { drone, lfo, noise, droneGain, noiseGain };
+        this.ambientNodes = { drone, lfo, noise, droneGain, noiseGain, noiseFilter };
+    },
+
+    // Modulate ambient sound based on visual system state
+    updateAmbient() {
+        if (!this.ambientNodes || !this.initialized || this.muted) return;
+
+        const params = AmbientViz.audioParams;
+        const now = this.ctx.currentTime;
+
+        // Modulate drone pitch based on player speed (subtle)
+        const basePitch = 45;
+        const pitchMod = params.playerSpeed * 8; // Up to 8Hz higher when drawing fast
+        this.ambientNodes.drone.frequency.setTargetAtTime(basePitch + pitchMod, now, 0.3);
+
+        // Modulate LFO speed based on energy
+        const baseLfoSpeed = 0.1;
+        const lfoMod = params.energy * 0.2; // Faster wobble with more particles
+        this.ambientNodes.lfo.frequency.setTargetAtTime(baseLfoSpeed + lfoMod, now, 0.3);
+
+        // Modulate noise filter based on proximity to end
+        const baseFilter = 200;
+        const filterMod = params.proximityToEnd * 400; // Brighter as you get closer
+        this.ambientNodes.noiseFilter.frequency.setTargetAtTime(baseFilter + filterMod, now, 0.3);
     },
 
     stopAmbient() {
@@ -534,6 +689,915 @@ const SoundEngine = {
 };
 
 // =============================================================================
+// AMBIENT VISUALIZATION SYSTEM - Energy Flow
+// =============================================================================
+
+const AmbientViz = {
+    // State
+    active: false,
+    animationId: null,
+    lastTime: 0,
+
+    // Pre-rendered sprite canvases
+    sprites: {
+        glowCyan: null,
+        glowPink: null,
+        glowPurple: null,
+        glowGreen: null,
+        glowWhite: null,
+    },
+    spriteSize: 64,
+
+    // Particle pool (fixed size, recycled)
+    particles: [],
+    maxParticles: 16,
+
+    // Trail afterglow
+    trailPoints: [],
+    maxTrailPoints: 50,
+
+    // Audio sync parameters (0-1 range, read by SoundEngine)
+    audioParams: {
+        energy: 0,          // Overall system energy
+        playerSpeed: 0,     // How fast player is drawing
+        proximityToEnd: 0,  // Distance to end goal (1 = close)
+        networkDensity: 0,  // Local edge density
+    },
+
+    // Marker pulse state
+    markerPulse: 0,
+
+    // Initialize sprite system
+    init() {
+        this.createSprites();
+        this.initParticlePool();
+    },
+
+    // Pre-render glow sprites (no shadowBlur at runtime!)
+    createSprites() {
+        const size = this.spriteSize;
+        const colors = {
+            glowCyan: { r: 0, g: 240, b: 255 },
+            glowPink: { r: 255, g: 42, b: 109 },
+            glowPurple: { r: 184, g: 41, b: 221 },
+            glowGreen: { r: 57, g: 255, b: 20 },
+            glowWhite: { r: 255, g: 255, b: 255 },
+        };
+
+        for (const [name, color] of Object.entries(colors)) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            const center = size / 2;
+            const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+            gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`);
+            gradient.addColorStop(0.2, `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`);
+            gradient.addColorStop(0.5, `rgba(${color.r}, ${color.g}, ${color.b}, 0.15)`);
+            gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+
+            this.sprites[name] = canvas;
+        }
+    },
+
+    // Initialize particle pool
+    initParticlePool() {
+        this.particles = [];
+        for (let i = 0; i < this.maxParticles; i++) {
+            this.particles.push({
+                active: false,
+                x: 0, y: 0,
+                edgeIndex: -1,
+                edgeProgress: 0,   // 0-1 along current edge
+                speed: 0,
+                color: 'glowCyan',
+                alpha: 0,
+                size: 1,
+            });
+        }
+    },
+
+    // Spawn a particle on a random edge
+    spawnParticle() {
+        if (GameState.edgeList.length === 0) return;
+
+        // Find inactive particle
+        const particle = this.particles.find(p => !p.active);
+        if (!particle) return;
+
+        // Pick random edge
+        const edgeIndex = Math.floor(Math.random() * GameState.edgeList.length);
+        const edge = GameState.edgeList[edgeIndex];
+
+        // Pick color based on location (cyan near start, pink near end, purple elsewhere)
+        const colors = ['glowCyan', 'glowCyan', 'glowPink', 'glowPurple'];
+        const colorIndex = Math.floor(Math.random() * colors.length);
+
+        particle.active = true;
+        particle.edgeIndex = edgeIndex;
+        particle.edgeProgress = Math.random();
+        particle.speed = 0.002 + Math.random() * 0.004; // Progress per frame
+        particle.color = colors[colorIndex];
+        particle.alpha = 0;
+        particle.size = 0.5 + Math.random() * 0.5;
+        particle.fadeIn = true;
+    },
+
+    // Update particle positions
+    updateParticles(deltaTime) {
+        const dt = Math.min(deltaTime / 16.67, 3); // Normalize to ~60fps, cap at 3x
+
+        for (const particle of this.particles) {
+            if (!particle.active) continue;
+
+            // Fade in/out
+            if (particle.fadeIn) {
+                particle.alpha = Math.min(1, particle.alpha + 0.05 * dt);
+                if (particle.alpha >= 1) particle.fadeIn = false;
+            }
+
+            // Move along edge
+            particle.edgeProgress += particle.speed * dt;
+
+            // When reaching end of edge, jump to connected edge or die
+            if (particle.edgeProgress >= 1) {
+                const edge = GameState.edgeList[particle.edgeIndex];
+                if (!edge) {
+                    particle.active = false;
+                    continue;
+                }
+
+                // Find connected edges
+                const neighbors = GameState.edges.get(edge.to);
+                if (neighbors && neighbors.length > 0) {
+                    // Pick random neighbor edge
+                    const nextNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    // Find the edge in edgeList
+                    const nextEdgeIndex = GameState.edgeList.findIndex(e =>
+                        (e.from === edge.to && e.to === nextNeighbor.neighbor) ||
+                        (e.to === edge.to && e.from === nextNeighbor.neighbor)
+                    );
+
+                    if (nextEdgeIndex >= 0) {
+                        particle.edgeIndex = nextEdgeIndex;
+                        particle.edgeProgress = 0;
+                        // Small chance to die anyway for variety
+                        if (Math.random() < 0.1) {
+                            particle.active = false;
+                        }
+                    } else {
+                        particle.active = false;
+                    }
+                } else {
+                    particle.active = false;
+                }
+            }
+
+            // Calculate screen position
+            if (particle.active) {
+                const edge = GameState.edgeList[particle.edgeIndex];
+                if (edge) {
+                    const lat = edge.fromPos.lat + (edge.toPos.lat - edge.fromPos.lat) * particle.edgeProgress;
+                    const lng = edge.fromPos.lng + (edge.toPos.lng - edge.fromPos.lng) * particle.edgeProgress;
+                    const screen = GameState.map.latLngToContainerPoint([lat, lng]);
+                    particle.x = screen.x;
+                    particle.y = screen.y;
+                }
+            }
+        }
+
+        // Maintain particle count
+        const activeCount = this.particles.filter(p => p.active).length;
+        if (activeCount < this.maxParticles * 0.7) {
+            this.spawnParticle();
+        }
+    },
+
+    // Add point to trail afterglow
+    addTrailPoint(lat, lng) {
+        this.trailPoints.push({
+            lat, lng,
+            alpha: 1,
+            time: performance.now()
+        });
+
+        // Limit trail length
+        if (this.trailPoints.length > this.maxTrailPoints) {
+            this.trailPoints.shift();
+        }
+
+        // Update audio params
+        this.audioParams.playerSpeed = Math.min(1, this.trailPoints.length / 20);
+    },
+
+    // Update trail fade
+    updateTrail(deltaTime) {
+        const fadeRate = 0.015 * (deltaTime / 16.67);
+
+        for (let i = this.trailPoints.length - 1; i >= 0; i--) {
+            this.trailPoints[i].alpha -= fadeRate;
+            if (this.trailPoints[i].alpha <= 0) {
+                this.trailPoints.splice(i, 1);
+            }
+        }
+    },
+
+    // Clear trail
+    clearTrail() {
+        this.trailPoints = [];
+    },
+
+    // Main render function
+    render(ctx, width, height, deltaTime) {
+        // Update systems
+        this.updateParticles(deltaTime);
+        this.updateTrail(deltaTime);
+        this.markerPulse += 0.03 * (deltaTime / 16.67);
+
+        // Update energy audio param
+        const activeParticles = this.particles.filter(p => p.active).length;
+        this.audioParams.energy = activeParticles / this.maxParticles;
+
+        // Draw particles using sprites (no shadowBlur!)
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const particle of this.particles) {
+            if (!particle.active) continue;
+
+            const sprite = this.sprites[particle.color];
+            if (!sprite) continue;
+
+            const size = this.spriteSize * particle.size;
+            ctx.globalAlpha = particle.alpha * 0.6;
+            ctx.drawImage(
+                sprite,
+                particle.x - size / 2,
+                particle.y - size / 2,
+                size,
+                size
+            );
+        }
+
+        // Draw trail afterglow
+        this.renderTrail(ctx);
+
+        // Draw marker auras
+        this.renderMarkerAuras(ctx);
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+    },
+
+    // Render player trail with afterglow
+    renderTrail(ctx) {
+        if (this.trailPoints.length < 2) return;
+
+        const sprite = this.sprites.glowCyan;
+
+        for (let i = 0; i < this.trailPoints.length; i++) {
+            const point = this.trailPoints[i];
+            const screen = GameState.map.latLngToContainerPoint([point.lat, point.lng]);
+
+            const size = this.spriteSize * 0.4 * point.alpha;
+            ctx.globalAlpha = point.alpha * 0.4;
+            ctx.drawImage(
+                sprite,
+                screen.x - size / 2,
+                screen.y - size / 2,
+                size,
+                size
+            );
+        }
+    },
+
+    // Render pulsing auras around start/end markers
+    renderMarkerAuras(ctx) {
+        const pulse = 0.6 + 0.4 * Math.sin(this.markerPulse);
+        const slowPulse = 0.7 + 0.3 * Math.sin(this.markerPulse * 0.5);
+
+        // Start marker aura (green)
+        if (GameState.startNode) {
+            const pos = GameState.nodes.get(GameState.startNode);
+            if (pos) {
+                const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                const sprite = this.sprites.glowGreen;
+                const size = this.spriteSize * 1.5 * pulse;
+
+                ctx.globalAlpha = 0.3 * slowPulse;
+                ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
+            }
+        }
+
+        // End marker aura (pink)
+        if (GameState.endNode) {
+            const pos = GameState.nodes.get(GameState.endNode);
+            if (pos) {
+                const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                const sprite = this.sprites.glowPink;
+                const size = this.spriteSize * 1.5 * pulse;
+
+                ctx.globalAlpha = 0.35 * slowPulse;
+                ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
+            }
+        }
+    },
+
+    // Start ambient loop
+    start() {
+        if (this.active) return;
+        this.active = true;
+        this.lastTime = performance.now();
+
+        // Spawn initial particles
+        for (let i = 0; i < this.maxParticles * 0.5; i++) {
+            this.spawnParticle();
+        }
+
+        this.loop();
+    },
+
+    // Main animation loop - unified render for all visual systems
+    loop() {
+        if (!this.active) return;
+
+        const now = performance.now();
+        const deltaTime = now - this.lastTime;
+        this.lastTime = now;
+
+        const ctx = GameState.vizCtx;
+        const width = GameState.vizCanvas.width;
+        const height = GameState.vizCanvas.height;
+
+        // Update systems
+        this.updateProximityToEnd();
+        RoundHistory.update(deltaTime);
+        ElectricitySystem.update(deltaTime);
+
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+
+        // Layer 1: Orange road network (always visible, CRT style)
+        if (GameState.showCustomRoads) {
+            drawRoadNetwork(ctx);
+        }
+
+        // Layer 2: Round history (persistent visualization from previous rounds)
+        if (!GameState.vizState.active) {
+            this.renderRoundHistory(ctx, deltaTime);
+        }
+
+        // Layer 3: Current A* exploration OR ambient particles
+        if (GameState.vizState.active) {
+            // A* visualization is running - let renderVisualization handle it
+            // (it's called from its own loop)
+        } else {
+            // Ambient gameplay - particles and marker auras
+            this.render(ctx, width, height, deltaTime);
+        }
+
+        // Layer 4: Arc sparks (always render on top)
+        ElectricitySystem.renderArcs(ctx);
+
+        // Layer 5: Trace animation for user path clicks
+        renderTraceAnimation(ctx);
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+
+        this.animationId = requestAnimationFrame(() => this.loop());
+    },
+
+    // Render persisted rounds with electricity effects
+    renderRoundHistory(ctx, deltaTime) {
+        const rounds = RoundHistory.getRounds();
+
+        for (const round of rounds) {
+            // Convert explored edges to screen coordinates (O(1) lookup via edgeLookup)
+            const screenEdges = [];
+            for (const edgeKey of round.exploredEdges) {
+                const edge = GameState.edgeLookup.get(edgeKey);
+
+                if (edge) {
+                    const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+                    const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+                    screenEdges.push({ from, to });
+                }
+            }
+
+            // Render explored edges with electricity
+            const isActive = round.state === 'surging';
+            ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, round.intensity, isActive);
+
+            // Render optimal path
+            if (round.optimalPath.length > 1) {
+                const optimalPoints = round.optimalPath.map(nodeId => {
+                    const pos = GameState.nodes.get(nodeId);
+                    if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                    return null;
+                }).filter(p => p !== null);
+
+                if (optimalPoints.length > 1) {
+                    // Initialize pulses for this path if not exists
+                    if (!round.optimalPulses) {
+                        round.optimalPulses = ElectricitySystem.createPulses(optimalPoints, round.color, 6);
+                    }
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, round.color, round.intensity, round.optimalPulses);
+                }
+            }
+
+            // Render user path with distinct electricity
+            if (round.userPath.length > 1) {
+                const userPoints = round.userPath.map(nodeId => {
+                    const pos = GameState.nodes.get(nodeId);
+                    if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                    return null;
+                }).filter(p => p !== null);
+
+                if (userPoints.length > 1) {
+                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, round.intensity);
+                }
+            }
+        }
+    },
+
+    // Render optimal path with flowing electricity
+    renderOptimalPathWithElectricity(ctx, points, color, intensity, pulses) {
+        if (points.length < 2) return;
+
+        const flicker = ElectricitySystem.getFlicker();
+        const effectiveIntensity = intensity * flicker;
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Outer glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Mid glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.4 * effectiveIntensity})`;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Core
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // White hot center
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Traveling pulses
+        ElectricitySystem.renderPulses(ctx, points, color, intensity, pulses);
+
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    // Calculate how close the user is to the end marker
+    updateProximityToEnd() {
+        if (!GameState.endNode || GameState.userPathNodes.length < 2) {
+            this.audioParams.proximityToEnd = 0;
+            return;
+        }
+
+        const endPos = GameState.nodes.get(GameState.endNode);
+        const lastNodeId = GameState.userPathNodes[GameState.userPathNodes.length - 1];
+        const lastPos = GameState.nodes.get(lastNodeId);
+
+        if (!endPos || !lastPos) {
+            this.audioParams.proximityToEnd = 0;
+            return;
+        }
+
+        // Calculate distance in km
+        const dist = haversineDistance(lastPos.lat, lastPos.lng, endPos.lat, endPos.lng);
+
+        // Map distance to 0-1 (1 = very close, 0 = far)
+        // Within 100m is "close"
+        this.audioParams.proximityToEnd = Math.max(0, 1 - (dist / 0.3));
+    },
+
+    // Stop ambient loop
+    stop() {
+        this.active = false;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+    },
+
+    // Reset for new round
+    reset() {
+        this.clearTrail();
+        this.initParticlePool();
+        this.markerPulse = 0;
+    }
+};
+
+// =============================================================================
+// ROUND HISTORY - Persistent Visualization Data
+// =============================================================================
+
+const RoundHistory = {
+    rounds: [],  // Array of completed round data
+
+    // Add completed round to history
+    addRound(roundNumber, exploredEdges, optimalPath, userPath) {
+        const color = CONFIG.roundColors[(roundNumber - 1) % CONFIG.roundColors.length];
+
+        this.rounds.push({
+            roundNumber,
+            exploredEdges: new Set(exploredEdges),  // Set of edge keys
+            optimalPath: [...optimalPath],           // Array of node IDs
+            userPath: [...userPath],                 // Array of node IDs
+            color,
+            state: 'surging',                        // 'surging' | 'settling' | 'idle'
+            intensity: 1.0,
+            surgeStartTime: performance.now(),
+        });
+    },
+
+    // Update all round states
+    update(deltaTime) {
+        const now = performance.now();
+
+        for (const round of this.rounds) {
+            if (round.state === 'surging') {
+                const elapsed = now - round.surgeStartTime;
+                if (elapsed > 800) {  // Surge for 800ms
+                    round.state = 'settling';
+                    round.settleStartTime = now;
+                }
+            } else if (round.state === 'settling') {
+                const elapsed = now - round.settleStartTime;
+                const settleProgress = Math.min(1, elapsed / 1000);  // 1s settle
+                round.intensity = 1.0 - (settleProgress * (1 - CONFIG.electricity.idleIntensity));
+
+                if (settleProgress >= 1) {
+                    round.state = 'idle';
+                    round.intensity = CONFIG.electricity.idleIntensity;
+                }
+            }
+        }
+    },
+
+    // Clear all history (for new game)
+    clear() {
+        this.rounds = [];
+    },
+
+    // Get all rounds for rendering
+    getRounds() {
+        return this.rounds;
+    }
+};
+
+// =============================================================================
+// ELECTRICITY SYSTEM - Organic Electric Effects
+// =============================================================================
+
+const ElectricitySystem = {
+    time: 0,
+    pulses: [],        // Traveling pulses along paths
+    arcs: [],          // Active arc sparks
+    lastCrackle: 0,
+
+    // Simple noise function for organic movement
+    noise(x, y, t) {
+        return Math.sin(x * 0.1 + t) * Math.cos(y * 0.1 + t * 0.7) * 0.5 +
+               Math.sin(x * 0.05 - t * 0.5) * 0.3 +
+               Math.cos(y * 0.08 + t * 0.3) * 0.2;
+    },
+
+    // Initialize pulses for a path
+    createPulses(pathPoints, color, count = 8) {
+        const pulses = [];
+        for (let i = 0; i < count; i++) {
+            pulses.push({
+                progress: i / count,  // 0-1 along path
+                speed: CONFIG.electricity.pulseSpeed * (0.8 + Math.random() * 0.4),
+                brightness: 0.6 + Math.random() * 0.4,
+                size: 0.8 + Math.random() * 0.4,
+            });
+        }
+        return pulses;
+    },
+
+    // Create arc spark between two points
+    createArc(x1, y1, x2, y2, color) {
+        this.arcs.push({
+            x1, y1, x2, y2,
+            color,
+            life: 1.0,
+            decay: 0.15 + Math.random() * 0.1,
+            segments: this.generateLightningPath(x1, y1, x2, y2),
+        });
+
+        // Play crackle sound (throttled)
+        if (performance.now() - this.lastCrackle > 100) {
+            SoundEngine.crackle();
+            this.lastCrackle = performance.now();
+        }
+    },
+
+    // Generate jagged lightning path between two points
+    generateLightningPath(x1, y1, x2, y2) {
+        const segments = [];
+        const steps = 4 + Math.floor(Math.random() * 3);
+        const dx = (x2 - x1) / steps;
+        const dy = (y2 - y1) / steps;
+
+        let px = x1, py = y1;
+        segments.push({ x: px, y: py });
+
+        for (let i = 1; i < steps; i++) {
+            const jitter = 8 + Math.random() * 12;
+            px = x1 + dx * i + (Math.random() - 0.5) * jitter;
+            py = y1 + dy * i + (Math.random() - 0.5) * jitter;
+            segments.push({ x: px, y: py });
+        }
+        segments.push({ x: x2, y: y2 });
+
+        return segments;
+    },
+
+    // Update system
+    update(deltaTime) {
+        this.time += deltaTime * 0.001;
+
+        // Update arcs
+        for (let i = this.arcs.length - 1; i >= 0; i--) {
+            this.arcs[i].life -= this.arcs[i].decay;
+            if (this.arcs[i].life <= 0) {
+                this.arcs.splice(i, 1);
+            }
+        }
+    },
+
+    // Get flicker multiplier for organic pulsing
+    getFlicker() {
+        const base = Math.sin(this.time * 15) * 0.05;
+        const fast = Math.sin(this.time * 47) * 0.03;
+        const random = (Math.random() - 0.5) * CONFIG.electricity.flickerIntensity;
+        return 1 + base + fast + random;
+    },
+
+    // Get wobble offset for a point
+    getWobble(x, y) {
+        const wx = this.noise(x, y, this.time * 2) * CONFIG.electricity.wobbleAmount;
+        const wy = this.noise(x + 100, y + 100, this.time * 2) * CONFIG.electricity.wobbleAmount;
+        return { wx, wy };
+    },
+
+    // Render electricity effects for edges
+    renderElectrifiedEdges(ctx, edges, color, intensity, isActive) {
+        if (edges.length === 0) return;
+
+        const flicker = this.getFlicker();
+        const effectiveIntensity = intensity * flicker;
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Outer glow
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
+        ctx.lineWidth = isActive ? 14 : 10;
+
+        ctx.beginPath();
+        for (const edge of edges) {
+            const w1 = this.getWobble(edge.from.x, edge.from.y);
+            const w2 = this.getWobble(edge.to.x, edge.to.y);
+            ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
+            ctx.lineTo(edge.to.x + w2.wx, edge.to.y + w2.wy);
+        }
+        ctx.stroke();
+
+        // Mid glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
+        ctx.lineWidth = isActive ? 6 : 4;
+        ctx.beginPath();
+        for (const edge of edges) {
+            const w1 = this.getWobble(edge.from.x, edge.from.y);
+            const w2 = this.getWobble(edge.to.x, edge.to.y);
+            ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
+            ctx.lineTo(edge.to.x + w2.wx, edge.to.y + w2.wy);
+        }
+        ctx.stroke();
+
+        // Core
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
+        ctx.lineWidth = isActive ? 2 : 1.5;
+        ctx.beginPath();
+        for (const edge of edges) {
+            const w1 = this.getWobble(edge.from.x, edge.from.y);
+            const w2 = this.getWobble(edge.to.x, edge.to.y);
+            ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
+            ctx.lineTo(edge.to.x + w2.wx, edge.to.y + w2.wy);
+        }
+        ctx.stroke();
+
+        // Random arc sparks for active rounds
+        if (isActive && Math.random() < CONFIG.electricity.arcFrequency && edges.length > 0) {
+            const edge = edges[Math.floor(Math.random() * edges.length)];
+            // Find nearby edge for arc
+            const nearbyEdge = edges.find(e =>
+                e !== edge &&
+                Math.abs(e.from.x - edge.to.x) < 50 &&
+                Math.abs(e.from.y - edge.to.y) < 50
+            );
+            if (nearbyEdge) {
+                this.createArc(edge.to.x, edge.to.y, nearbyEdge.from.x, nearbyEdge.from.y, color);
+            }
+        }
+    },
+
+    // Render traveling pulses along a path
+    renderPulses(ctx, pathPoints, color, intensity, pulses) {
+        if (pathPoints.length < 2 || !pulses) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+        const sprite = AmbientViz.sprites.glowWhite;
+
+        for (const pulse of pulses) {
+            // Update pulse position
+            pulse.progress += pulse.speed;
+            if (pulse.progress > 1) pulse.progress -= 1;
+
+            // Find position along path
+            const totalSegments = pathPoints.length - 1;
+            const segmentFloat = pulse.progress * totalSegments;
+            const segmentIndex = Math.floor(segmentFloat);
+            const segmentProgress = segmentFloat - segmentIndex;
+
+            if (segmentIndex < pathPoints.length - 1) {
+                const p1 = pathPoints[segmentIndex];
+                const p2 = pathPoints[segmentIndex + 1];
+                const x = p1.x + (p2.x - p1.x) * segmentProgress;
+                const y = p1.y + (p2.y - p1.y) * segmentProgress;
+
+                const size = AmbientViz.spriteSize * 0.4 * pulse.size;
+                ctx.globalAlpha = pulse.brightness * intensity * this.getFlicker();
+                ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+            }
+        }
+        ctx.globalAlpha = 1;
+    },
+
+    // Render arc sparks
+    renderArcs(ctx) {
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const arc of this.arcs) {
+            const { color, life, segments } = arc;
+
+            ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${life})`;
+            ctx.lineWidth = 2 * life;
+
+            ctx.beginPath();
+            ctx.moveTo(segments[0].x, segments[0].y);
+            for (let i = 1; i < segments.length; i++) {
+                ctx.lineTo(segments[i].x, segments[i].y);
+            }
+            ctx.stroke();
+
+            // White core
+            ctx.strokeStyle = `rgba(255, 255, 255, ${life * 0.8})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(segments[0].x, segments[0].y);
+            for (let i = 1; i < segments.length; i++) {
+                ctx.lineTo(segments[i].x, segments[i].y);
+            }
+            ctx.stroke();
+        }
+    },
+
+    // Render user path with distinct electricity (more chaotic, orange/yellow)
+    renderUserPathElectricity(ctx, pathPoints, intensity) {
+        if (pathPoints.length < 2) return;
+
+        const color = { r: 255, g: 140, b: 50 };  // Orange
+        const flicker = this.getFlicker() * (1 + Math.random() * 0.2);  // More chaotic
+        const effectiveIntensity = intensity * flicker;
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Outer chaotic glow
+        ctx.strokeStyle = `rgba(255, 100, 30, ${0.25 * effectiveIntensity})`;
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+        for (let i = 1; i < pathPoints.length; i++) {
+            const w = this.getWobble(pathPoints[i].x, pathPoints[i].y);
+            ctx.lineTo(pathPoints[i].x + w.wx * 1.5, pathPoints[i].y + w.wy * 1.5);
+        }
+        ctx.stroke();
+
+        // Mid glow
+        ctx.strokeStyle = `rgba(255, 140, 50, ${0.5 * effectiveIntensity})`;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+        for (let i = 1; i < pathPoints.length; i++) {
+            const w = this.getWobble(pathPoints[i].x, pathPoints[i].y);
+            ctx.lineTo(pathPoints[i].x + w.wx, pathPoints[i].y + w.wy);
+        }
+        ctx.stroke();
+
+        // Yellow-white core
+        ctx.strokeStyle = `rgba(255, 220, 150, ${0.9 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+        for (let i = 1; i < pathPoints.length; i++) {
+            ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
+        }
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
+    }
+};
+
+// =============================================================================
+// SCREEN COORDINATE CACHE - Avoid recalculating every frame
+// =============================================================================
+
+const ScreenCoordCache = {
+    edges: [],           // Array of {from: {x,y}, to: {x,y}} for each edge
+    dirty: true,         // Needs refresh when map moves/zooms
+    lastRefresh: 0,      // Timestamp of last refresh
+
+    // Refresh all edge screen coordinates
+    refresh() {
+        if (!GameState.map || !GameState.edgeList || GameState.edgeList.length === 0) {
+            this.edges = [];
+            return;
+        }
+
+        const map = GameState.map;
+        this.edges = new Array(GameState.edgeList.length);
+
+        for (let i = 0; i < GameState.edgeList.length; i++) {
+            const edge = GameState.edgeList[i];
+            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+            this.edges[i] = {
+                from: { x: fromScreen.x, y: fromScreen.y },
+                to: { x: toScreen.x, y: toScreen.y },
+                edgeKey: `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`
+            };
+        }
+
+        this.dirty = false;
+        this.lastRefresh = performance.now();
+    },
+
+    // Mark cache as needing refresh
+    invalidate() {
+        this.dirty = true;
+    },
+
+    // Get cached coordinates, refresh if needed
+    getEdges() {
+        if (this.dirty || this.edges.length === 0) {
+            this.refresh();
+        }
+        return this.edges;
+    }
+};
+
+// =============================================================================
 // GAME STATE
 // =============================================================================
 
@@ -550,6 +1614,7 @@ const GameState = {
     nodes: new Map(),
     edges: new Map(),
     edgeList: [],
+    edgeLookup: new Map(),  // Fast lookup: edgeKey -> edge object
 
     // Debug state
     debug: {
@@ -576,6 +1641,15 @@ const GameState = {
     userDrawnPoints: [],    // Raw lat/lng points (actual mouse path for distance calc)
     userDistance: 0,        // Distance in km (single value used everywhere)
     userPathLayer: null,
+
+    // Electric trace animation for new path segments
+    traceAnimation: {
+        active: false,
+        segments: [],       // Array of {from, to} screen coords to animate
+        progress: 0,        // 0-1 animation progress
+        startTime: 0,
+        duration: 150,      // ms per segment
+    },
 
     // A* results
     exploredNodes: [],
@@ -622,6 +1696,7 @@ const GameState = {
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
     initCanvases();
+    AmbientViz.init();  // Initialize glow sprites
     initEventListeners();
     initSoundListeners();
     initLocationSelector();
@@ -689,11 +1764,13 @@ function initMap() {
     GameState.userPathLayer = L.layerGroup().addTo(GameState.map);
 
     GameState.map.on('move', () => {
+        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
     });
     GameState.map.on('zoom', () => {
+        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
@@ -863,6 +1940,7 @@ function processRoadData(data) {
     GameState.nodes.clear();
     GameState.edges.clear();
     GameState.edgeList = [];
+    GameState.edgeLookup.clear();
 
     const nodeMap = new Map();
     for (const element of data.elements) {
@@ -900,18 +1978,23 @@ function processRoadData(data) {
                 GameState.edges.get(nodeA).push({ neighbor: nodeB, weight });
                 GameState.edges.get(nodeB).push({ neighbor: nodeA, weight });
 
-                GameState.edgeList.push({
+                const edgeObj = {
                     from: nodeA,
                     to: nodeB,
                     fromPos: posA,
                     toPos: posB
-                });
+                };
+                GameState.edgeList.push(edgeObj);
+                GameState.edgeLookup.set(edgeKey, edgeObj);
             }
         }
     }
 
     // Analyze graph connectivity
     analyzeGraphConnectivity();
+
+    // Invalidate coordinate cache - new road data loaded
+    ScreenCoordCache.invalidate();
 
     // Draw road network if custom view is enabled
     if (GameState.showCustomRoads) {
@@ -925,11 +2008,14 @@ function processRoadData(data) {
 
 function startGame() {
     SoundEngine.init();
-    SoundEngine.startAmbient();
+    // Old ambient drone removed - using wav files now
     hideInstructions();
     GameState.gameStarted = true;
     enableDrawing();
     selectRandomEndpoints();
+
+    // Start ambient visual system
+    AmbientViz.start();
 }
 
 function nextRound() {
@@ -947,6 +2033,9 @@ function nextRound() {
     const roundScore = document.getElementById('round-score');
     if (roundScore) roundScore.textContent = '0';
 
+    // Reset ambient visuals for new round
+    AmbientViz.reset();
+
     if (GameState.currentRound < CONFIG.totalRounds) {
         GameState.currentRound++;
         updateRoundDisplay();
@@ -956,6 +2045,7 @@ function nextRound() {
         enableDrawing();
     } else {
         showGameOver();
+        AmbientViz.stop();
     }
 }
 
@@ -975,6 +2065,13 @@ function playAgain() {
     const optimalBar = document.getElementById('optimal-bar');
     if (userBar) userBar.style.width = '0%';
     if (optimalBar) optimalBar.style.width = '0%';
+
+    // Reset ambient visuals
+    AmbientViz.stop();
+    AmbientViz.reset();
+
+    // Clear persistent round history
+    RoundHistory.clear();
 
     // Show location selector for new game
     showLocationSelector();
@@ -1172,18 +2269,18 @@ function disableDrawing() {
     GameState.canDraw = false;
 }
 
-function startDrawing(e) {
+/**
+ * Handle click to add waypoint - uses micro A* routing to connect to last point.
+ * This is the primary interaction method (no dragging needed).
+ */
+function handlePathClick(e) {
     if (e.button !== undefined && e.button !== 0) return;
     if (!GameState.gameStarted || !GameState.canDraw) return;
+    if (GameState.vizState.active) return; // Don't allow clicks during A* visualization
 
-    GameState.isDrawing = true;
-    GameState.drawCanvas.classList.add('drawing-active');
-    GameState.map.dragging.disable();
-
-    // Always start from the start node
+    // Initialize path from start node on first click
     if (GameState.userPathNodes.length === 0) {
         GameState.userPathNodes.push(GameState.startNode);
-        // Add start node position as first raw point
         const startPos = GameState.nodes.get(GameState.startNode);
         if (startPos) {
             GameState.userDrawnPoints.push({ lat: startPos.lat, lng: startPos.lng });
@@ -1192,53 +2289,49 @@ function startDrawing(e) {
         updateAllDistanceDisplays();
     }
 
-    // Add the clicked point (raw + snapped)
+    // Add the clicked point (micro A* routing happens inside addPointToUserPath)
     const point = getLatLngFromEvent(e);
     GameState.userDrawnPoints.push({ lat: point.lat, lng: point.lng });
-    addPointToUserPath(point.lat, point.lng);
-    redrawUserPath();
+
+    if (addPointToUserPath(point.lat, point.lng)) {
+        redrawUserPath();
+        // Quick visual feedback
+        GameState.drawCanvas.classList.add('click-feedback');
+        setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
+    }
+}
+
+/**
+ * Handle touch tap to add waypoint.
+ */
+function handleTouchTap(e) {
+    e.preventDefault();
+    // Only handle single taps, not multi-touch gestures
+    if (e.touches.length === 1) {
+        handlePathClick({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+    }
+}
+
+// Legacy functions kept for compatibility but simplified
+function startDrawing(e) {
+    handlePathClick(e);
 }
 
 function draw(e) {
-    if (!GameState.isDrawing) return;
-
-    const point = getLatLngFromEvent(e);
-
-    // Store raw point for distance calculation
-    GameState.userDrawnPoints.push({ lat: point.lat, lng: point.lng });
-
-    // Add point to path (addPointToUserPath handles deduplication)
-    if (addPointToUserPath(point.lat, point.lng)) {
-        redrawUserPath();
-    }
-
-    // Update distance from raw drawn points
-    recalculateUserDistance();
-    updateAllDistanceDisplays();
+    // No-op: dragging is disabled, we use click-only
 }
 
 function stopDrawing() {
-    if (GameState.isDrawing) {
-        GameState.isDrawing = false;
-        GameState.drawCanvas.classList.remove('drawing-active');
-        GameState.map.dragging.enable();
-    }
-
-    // Enable submit button if enough points (for fallback, auto-submit handles most cases)
-    if (GameState.userPathNodes.length >= CONFIG.minRoutePoints) {
-        const submitBtn = document.getElementById('submit-btn');
-        if (submitBtn) submitBtn.disabled = false;
-    }
+    // No-op: no continuous drawing state to manage
 }
 
 function handleTouchStart(e) {
-    e.preventDefault();
-    startDrawing({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+    handleTouchTap(e);
 }
 
 function handleTouchMove(e) {
+    // No-op: dragging is disabled on touch
     e.preventDefault();
-    draw({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
 }
 
 function getLatLngFromEvent(e) {
@@ -1254,26 +2347,52 @@ function redrawUserPath() {
 
     if (GameState.userPathNodes.length < 2) return;
 
-    ctx.shadowColor = CONFIG.colors.userRoute;
-    ctx.shadowBlur = 12;
-    ctx.strokeStyle = CONFIG.colors.userRoute;
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    ctx.beginPath();
+    const points = [];
     for (let i = 0; i < GameState.userPathNodes.length; i++) {
         const nodeId = GameState.userPathNodes[i];
         const pos = GameState.nodes.get(nodeId);
         if (!pos) continue;
+        points.push(GameState.map.latLngToContainerPoint([pos.lat, pos.lng]));
+    }
 
-        const screenPoint = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
-        if (i === 0) ctx.moveTo(screenPoint.x, screenPoint.y);
-        else ctx.lineTo(screenPoint.x, screenPoint.y);
+    if (points.length < 2) return;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Use lighter composite for glow (no shadowBlur!)
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Glow layers
+    ctx.strokeStyle = 'rgba(255, 107, 53, 0.2)';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
     }
     ctx.stroke();
 
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 107, 53, 0.5)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Core line
+    ctx.strokeStyle = CONFIG.colors.userRoute;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.stroke();
 }
 
 function clearUserPath() {
@@ -1447,6 +2566,9 @@ async function runEpicVisualization(explored, path) {
 
     startRenderLoop();
 
+    // Play scanning sound when A* exploration begins
+    SoundEngine.scanning();
+
     const startTime = performance.now();
     const explorationDelay = CONFIG.viz.explorationDelay / speed;
 
@@ -1485,34 +2607,31 @@ async function runEpicVisualization(explored, path) {
 
     await sleep(400 / speed);
 
-    // Animate optimal path - start trace sound
-    SoundEngine.startTrace();
+    // Animate optimal path - BATCHED for performance
     viz.phase = 'path';
-    const pathDelay = CONFIG.viz.pathTraceSpeed / speed;
 
-    for (let i = 0; i < path.length - 1; i++) {
-        viz.pathProgress = i;
+    // Target ~1.5 seconds for path animation regardless of path length
+    const targetDuration = 1500 / speed;
+    const frameTime = 16; // ~60fps
+    const totalFrames = Math.ceil(targetDuration / frameTime);
+    const nodesPerFrame = Math.max(1, Math.ceil(path.length / totalFrames));
 
-        // Update trace sound pitch based on progress
-        SoundEngine.updateTrace(i / path.length);
+    for (let i = 0; i < path.length - 1; i += nodesPerFrame) {
+        viz.pathProgress = Math.min(i, path.length - 2);
 
         // Spawn path particles occasionally
-        if (i % 2 === 0 && viz.particles.length < CONFIG.viz.maxParticles) {
+        if (viz.particles.length < CONFIG.viz.maxParticles) {
             const pos = GameState.nodes.get(path[i]);
             if (pos) {
                 viz.particles.push(createParticle(pos, 'path'));
             }
         }
 
-        await sleep(pathDelay);
+        await sleep(frameTime);
     }
 
     viz.pathProgress = path.length - 1;
     viz.phase = 'complete';
-
-    // Stop trace sound and play resolve chime
-    SoundEngine.stopTrace();
-    SoundEngine.resolve();
 
     // Final burst - limited
     const endPos = GameState.nodes.get(path[path.length - 1]);
@@ -1565,6 +2684,43 @@ function startRenderLoop() {
     render();
 }
 
+// Ambient road network with warm radial breathing - uses cached coordinates
+function drawAmbientRoads(ctx, time, width, height) {
+    const edges = ScreenCoordCache.getEdges();
+    if (edges.length === 0) return;
+
+    // Global breathing - one calculation for all edges
+    const breathe = 0.5 + 0.3 * Math.sin(time * 0.8);
+    const baseAlpha = 0.12 * breathe;
+
+    // Single batched draw - warm purple/pink undertone
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Outer glow layer
+    ctx.strokeStyle = `rgba(120, 60, 140, ${baseAlpha * 0.5})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i = 0; i < edges.length; i++) {
+        const edge = edges[i];
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+
+    // Core roads
+    ctx.strokeStyle = `rgba(80, 40, 100, ${baseAlpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < edges.length; i++) {
+        const edge = edges[i];
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+}
+
 function renderVisualization() {
     const ctx = GameState.vizCtx;
     const viz = GameState.vizState;
@@ -1575,6 +2731,36 @@ function renderVisualization() {
 
     viz.pulsePhase += CONFIG.viz.pulseSpeed;
 
+    const time = performance.now() * 0.001;
+    const flicker = 0.85 + Math.sin(time * 30) * 0.02 + Math.sin(time * 7) * 0.03 + (Math.random() - 0.5) * 0.05;
+
+    // Draw ambient road network underneath - warm breathing effect
+    drawAmbientRoads(ctx, time, width, height);
+
+    // Use lighter composite for glow effect (no shadowBlur!)
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Batch render explored edges - simple 3-band system using cached coordinates
+    const edgesByHeat = { high: [], medium: [], low: [] };
+    const cachedEdges = ScreenCoordCache.getEdges();
+
+    for (let i = 0; i < cachedEdges.length; i++) {
+        const cached = cachedEdges[i];
+        const heat = viz.edgeHeat.get(cached.edgeKey) || 0;
+
+        if (heat < 0.03) continue;
+
+        if (heat > 0.7) {
+            edgesByHeat.high.push(cached);
+        } else if (heat > 0.3) {
+            edgesByHeat.medium.push(cached);
+        } else {
+            edgesByHeat.low.push(cached);
+        }
+    }
+
     // Decay heat values
     for (const [nodeId, heat] of viz.nodeHeat) {
         viz.nodeHeat.set(nodeId, heat * CONFIG.viz.heatDecay);
@@ -1583,71 +2769,82 @@ function renderVisualization() {
         viz.edgeHeat.set(edgeKey, heat * CONFIG.viz.heatDecay);
     }
 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Draw explored edges - OPTIMIZED (fewer glow layers)
-    for (const edge of GameState.edgeList) {
-        const edgeKey = `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`;
-        const heat = viz.edgeHeat.get(edgeKey) || 0;
-
-        if (heat > 0.03) {
-            const fromScreen = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-            const toScreen = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
-
-            const color = getHeatColor(heat);
-
-            // Simplified glow - just 2 layers instead of 4
-            ctx.shadowColor = `rgba(${color.r}, ${color.g}, ${color.b}, 1)`;
-            ctx.shadowBlur = 15 * heat;
-            ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * heat})`;
-            ctx.lineWidth = 6 * heat;
-
-            ctx.beginPath();
-            ctx.moveTo(fromScreen.x, fromScreen.y);
-            ctx.lineTo(toScreen.x, toScreen.y);
-            ctx.stroke();
-
-            // Core line
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * heat})`;
-            ctx.lineWidth = 2 * heat;
-            ctx.beginPath();
-            ctx.moveTo(fromScreen.x, fromScreen.y);
-            ctx.lineTo(toScreen.x, toScreen.y);
-            ctx.stroke();
+    // High heat - bright cyan with glow
+    if (edgesByHeat.high.length > 0) {
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        for (const edge of edgesByHeat.high) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
         }
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        for (const edge of edgesByHeat.high) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
     }
 
-    ctx.shadowBlur = 0;
+    // Medium heat - purple
+    if (edgesByHeat.medium.length > 0) {
+        ctx.strokeStyle = 'rgba(184, 41, 221, 0.25)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        for (const edge of edgesByHeat.medium) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
 
-    // Draw explored nodes - OPTIMIZED (simpler glow)
+        ctx.strokeStyle = 'rgba(184, 41, 221, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (const edge of edgesByHeat.medium) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+    }
+
+    // Low heat - pink fading
+    if (edgesByHeat.low.length > 0) {
+        ctx.strokeStyle = 'rgba(255, 42, 109, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const edge of edgesByHeat.low) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+    }
+
+    // Draw frontier nodes using sprites
+    const sprite = AmbientViz.sprites.glowCyan;
+    const spriteSize = AmbientViz.spriteSize;
+
     for (const [nodeId, heat] of viz.nodeHeat) {
-        if (heat < 0.05) continue;
+        if (heat < 0.4) continue;
 
         const pos = GameState.nodes.get(nodeId);
         if (!pos) continue;
 
         const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
-        const color = getHeatColor(heat);
+        const size = spriteSize * heat * 0.8;
+        const spriteToUse = heat > 0.8 ? AmbientViz.sprites.glowWhite :
+                           heat > 0.5 ? AmbientViz.sprites.glowCyan :
+                           AmbientViz.sprites.glowPurple;
 
-        const pulse = 0.7 + 0.3 * Math.sin(viz.pulsePhase * 2 + nodeId * 0.001);
-        const radius = CONFIG.viz.nodeGlowRadius * heat * pulse;
-
-        // Simple radial gradient
-        const gradient = ctx.createRadialGradient(
-            screen.x, screen.y, 0,
-            screen.x, screen.y, radius
-        );
-        gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${heat * 0.9})`);
-        gradient.addColorStop(0.5, `rgba(${color.r}, ${color.g}, ${color.b}, ${heat * 0.3})`);
-        gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.globalAlpha = heat * flicker * 0.8;
+        ctx.drawImage(spriteToUse, screen.x - size / 2, screen.y - size / 2, size, size);
     }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
 
     // Draw optimal path
     if (viz.phase === 'path' || viz.phase === 'complete') {
@@ -1694,19 +2891,20 @@ function drawOptimalPath(ctx) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Simplified neon glow - 3 layers instead of 5
-    const glowLayers = [
-        { color: '0, 240, 255', blur: 25, width: 14, alpha: 0.2 },
-        { color: '0, 240, 255', blur: 12, width: 8, alpha: 0.5 },
-        { color: '150, 255, 255', blur: 4, width: 4, alpha: 0.9 },
+    // Use lighter composite for glow effect (NO shadowBlur!)
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Draw glow layers - wider and more transparent first
+    const layers = [
+        { color: 'rgba(0, 240, 255, 0.15)', width: 16 },
+        { color: 'rgba(0, 240, 255, 0.3)', width: 10 },
+        { color: 'rgba(0, 240, 255, 0.5)', width: 6 },
+        { color: 'rgba(150, 255, 255, 0.8)', width: 3 },
     ];
 
-    for (const layer of glowLayers) {
-        ctx.shadowColor = `rgba(${layer.color}, 1)`;
-        ctx.shadowBlur = layer.blur;
-        ctx.strokeStyle = `rgba(${layer.color}, ${layer.alpha})`;
+    for (const layer of layers) {
+        ctx.strokeStyle = layer.color;
         ctx.lineWidth = layer.width;
-
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
@@ -1715,8 +2913,9 @@ function drawOptimalPath(ctx) {
         ctx.stroke();
     }
 
+    ctx.globalCompositeOperation = 'source-over';
+
     // Bright white core
-    ctx.shadowBlur = 0;
     ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1726,9 +2925,13 @@ function drawOptimalPath(ctx) {
     }
     ctx.stroke();
 
-    // Energy pulses along completed path
+    // Energy pulses along completed path using sprites
     if (viz.phase === 'complete' && points.length > 1) {
-        const numPulses = 2; // Reduced from 3
+        ctx.globalCompositeOperation = 'lighter';
+        const sprite = AmbientViz.sprites.glowWhite;
+        const spriteSize = AmbientViz.spriteSize;
+
+        const numPulses = 2;
         for (let p = 0; p < numPulses; p++) {
             const t = ((viz.pulsePhase * 0.25 + p / numPulses) % 1);
             const totalLen = points.length - 1;
@@ -1739,17 +2942,13 @@ function drawOptimalPath(ctx) {
                 const x = points[idx].x + (points[idx + 1].x - points[idx].x) * frac;
                 const y = points[idx].y + (points[idx + 1].y - points[idx].y) * frac;
 
-                const pulseGrad = ctx.createRadialGradient(x, y, 0, x, y, 18);
-                pulseGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-                pulseGrad.addColorStop(0.4, 'rgba(0, 240, 255, 0.5)');
-                pulseGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
-
-                ctx.fillStyle = pulseGrad;
-                ctx.beginPath();
-                ctx.arc(x, y, 18, 0, Math.PI * 2);
-                ctx.fill();
+                const size = spriteSize * 0.6;
+                ctx.globalAlpha = 0.8;
+                ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
             }
         }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
     }
 
     // Leading point glow
@@ -1790,31 +2989,33 @@ function updateParticles() {
 }
 
 function drawParticles(ctx) {
+    if (GameState.vizState.particles.length === 0) return;
+
+    // Use sprites for particles (no shadowBlur!)
+    ctx.globalCompositeOperation = 'lighter';
+    const sprites = AmbientViz.sprites;
+    const spriteSize = AmbientViz.spriteSize;
+
     for (const p of GameState.vizState.particles) {
         const screen = GameState.map.latLngToContainerPoint([p.lat, p.lng]);
 
-        let color;
+        // Pick sprite based on particle type
+        let sprite;
         if (p.type === 'explore') {
-            color = getHeatColor(p.life);
+            sprite = p.life > 0.5 ? sprites.glowCyan : sprites.glowPurple;
         } else if (p.type === 'path') {
-            color = { r: 0, g: 240, b: 255 };
+            sprite = sprites.glowCyan;
         } else {
-            color = { r: 255, g: 255, b: 255 };
+            sprite = sprites.glowWhite;
         }
 
-        const radius = p.size * p.life;
-
-        // Simple glow
-        ctx.shadowColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.8)`;
-        ctx.shadowBlur = radius;
-
-        ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${p.life * 0.8})`;
-        ctx.beginPath();
-        ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        const size = spriteSize * p.size * p.life * 0.5;
+        ctx.globalAlpha = p.life * 0.7;
+        ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
     }
 
-    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
 }
 
 function clearVisualizationState() {
@@ -1857,43 +3058,71 @@ function clearVisualization() {
 // =============================================================================
 
 /**
- * Add a point to the user's path by snapping to nearest road node.
- * This is the ONLY way points should be added to the user path.
+ * Add a point to the user's path using micro A* routing.
+ * Finds the shortest path from the last node to the clicked location.
+ * This ensures the path always follows valid roads.
  */
 function addPointToUserPath(lat, lng) {
-    const nodeId = findNearestNode(lat, lng);
-    if (nodeId === null) return false;
+    const targetNode = findNearestNode(lat, lng);
+    if (targetNode === null) return false;
+
+    const lastNode = GameState.userPathNodes[GameState.userPathNodes.length - 1];
 
     // Avoid duplicate consecutive nodes
-    const lastNode = GameState.userPathNodes[GameState.userPathNodes.length - 1];
-    if (nodeId === lastNode) return false;
+    if (targetNode === lastNode) return false;
 
-    GameState.userPathNodes.push(nodeId);
+    // Use micro A* to find the path along roads
+    const microPath = findShortestPathBetween(lastNode, targetNode);
+
+    if (microPath.length === 0) {
+        // No path found - fall back to direct add (shouldn't happen often)
+        GameState.userPathNodes.push(targetNode);
+    } else {
+        // Add all nodes from the micro path (skip first since it's already in path)
+        const newNodes = microPath.slice(1);
+
+        // Start trace animation for visual feedback
+        startTraceAnimation(microPath);
+
+        // Add all intermediate nodes
+        for (const nodeId of newNodes) {
+            GameState.userPathNodes.push(nodeId);
+        }
+    }
+
     recalculateUserDistance();
     updateAllDistanceDisplays();
 
     // Auto-complete: if user reached (or is very close to) the end node
     if (GameState.userPathNodes.length >= CONFIG.minRoutePoints) {
         const endPos = GameState.nodes.get(GameState.endNode);
-        const nodePos = GameState.nodes.get(nodeId);
+        const lastAddedNode = GameState.userPathNodes[GameState.userPathNodes.length - 1];
+        const nodePos = GameState.nodes.get(lastAddedNode);
 
         // Check if exact match OR within 30 meters of end node
-        const isAtEnd = nodeId === GameState.endNode ||
+        const isAtEnd = lastAddedNode === GameState.endNode ||
             (endPos && nodePos && haversineDistance(nodePos.lat, nodePos.lng, endPos.lat, endPos.lng) < 0.03);
 
         if (isAtEnd) {
             // If close but not exactly at end, add endNode to complete the path
-            if (nodeId !== GameState.endNode) {
-                GameState.userPathNodes.push(GameState.endNode);
+            if (lastAddedNode !== GameState.endNode) {
+                const finalPath = findShortestPathBetween(lastAddedNode, GameState.endNode);
+                if (finalPath.length > 1) {
+                    for (const nodeId of finalPath.slice(1)) {
+                        GameState.userPathNodes.push(nodeId);
+                    }
+                } else {
+                    GameState.userPathNodes.push(GameState.endNode);
+                }
                 recalculateUserDistance();
                 updateAllDistanceDisplays();
             }
-            // Small delay for visual feedback, then auto-submit
+            // Delay for trace animation to complete, then auto-submit
             setTimeout(() => {
-                if (!GameState.vizState.active) {  // Don't submit if already processing
+                if (!GameState.vizState.active) {
                     submitRoute();
                 }
-            }, 150);
+            }, 300);
         }
     }
 
@@ -1901,29 +3130,129 @@ function addPointToUserPath(lat, lng) {
 }
 
 /**
+ * Start the electric trace animation for a new path segment.
+ */
+function startTraceAnimation(pathNodes) {
+    if (pathNodes.length < 2) return;
+
+    // Convert path nodes to screen coordinates
+    const segments = [];
+    for (let i = 0; i < pathNodes.length - 1; i++) {
+        const fromPos = GameState.nodes.get(pathNodes[i]);
+        const toPos = GameState.nodes.get(pathNodes[i + 1]);
+        if (fromPos && toPos) {
+            segments.push({
+                fromLat: fromPos.lat, fromLng: fromPos.lng,
+                toLat: toPos.lat, toLng: toPos.lng
+            });
+        }
+    }
+
+    GameState.traceAnimation = {
+        active: true,
+        segments,
+        progress: 0,
+        startTime: performance.now(),
+        duration: Math.min(150, 50 + segments.length * 15), // Scale with path length, max 150ms
+    };
+}
+
+/**
+ * Render the electric trace animation.
+ * Called from the ambient render loop.
+ */
+function renderTraceAnimation(ctx) {
+    const trace = GameState.traceAnimation;
+    if (!trace.active || trace.segments.length === 0) return;
+
+    const elapsed = performance.now() - trace.startTime;
+    const totalDuration = trace.duration;
+    trace.progress = Math.min(1, elapsed / totalDuration);
+
+    // Calculate how many segments to show and the progress within the current segment
+    const totalSegments = trace.segments.length;
+    const overallProgress = trace.progress * totalSegments;
+    const completedSegments = Math.floor(overallProgress);
+    const currentSegmentProgress = overallProgress - completedSegments;
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Draw completed segments (full glow)
+    for (let i = 0; i < completedSegments && i < totalSegments; i++) {
+        const seg = trace.segments[i];
+        const from = GameState.map.latLngToContainerPoint([seg.fromLat, seg.fromLng]);
+        const to = GameState.map.latLngToContainerPoint([seg.toLat, seg.toLng]);
+
+        // Glow
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+
+        // Core
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+    }
+
+    // Draw current segment (partial, with bright leading edge)
+    if (completedSegments < totalSegments) {
+        const seg = trace.segments[completedSegments];
+        const from = GameState.map.latLngToContainerPoint([seg.fromLat, seg.fromLng]);
+        const to = GameState.map.latLngToContainerPoint([seg.toLat, seg.toLng]);
+
+        // Interpolate position
+        const currentX = from.x + (to.x - from.x) * currentSegmentProgress;
+        const currentY = from.y + (to.y - from.y) * currentSegmentProgress;
+
+        // Trail glow
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(currentX, currentY);
+        ctx.stroke();
+
+        // Trail core
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(currentX, currentY);
+        ctx.stroke();
+
+        // Bright leading edge (white hot)
+        const sprite = AmbientViz.sprites.glowWhite;
+        if (sprite) {
+            const size = 40;
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(sprite, currentX - size/2, currentY - size/2, size, size);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // End animation when complete
+    if (trace.progress >= 1) {
+        trace.active = false;
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+/**
  * Recalculate the user's path distance from raw drawn points.
  * This measures the actual line the user drew, not snapped nodes.
  */
 function recalculateUserDistance() {
-    GameState.userDistance = calculateDrawnDistance();
-}
-
-/**
- * Calculate distance from raw drawn points (actual mouse path).
- * This is what the user visually drew - simple and accurate.
- */
-function calculateDrawnDistance() {
-    const points = GameState.userDrawnPoints;
-    if (!points || points.length < 2) return 0;
-
-    let total = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-        total += haversineDistance(
-            points[i].lat, points[i].lng,
-            points[i + 1].lat, points[i + 1].lng
-        );
-    }
-    return total;
+    // With click-based routing, calculate distance from the actual snapped path
+    GameState.userDistance = calculateNodePathDistance(GameState.userPathNodes);
 }
 
 /**
@@ -2020,6 +3349,18 @@ function calculateAndShowScore() {
         userDistance: userDistance,
         optimalDistance: optimalDistance
     });
+
+    // Save round to persistent history for visualization
+    const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
+    RoundHistory.addRound(
+        GameState.currentRound,
+        exploredEdgeKeys,
+        GameState.optimalPath,
+        GameState.userPathNodes
+    );
+
+    // Play the path found sound
+    SoundEngine.pathFound();
 
     // Update displays - user distance already shown via updateAllDistanceDisplays()
     document.getElementById('optimal-distance').textContent = `${optimalDistance.toFixed(2)} km`;
@@ -2398,8 +3739,6 @@ function hideResults() {
 }
 
 function showGameOver() {
-    SoundEngine.stopAmbient();
-
     // Animate the final score count-up
     const finalScoreEl = document.getElementById('final-score');
     animateFinalScore(GameState.totalScore, finalScoreEl);
@@ -2516,30 +3855,29 @@ function sleep(ms) {
 // =============================================================================
 
 /**
- * Draw the road network with cyberpunk neon aesthetic.
- * Only shows roads that exist in our graph - what A* can actually use.
+ * Draw the road network with cyberpunk CRT aesthetic.
+ * Always visible as the base layer - the "canvas" for pathfinding.
+ * Includes subtle CRT flicker and breathing effects.
  */
-function drawRoadNetwork() {
-    const ctx = GameState.vizCtx;
+function drawRoadNetwork(ctx) {
+    // Use passed context or default to vizCtx
+    ctx = ctx || GameState.vizCtx;
     const width = GameState.vizCanvas.width;
     const height = GameState.vizCanvas.height;
 
-    // Don't draw if visualization is active
-    if (GameState.vizState.active) return;
-
-    // Clear the canvas (background handled by CSS)
-    ctx.clearRect(0, 0, width, height);
-
     if (GameState.edgeList.length === 0) return;
 
-    // Draw all edges with neon glow effect
-    ctx.strokeStyle = 'rgba(255, 140, 50, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = '#ff8c32';
-    ctx.shadowBlur = 6;
-    ctx.lineCap = 'round';
+    // CRT flicker effect
+    const time = performance.now() * 0.001;
+    const flicker = 0.85 + Math.sin(time * 30) * 0.02 + Math.sin(time * 7) * 0.03 + (Math.random() - 0.5) * 0.05;
+    const breathing = 0.95 + Math.sin(time * 0.5) * 0.05;
+    const crtIntensity = flicker * breathing;
 
-    ctx.beginPath();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Build visible edges array first
+    const visibleEdges = [];
     for (const edge of GameState.edgeList) {
         const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
         const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
@@ -2550,11 +3888,98 @@ function drawRoadNetwork() {
         if (from.y < -100 && to.y < -100) continue;
         if (from.y > height + 100 && to.y > height + 100) continue;
 
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
+        visibleEdges.push({ from, to });
+    }
+
+    // Use lighter composite for glow effect
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer glow layer
+    ctx.strokeStyle = `rgba(255, 140, 50, ${0.08 * crtIntensity})`;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
     }
     ctx.stroke();
-    ctx.shadowBlur = 0;
+
+    // Mid glow layer
+    ctx.strokeStyle = `rgba(255, 140, 50, ${0.15 * crtIntensity})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Core line
+    ctx.strokeStyle = `rgba(255, 140, 50, ${0.5 * crtIntensity})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+}
+
+/**
+ * Draw road network with soft ambient glow during A* visualization.
+ * Simple, performant, warm effect - BATCHED rendering for performance.
+ */
+function drawRoadNetworkScanning(ctx, time, pulsePhase) {
+    ctx = ctx || GameState.vizCtx;
+    const width = GameState.vizCanvas.width;
+    const height = GameState.vizCanvas.height;
+
+    if (GameState.edgeList.length === 0) return;
+
+    // Soft breathing - very slow, gentle pulse
+    const breathe = 0.9 + Math.sin(time * 0.7) * 0.1;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Build visible edges array (BATCHED - no per-edge calculations)
+    const visibleEdges = [];
+    for (const edge of GameState.edgeList) {
+        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+
+        // Skip edges completely off-screen
+        if (from.x < -100 && to.x < -100) continue;
+        if (from.x > width + 100 && to.x > width + 100) continue;
+        if (from.y < -100 && to.y < -100) continue;
+        if (from.y > height + 100 && to.y > height + 100) continue;
+
+        visibleEdges.push({ from, to });
+    }
+
+    // Soft outer glow - SINGLE batched draw call
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255, 140, 50, ${0.08 * breathe})`;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+
+    // Core lines - SINGLE batched draw call
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(255, 140, 50, ${0.35 * breathe})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
 }
 
 /**
