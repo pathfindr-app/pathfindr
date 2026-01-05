@@ -13,8 +13,66 @@ const CONFIG = {
         lat: 47.6062,
         lng: -122.3321,
         zoom: 15,
-        name: "Downtown Seattle, WA"
+        name: "Seattle, WA"
     },
+
+    // US Cities for random selection
+    usCities: [
+        { lat: 40.7128, lng: -74.0060, name: "New York, NY", zoom: 15 },
+        { lat: 34.0522, lng: -118.2437, name: "Los Angeles, CA", zoom: 15 },
+        { lat: 41.8781, lng: -87.6298, name: "Chicago, IL", zoom: 15 },
+        { lat: 29.7604, lng: -95.3698, name: "Houston, TX", zoom: 15 },
+        { lat: 33.4484, lng: -112.0740, name: "Phoenix, AZ", zoom: 15 },
+        { lat: 39.9526, lng: -75.1652, name: "Philadelphia, PA", zoom: 15 },
+        { lat: 29.4241, lng: -98.4936, name: "San Antonio, TX", zoom: 15 },
+        { lat: 32.7767, lng: -96.7970, name: "Dallas, TX", zoom: 15 },
+        { lat: 37.3382, lng: -121.8863, name: "San Jose, CA", zoom: 15 },
+        { lat: 30.2672, lng: -97.7431, name: "Austin, TX", zoom: 15 },
+        { lat: 37.7749, lng: -122.4194, name: "San Francisco, CA", zoom: 15 },
+        { lat: 47.6062, lng: -122.3321, name: "Seattle, WA", zoom: 15 },
+        { lat: 39.7392, lng: -104.9903, name: "Denver, CO", zoom: 15 },
+        { lat: 42.3601, lng: -71.0589, name: "Boston, MA", zoom: 15 },
+        { lat: 33.7490, lng: -84.3880, name: "Atlanta, GA", zoom: 15 },
+        { lat: 25.7617, lng: -80.1918, name: "Miami, FL", zoom: 15 },
+        { lat: 38.9072, lng: -77.0369, name: "Washington, DC", zoom: 15 },
+        { lat: 36.1627, lng: -86.7816, name: "Nashville, TN", zoom: 15 },
+        { lat: 45.5152, lng: -122.6784, name: "Portland, OR", zoom: 15 },
+        { lat: 35.2271, lng: -80.8431, name: "Charlotte, NC", zoom: 15 },
+        { lat: 32.7157, lng: -117.1611, name: "San Diego, CA", zoom: 15 },
+        { lat: 44.9778, lng: -93.2650, name: "Minneapolis, MN", zoom: 15 },
+        { lat: 39.0997, lng: -94.5786, name: "Kansas City, MO", zoom: 15 },
+        { lat: 36.1699, lng: -115.1398, name: "Las Vegas, NV", zoom: 15 },
+        { lat: 43.0389, lng: -87.9065, name: "Milwaukee, WI", zoom: 15 },
+    ],
+
+    // Global Cities for random selection
+    globalCities: [
+        { lat: 51.5074, lng: -0.1278, name: "London, UK", zoom: 15 },
+        { lat: 48.8566, lng: 2.3522, name: "Paris, France", zoom: 15 },
+        { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan", zoom: 15 },
+        { lat: 52.5200, lng: 13.4050, name: "Berlin, Germany", zoom: 15 },
+        { lat: 55.7558, lng: 37.6173, name: "Moscow, Russia", zoom: 15 },
+        { lat: 39.9042, lng: 116.4074, name: "Beijing, China", zoom: 15 },
+        { lat: -33.8688, lng: 151.2093, name: "Sydney, Australia", zoom: 15 },
+        { lat: 19.4326, lng: -99.1332, name: "Mexico City, Mexico", zoom: 15 },
+        { lat: -23.5505, lng: -46.6333, name: "São Paulo, Brazil", zoom: 15 },
+        { lat: 28.6139, lng: 77.2090, name: "New Delhi, India", zoom: 15 },
+        { lat: 31.2304, lng: 121.4737, name: "Shanghai, China", zoom: 15 },
+        { lat: 41.9028, lng: 12.4964, name: "Rome, Italy", zoom: 15 },
+        { lat: 40.4168, lng: -3.7038, name: "Madrid, Spain", zoom: 15 },
+        { lat: 52.3676, lng: 4.9041, name: "Amsterdam, Netherlands", zoom: 15 },
+        { lat: 59.3293, lng: 18.0686, name: "Stockholm, Sweden", zoom: 15 },
+        { lat: 50.0755, lng: 14.4378, name: "Prague, Czechia", zoom: 15 },
+        { lat: 47.4979, lng: 19.0402, name: "Budapest, Hungary", zoom: 15 },
+        { lat: 41.0082, lng: 28.9784, name: "Istanbul, Turkey", zoom: 15 },
+        { lat: 1.3521, lng: 103.8198, name: "Singapore", zoom: 15 },
+        { lat: 22.3193, lng: 114.1694, name: "Hong Kong", zoom: 15 },
+        { lat: 37.5665, lng: 126.9780, name: "Seoul, South Korea", zoom: 15 },
+        { lat: -34.6037, lng: -58.3816, name: "Buenos Aires, Argentina", zoom: 15 },
+        { lat: 6.5244, lng: 3.3792, name: "Lagos, Nigeria", zoom: 15 },
+        { lat: -33.9249, lng: 18.4241, name: "Cape Town, South Africa", zoom: 15 },
+        { lat: 35.6892, lng: 51.3890, name: "Tehran, Iran", zoom: 15 },
+    ],
 
     tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     totalRounds: 5,
@@ -550,7 +608,11 @@ const GameState = {
     totalScore: 0,
     isLoading: true,
     gameStarted: false,
-    canDraw: false
+    canDraw: false,
+
+    // Location settings
+    locationMode: 'us',  // 'local', 'us', or 'global'
+    currentCity: null    // Current city object
 };
 
 // =============================================================================
@@ -562,13 +624,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initCanvases();
     initEventListeners();
     initSoundListeners();
-    loadRoadNetwork(CONFIG.defaultLocation);
+    initLocationSelector();
+    // Show location selector instead of loading immediately
+    showLocationSelector();
 });
 
 // Initialize sound on first user interaction
 function initSoundListeners() {
     // Add hover/click sounds to all buttons
-    document.querySelectorAll('.btn, .speed-btn, .replay-btn').forEach(btn => {
+    document.querySelectorAll('.btn, .speed-btn, .replay-btn, .location-option').forEach(btn => {
         btn.addEventListener('mouseenter', () => {
             SoundEngine.init();
             SoundEngine.hover();
@@ -886,8 +950,20 @@ function nextRound() {
     if (GameState.currentRound < CONFIG.totalRounds) {
         GameState.currentRound++;
         updateRoundDisplay();
-        selectRandomEndpoints();
-        enableDrawing();
+
+        // Get a new random city for the next round (same mode)
+        if (GameState.locationMode !== 'local') {
+            const newCity = getRandomCity(GameState.locationMode);
+            GameState.currentCity = newCity;
+            updateLocationDisplay(newCity.name);
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            document.getElementById('loading-text').textContent = 'Loading new area...';
+            loadRoadNetwork(newCity);
+        } else {
+            // For local mode, just pick new endpoints in same area
+            selectRandomEndpoints();
+            enableDrawing();
+        }
     } else {
         showGameOver();
     }
@@ -898,18 +974,20 @@ function playAgain() {
     GameState.currentRound = 1;
     GameState.totalScore = 0;
     GameState.roundScores = []; // Reset round history
+    GameState.gameStarted = false;
     updateScoreDisplay();
     updateRoundDisplay();
     clearVisualization();
     clearUserPath();
-    selectRandomEndpoints();
-    enableDrawing();
 
     // Reset comparison bars
     const userBar = document.getElementById('user-bar');
     const optimalBar = document.getElementById('optimal-bar');
     if (userBar) userBar.style.width = '0%';
     if (optimalBar) optimalBar.style.width = '0%';
+
+    // Show location selector for new game
+    showLocationSelector();
 }
 
 function selectRandomEndpoints() {
@@ -2185,6 +2263,120 @@ function showLoading(text) {
 
 function hideLoading() {
     document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+// =============================================================================
+// LOCATION SELECTOR
+// =============================================================================
+
+function initLocationSelector() {
+    // Add click handlers for location options
+    document.querySelectorAll('.location-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+            selectLocationMode(mode);
+        });
+    });
+}
+
+function showLocationSelector() {
+    // Hide loading overlay first
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('location-selector').classList.remove('hidden');
+}
+
+function hideLocationSelector() {
+    document.getElementById('location-selector').classList.add('hidden');
+}
+
+function selectLocationMode(mode) {
+    GameState.locationMode = mode;
+    hideLocationSelector();
+
+    // Show loading overlay
+    document.getElementById('loading-overlay').classList.remove('hidden');
+    document.getElementById('loading-text').textContent = 'Finding location...';
+
+    if (mode === 'local') {
+        // Use browser geolocation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const location = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        zoom: 15,
+                        name: 'Your Location'
+                    };
+                    // Try to get city name via reverse geocoding
+                    reverseGeocode(location.lat, location.lng).then(name => {
+                        location.name = name || 'Your Location';
+                        startGameWithLocation(location);
+                    });
+                },
+                (error) => {
+                    console.warn('Geolocation failed:', error);
+                    // Fall back to random US city
+                    const fallback = getRandomCity('us');
+                    startGameWithLocation(fallback);
+                },
+                { timeout: 10000, enableHighAccuracy: false }
+            );
+        } else {
+            // Geolocation not supported, fall back
+            const fallback = getRandomCity('us');
+            startGameWithLocation(fallback);
+        }
+    } else if (mode === 'us') {
+        const city = getRandomCity('us');
+        startGameWithLocation(city);
+    } else if (mode === 'global') {
+        const city = getRandomCity('global');
+        startGameWithLocation(city);
+    }
+}
+
+function getRandomCity(mode) {
+    const cities = mode === 'us' ? CONFIG.usCities : CONFIG.globalCities;
+    return cities[Math.floor(Math.random() * cities.length)];
+}
+
+async function reverseGeocode(lat, lng) {
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+            { headers: { 'User-Agent': 'pathfindr-game' } }
+        );
+        const data = await response.json();
+        if (data.address) {
+            const city = data.address.city || data.address.town || data.address.village || data.address.municipality;
+            const state = data.address.state;
+            const country = data.address.country_code?.toUpperCase();
+            if (city && state && country === 'US') {
+                return `${city}, ${state}`;
+            } else if (city && country) {
+                return `${city}, ${country}`;
+            } else if (city) {
+                return city;
+            }
+        }
+        return null;
+    } catch (e) {
+        console.warn('Reverse geocoding failed:', e);
+        return null;
+    }
+}
+
+function startGameWithLocation(location) {
+    GameState.currentCity = location;
+    updateLocationDisplay(location.name);
+    document.getElementById('loading-text').textContent = 'Loading road network...';
+    loadRoadNetwork(location);
+}
+
+function updateLocationDisplay(name) {
+    const el = document.getElementById('current-location');
+    if (el) el.textContent = name;
 }
 
 function showInstructions() {

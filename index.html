@@ -14,6 +14,13 @@
             <div class="hud-section hud-brand">
                 <span class="brand-name">pathfindr</span>
             </div>
+            <div class="hud-section hud-location">
+                <svg class="location-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                    <circle cx="12" cy="9" r="2.5"/>
+                </svg>
+                <span id="current-location">Seattle, WA</span>
+            </div>
             <div class="hud-section hud-stats">
                 <div class="hud-stat">
                     <span class="hud-label">Round</span>
@@ -52,11 +59,6 @@
             </div>
         </div>
 
-        <!-- Location Display (subtle, bottom-left) -->
-        <div id="location-display">
-            <span id="current-location">Downtown Seattle, WA</span>
-        </div>
-
         <!-- Game Container (now full-screen map) -->
         <main id="game-container">
             <div id="map-container">
@@ -69,6 +71,47 @@
                     <div class="overlay-content">
                         <div class="spinner"></div>
                         <p id="loading-text">Loading road network...</p>
+                    </div>
+                </div>
+
+                <!-- Location Selector Overlay -->
+                <div id="location-selector" class="overlay hidden">
+                    <div class="overlay-content location-select">
+                        <h2>Choose Your Arena</h2>
+                        <p class="location-subtitle">Where do you want to pathfind?</p>
+                        <div class="location-options">
+                            <button class="location-option" data-mode="local">
+                                <div class="option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"/>
+                                        <path d="M12 2v4m0 12v4m10-10h-4M6 12H2"/>
+                                        <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
+                                    </svg>
+                                </div>
+                                <span class="option-label">My Location</span>
+                                <span class="option-desc">Use GPS to play nearby</span>
+                            </button>
+                            <button class="location-option" data-mode="us">
+                                <div class="option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                                        <circle cx="12" cy="9" r="2.5"/>
+                                    </svg>
+                                </div>
+                                <span class="option-label">US Cities</span>
+                                <span class="option-desc">Random American cities</span>
+                            </button>
+                            <button class="location-option" data-mode="global">
+                                <div class="option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                                    </svg>
+                                </div>
+                                <span class="option-label">Global</span>
+                                <span class="option-desc">Cities around the world</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
