@@ -84,7 +84,8 @@ const CONFIG = {
         batchSize: 4,               // nodes per batch (increased)
         nodeGlowRadius: 14,         // base glow radius (reduced)
         edgeWidth: 3,               // base edge width (reduced)
-        heatDecay: 0.96,            // faster decay for sharper frontier
+        heatDecay: 0.992,           // slower decay - explored edges persist longer
+        heatFloor: 0.15,            // minimum heat - explored edges never fully fade
         pulseSpeed: 0.05,           // pulse animation speed
         particleCount: 25,          // reduced particle count
         pathTraceSpeed: 15,         // ms per path segment
@@ -1046,9 +1047,8 @@ const AmbientViz = {
         }
 
         // Layer 2: Round history (persistent visualization from previous rounds)
-        if (!GameState.vizState.active) {
-            this.renderRoundHistory(ctx, deltaTime);
-        }
+        // Always render - previous rounds should persist during new visualizations
+        this.renderRoundHistory(ctx, deltaTime, GameState.vizState.active);
 
         // Layer 3: Current A* exploration OR ambient particles
         if (GameState.vizState.active) {
@@ -1072,8 +1072,11 @@ const AmbientViz = {
     },
 
     // Render persisted rounds with electricity effects
-    renderRoundHistory(ctx, deltaTime) {
+    renderRoundHistory(ctx, deltaTime, isVizActive = false) {
         const rounds = RoundHistory.getRounds();
+
+        // During active visualization, dim previous rounds to 40% to not compete
+        const vizDimFactor = isVizActive ? 0.4 : 1.0;
 
         for (const round of rounds) {
             // Convert explored edges to screen coordinates (O(1) lookup via edgeLookup)
@@ -1088,11 +1091,12 @@ const AmbientViz = {
                 }
             }
 
-            // Render explored edges with electricity
-            const isActive = round.state === 'surging';
-            ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, round.intensity, isActive);
+            // Render explored edges with electricity (dimmed during active viz)
+            const isActive = round.state === 'surging' && !isVizActive;
+            const effectiveIntensity = round.intensity * vizDimFactor;
+            ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
-            // Render optimal path
+            // Render optimal path (dimmed during active viz)
             if (round.optimalPath.length > 1) {
                 const optimalPoints = round.optimalPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
@@ -1105,11 +1109,11 @@ const AmbientViz = {
                     if (!round.optimalPulses) {
                         round.optimalPulses = ElectricitySystem.createPulses(optimalPoints, round.color, 6);
                     }
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, round.color, round.intensity, round.optimalPulses);
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, round.color, effectiveIntensity, round.optimalPulses);
                 }
             }
 
-            // Render user path with distinct electricity
+            // Render user path with distinct electricity (dimmed during active viz)
             if (round.userPath.length > 1) {
                 const userPoints = round.userPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
@@ -1118,7 +1122,7 @@ const AmbientViz = {
                 }).filter(p => p !== null);
 
                 if (userPoints.length > 1) {
-                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, round.intensity);
+                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity);
                 }
             }
         }
@@ -2684,23 +2688,34 @@ function startRenderLoop() {
     render();
 }
 
-// Ambient road network with warm radial breathing - uses cached coordinates
+// Ambient road network with warm radial glow - visible during A* visualization
 function drawAmbientRoads(ctx, time, width, height) {
     const edges = ScreenCoordCache.getEdges();
     if (edges.length === 0) return;
 
-    // Global breathing - one calculation for all edges
-    const breathe = 0.5 + 0.3 * Math.sin(time * 0.8);
-    const baseAlpha = 0.12 * breathe;
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    // Single batched draw - warm purple/pink undertone
+    // Gentle breathing pulse
+    const breathe = 0.85 + 0.15 * Math.sin(time * 0.6);
+
+    // Create radial gradient for warm center falloff
+    const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
+
+    // Warm amber/orange at center fading to deep purple at edges
+    gradient.addColorStop(0, `rgba(180, 100, 60, ${0.35 * breathe})`);
+    gradient.addColorStop(0.3, `rgba(140, 60, 90, ${0.28 * breathe})`);
+    gradient.addColorStop(0.6, `rgba(100, 40, 120, ${0.20 * breathe})`);
+    gradient.addColorStop(1, `rgba(60, 20, 80, ${0.10 * breathe})`);
+
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Outer glow layer
-    ctx.strokeStyle = `rgba(120, 60, 140, ${baseAlpha * 0.5})`;
-    ctx.lineWidth = 4;
+    // Outer warm glow layer
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 6;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
         const edge = edges[i];
@@ -2709,8 +2724,23 @@ function drawAmbientRoads(ctx, time, width, height) {
     }
     ctx.stroke();
 
-    // Core roads
-    ctx.strokeStyle = `rgba(80, 40, 100, ${baseAlpha})`;
+    // Mid glow layer - slightly brighter
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < edges.length; i++) {
+        const edge = edges[i];
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+
+    // Core roads - warm white/amber core
+    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
+    coreGradient.addColorStop(0, `rgba(255, 200, 150, ${0.25 * breathe})`);
+    coreGradient.addColorStop(0.4, `rgba(200, 120, 100, ${0.18 * breathe})`);
+    coreGradient.addColorStop(1, `rgba(120, 60, 100, ${0.08 * breathe})`);
+
+    ctx.strokeStyle = coreGradient;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -2761,12 +2791,15 @@ function renderVisualization() {
         }
     }
 
-    // Decay heat values
+    // Decay heat values with floor - explored edges never fully fade
+    const heatFloor = CONFIG.viz.heatFloor;
     for (const [nodeId, heat] of viz.nodeHeat) {
-        viz.nodeHeat.set(nodeId, heat * CONFIG.viz.heatDecay);
+        const newHeat = heat * CONFIG.viz.heatDecay;
+        viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
     }
     for (const [edgeKey, heat] of viz.edgeHeat) {
-        viz.edgeHeat.set(edgeKey, heat * CONFIG.viz.heatDecay);
+        const newHeat = heat * CONFIG.viz.heatDecay;
+        viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
     }
 
     // High heat - bright cyan with glow
