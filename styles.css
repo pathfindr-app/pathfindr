@@ -548,6 +548,17 @@ body::after {
     background: var(--void);
 }
 
+/* Marker container - sits above canvases */
+#marker-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 800;
+}
+
 /* Drawing Canvas */
 #draw-canvas {
     position: absolute;
@@ -630,7 +641,7 @@ body::after {
 /* Ensure markers appear above canvases and vignette */
 .leaflet-marker-pane,
 .leaflet-shadow-pane {
-    z-index: 650 !important;
+    z-index: 700 !important;
 }
 
 /* Warm processed map tiles - visible texture with synthwave treatment */
@@ -700,37 +711,86 @@ body::after {
    MARKERS
    ============================================================================= */
 
-.leaflet-marker-icon.custom-marker {
+/* Override Leaflet default div icon styles */
+.leaflet-div-icon {
+    background: transparent;
+    border: none;
+}
+
+/* Marker core - small and subtle */
+#marker-container .custom-marker {
+    position: absolute;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    font-weight: bold;
-    font-size: 18px;
-    border: 3px solid rgba(255, 248, 244, 0.85);
-    animation: marker-pulse 2.5s ease-in-out infinite;
-    margin-left: -25px !important;
-    margin-top: -25px !important;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    pointer-events: none;
+    border: 2px solid rgba(255, 255, 255, 0.9);
 }
 
-.leaflet-marker-icon.start-marker {
-    background: var(--start-color);
+/* Orbiting ring animation */
+#marker-container .custom-marker::before {
+    content: '';
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    animation: marker-orbit 3s linear infinite;
+}
+
+#marker-container .custom-marker::after {
+    content: '';
+    position: absolute;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    animation: marker-orbit 2s linear infinite reverse;
+}
+
+@keyframes marker-orbit {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#marker-container .start-marker {
+    background: rgba(125, 234, 125, 0.85);
     color: #0d0a14;
-    box-shadow:
-        0 0 16px var(--start-color),
-        0 0 32px rgba(125, 234, 125, 0.4),
-        0 0 48px rgba(125, 234, 125, 0.2),
-        0 0 64px rgba(125, 234, 125, 0.1);
+    box-shadow: 0 0 12px rgba(125, 234, 125, 0.5);
 }
 
-.leaflet-marker-icon.end-marker {
-    background: var(--end-color);
+#marker-container .start-marker::before {
+    border-top-color: rgba(125, 234, 125, 0.7);
+    border-right-color: rgba(125, 234, 125, 0.3);
+    box-shadow: 0 0 8px rgba(125, 234, 125, 0.3);
+}
+
+#marker-container .start-marker::after {
+    border-bottom-color: rgba(125, 234, 125, 0.5);
+    border-left-color: rgba(125, 234, 125, 0.2);
+}
+
+#marker-container .end-marker {
+    background: rgba(255, 107, 157, 0.85);
     color: #fff;
-    box-shadow:
-        0 0 16px var(--end-color),
-        0 0 32px rgba(255, 107, 157, 0.4),
-        0 0 48px rgba(255, 107, 157, 0.2),
-        0 0 64px rgba(255, 107, 157, 0.1);
+    box-shadow: 0 0 12px rgba(255, 107, 157, 0.5);
+}
+
+#marker-container .end-marker::before {
+    border-top-color: rgba(255, 107, 157, 0.7);
+    border-right-color: rgba(255, 107, 157, 0.3);
+    box-shadow: 0 0 8px rgba(255, 107, 157, 0.3);
+}
+
+#marker-container .end-marker::after {
+    border-bottom-color: rgba(255, 107, 157, 0.5);
+    border-left-color: rgba(255, 107, 157, 0.2);
 }
 
 .marker-label {
@@ -934,15 +994,15 @@ body::after {
     transform: translateX(-50%) translateY(100%);
     width: 90%;
     max-width: 480px;
-    background: rgba(18, 16, 26, 0.75);
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    background: rgba(18, 16, 26, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 107, 157, 0.12);
     border-bottom: none;
     border-radius: 20px 20px 0 0;
     padding: 1rem 1.5rem 1.25rem;
     z-index: 900;
-    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #results-panel.visible {

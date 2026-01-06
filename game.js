@@ -1787,12 +1787,14 @@ function initMap() {
 
     GameState.map.on('move', () => {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
+        updateMarkerPositions();
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
     });
     GameState.map.on('zoom', () => {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
+        updateMarkerPositions();
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
@@ -2273,6 +2275,18 @@ function centerOnRoute() {
 }
 
 function placeMarkers() {
+    // Clear existing markers from DOM container
+    const markerContainer = document.getElementById('marker-container');
+    if (GameState.startMarkerEl) {
+        GameState.startMarkerEl.remove();
+        GameState.startMarkerEl = null;
+    }
+    if (GameState.endMarkerEl) {
+        GameState.endMarkerEl.remove();
+        GameState.endMarkerEl = null;
+    }
+
+    // Clear legacy Leaflet markers if present
     if (GameState.startMarker) {
         GameState.map.removeLayer(GameState.startMarker);
         GameState.startMarker = null;
@@ -2280,14 +2294,6 @@ function placeMarkers() {
     if (GameState.endMarker) {
         GameState.map.removeLayer(GameState.endMarker);
         GameState.endMarker = null;
-    }
-    if (GameState.startLabel) {
-        GameState.map.removeLayer(GameState.startLabel);
-        GameState.startLabel = null;
-    }
-    if (GameState.endLabel) {
-        GameState.map.removeLayer(GameState.endLabel);
-        GameState.endLabel = null;
     }
 
     const startPos = GameState.nodes.get(GameState.startNode);
@@ -2298,44 +2304,45 @@ function placeMarkers() {
         return;
     }
 
-    GameState.startMarker = L.circleMarker([startPos.lat, startPos.lng], {
-        radius: 18,
-        fillColor: CONFIG.colors.start,
-        color: '#ffffff',
-        weight: 3,
-        opacity: 1,
-        fillOpacity: 1
-    }).addTo(GameState.map);
+    // Create start marker element
+    const startMarker = document.createElement('div');
+    startMarker.className = 'custom-marker start-marker';
+    startMarker.textContent = 'S';
+    markerContainer.appendChild(startMarker);
+    GameState.startMarkerEl = startMarker;
 
-    GameState.endMarker = L.circleMarker([endPos.lat, endPos.lng], {
-        radius: 18,
-        fillColor: CONFIG.colors.end,
-        color: '#ffffff',
-        weight: 3,
-        opacity: 1,
-        fillOpacity: 1
-    }).addTo(GameState.map);
+    // Create end marker element
+    const endMarker = document.createElement('div');
+    endMarker.className = 'custom-marker end-marker';
+    endMarker.textContent = 'E';
+    markerContainer.appendChild(endMarker);
+    GameState.endMarkerEl = endMarker;
 
-    const startLabel = L.marker([startPos.lat, startPos.lng], {
-        icon: L.divIcon({
-            className: 'marker-label',
-            html: '<span style="font-family:Orbitron,monospace;font-weight:bold;font-size:14px;color:#000;text-shadow:0 0 3px #fff;">S</span>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        })
-    }).addTo(GameState.map);
+    // Store lat/lng for position updates
+    GameState.startMarkerLatLng = L.latLng(startPos.lat, startPos.lng);
+    GameState.endMarkerLatLng = L.latLng(endPos.lat, endPos.lng);
 
-    const endLabel = L.marker([endPos.lat, endPos.lng], {
-        icon: L.divIcon({
-            className: 'marker-label',
-            html: '<span style="font-family:Orbitron,monospace;font-weight:bold;font-size:14px;color:#fff;text-shadow:0 0 3px #000;">E</span>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        })
-    }).addTo(GameState.map);
+    // Position markers initially
+    updateMarkerPositions();
 
-    GameState.startLabel = startLabel;
-    GameState.endLabel = endLabel;
+    // Labels no longer needed - integrated into markers
+    GameState.startLabel = null;
+    GameState.endLabel = null;
+}
+
+function updateMarkerPositions() {
+    if (!GameState.map) return;
+
+    // Marker is 28px, so offset by 14 to center
+    if (GameState.startMarkerEl && GameState.startMarkerLatLng) {
+        const startPt = GameState.map.latLngToContainerPoint(GameState.startMarkerLatLng);
+        GameState.startMarkerEl.style.transform = `translate(${startPt.x - 14}px, ${startPt.y - 14}px)`;
+    }
+
+    if (GameState.endMarkerEl && GameState.endMarkerLatLng) {
+        const endPt = GameState.map.latLngToContainerPoint(GameState.endMarkerLatLng);
+        GameState.endMarkerEl.style.transform = `translate(${endPt.x - 14}px, ${endPt.y - 14}px)`;
+    }
 }
 
 // =============================================================================
@@ -3948,6 +3955,7 @@ function startGameWithLocation(location) {
     GameState.currentCity = location;
     updateLocationDisplay(location.name);
     document.getElementById('loading-text').textContent = 'Loading road network...';
+    GameState.map.setView([location.lat, location.lng], location.zoom || 15);
     loadRoadNetwork(location);
 }
 
