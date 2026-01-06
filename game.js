@@ -142,6 +142,693 @@ const CONFIG = {
 };
 
 // =============================================================================
+// WEBGL RENDERER - GPU-Accelerated Road Network Rendering
+// =============================================================================
+
+const WebGLRenderer = {
+    canvas: null,
+    gl: null,
+    initialized: false,
+
+    // Shader programs
+    programs: {
+        roads: null,      // Ambient road network
+        heatEdges: null,  // Heat-mapped exploration edges
+        glow: null,       // Glow effect pass
+    },
+
+    // Buffers
+    buffers: {
+        edgePositions: null,   // Float32Array of edge vertices
+        edgeNormals: null,     // Float32Array of edge normals
+        edgeHeats: null,       // Float32Array of heat values per edge
+        edgeIndices: null,     // Element array buffer for indexed drawing
+    },
+
+    // Index count for drawing
+    indexCount: 0,
+
+    // State
+    edgeCount: 0,
+    edgeKeyToIndex: new Map(),  // Map edgeKey -> index in buffer
+    heatData: null,             // Float32Array for heat values
+    needsHeatUpdate: false,
+
+    // Uniforms
+    uniforms: {
+        time: 0,
+        resolution: [0, 0],
+        viewMatrix: null,
+    },
+
+    // Shaders source code
+    shaders: {
+        // Vertex shader for thick lines (road edges)
+        roadVertex: `
+            precision mediump float;
+
+            attribute vec2 a_position;
+            attribute vec2 a_normal;
+            attribute float a_heat;
+
+            uniform vec2 u_resolution;
+            uniform float u_lineWidth;
+            uniform float u_time;
+
+            varying float v_heat;
+            varying vec2 v_position;
+
+            void main() {
+                v_heat = a_heat;
+                v_position = a_position;
+
+                // Expand vertex along normal for line thickness
+                vec2 pos = a_position + a_normal * u_lineWidth;
+
+                // Convert to clip space
+                vec2 clipSpace = (pos / u_resolution) * 2.0 - 1.0;
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+            }
+        `,
+
+        // Fragment shader for ambient roads
+        ambientFragment: `
+            precision mediump float;
+
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform vec2 u_center;
+
+            varying float v_heat;
+            varying vec2 v_position;
+
+            void main() {
+                // Distance from center for radial gradient
+                float dist = distance(v_position, u_center) / max(u_resolution.x, u_resolution.y);
+
+                // Breathing effect
+                float breathe = 0.85 + 0.15 * sin(u_time * 0.6);
+
+                // Warm amber at center fading to purple at edges
+                vec3 warmCore = vec3(0.7, 0.4, 0.24);
+                vec3 coolEdge = vec3(0.24, 0.08, 0.32);
+                vec3 color = mix(warmCore, coolEdge, dist);
+
+                float alpha = mix(0.35, 0.1, dist) * breathe;
+
+                gl_FragColor = vec4(color, alpha);
+            }
+        `,
+
+        // Fragment shader for heat-mapped exploration
+        heatFragment: `
+            precision mediump float;
+
+            uniform float u_time;
+            uniform vec2 u_resolution;
+
+            varying float v_heat;
+            varying vec2 v_position;
+
+            // Heat color palette: cyan -> purple -> pink
+            vec3 getHeatColor(float heat) {
+                vec3 cyan = vec3(0.0, 0.94, 1.0);
+                vec3 purple = vec3(0.72, 0.16, 0.87);
+                vec3 pink = vec3(1.0, 0.16, 0.43);
+                vec3 dark = vec3(0.12, 0.04, 0.16);
+
+                if (heat > 0.7) {
+                    return mix(purple, cyan, (heat - 0.7) / 0.3);
+                } else if (heat > 0.3) {
+                    return mix(pink, purple, (heat - 0.3) / 0.4);
+                } else {
+                    return mix(dark, pink, heat / 0.3);
+                }
+            }
+
+            void main() {
+                if (v_heat < 0.03) discard;
+
+                // Flicker effect
+                float flicker = 0.85 + sin(u_time * 30.0) * 0.02 + sin(u_time * 7.0) * 0.03;
+
+                vec3 color = getHeatColor(v_heat);
+                float alpha = v_heat * flicker;
+
+                // Additive blending preparation
+                gl_FragColor = vec4(color * alpha, alpha);
+            }
+        `,
+
+        // Fragment shader for glow effect
+        glowFragment: `
+            precision mediump float;
+
+            uniform float u_time;
+
+            varying float v_heat;
+            varying vec2 v_position;
+
+            void main() {
+                if (v_heat < 0.03) discard;
+
+                vec3 cyan = vec3(0.0, 0.94, 1.0);
+                vec3 purple = vec3(0.72, 0.16, 0.87);
+                vec3 color = mix(purple, cyan, v_heat);
+
+                // Soft glow falloff
+                float glow = v_heat * 0.3;
+
+                gl_FragColor = vec4(color * glow, glow);
+            }
+        `,
+
+        // Vertex shader for optimal path
+        pathVertex: `
+            precision mediump float;
+
+            attribute vec2 a_position;
+            attribute vec2 a_normal;
+            attribute float a_progress;
+
+            uniform vec2 u_resolution;
+            uniform float u_lineWidth;
+            uniform float u_pathProgress;
+
+            varying float v_visible;
+            varying vec2 v_position;
+
+            void main() {
+                v_visible = step(a_progress, u_pathProgress);
+                v_position = a_position;
+
+                vec2 pos = a_position + a_normal * u_lineWidth;
+                vec2 clipSpace = (pos / u_resolution) * 2.0 - 1.0;
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+            }
+        `,
+
+        pathFragment: `
+            precision mediump float;
+
+            uniform float u_time;
+
+            varying float v_visible;
+            varying vec2 v_position;
+
+            void main() {
+                if (v_visible < 0.5) discard;
+
+                // Bright cyan core with white center
+                vec3 color = vec3(0.6, 1.0, 1.0);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `,
+    },
+
+    // Initialize WebGL context and compile shaders
+    init() {
+        this.canvas = document.getElementById('webgl-canvas');
+        if (!this.canvas) {
+            console.error('WebGL canvas not found');
+            return false;
+        }
+
+        // Get WebGL context with alpha for transparency
+        this.gl = this.canvas.getContext('webgl', {
+            alpha: true,
+            premultipliedAlpha: false,
+            antialias: true,
+        });
+
+        if (!this.gl) {
+            console.error('WebGL not supported');
+            return false;
+        }
+
+        const gl = this.gl;
+
+        // Enable blending for transparency and glow
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        // Compile shader programs
+        this.programs.roads = this.createProgram(
+            this.shaders.roadVertex,
+            this.shaders.ambientFragment
+        );
+
+        this.programs.heatEdges = this.createProgram(
+            this.shaders.roadVertex,
+            this.shaders.heatFragment
+        );
+
+        this.programs.glow = this.createProgram(
+            this.shaders.roadVertex,
+            this.shaders.glowFragment
+        );
+
+        if (!this.programs.roads || !this.programs.heatEdges) {
+            console.error('Failed to compile WebGL shaders');
+            return false;
+        }
+
+        // Create buffers
+        this.buffers.edgePositions = gl.createBuffer();
+        this.buffers.edgeNormals = gl.createBuffer();
+        this.buffers.edgeHeats = gl.createBuffer();
+        this.buffers.edgeIndices = gl.createBuffer();
+
+        this.initialized = true;
+        console.log('WebGL renderer initialized successfully');
+        return true;
+    },
+
+    // Compile shader from source
+    compileShader(type, source) {
+        const gl = this.gl;
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    },
+
+    // Create shader program
+    createProgram(vertexSource, fragmentSource) {
+        const gl = this.gl;
+
+        const vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource);
+        const fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+
+        if (!vertexShader || !fragmentShader) return null;
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Program link error:', gl.getProgramInfoLog(program));
+            return null;
+        }
+
+        // Cache attribute and uniform locations
+        program.attributes = {
+            position: gl.getAttribLocation(program, 'a_position'),
+            normal: gl.getAttribLocation(program, 'a_normal'),
+            heat: gl.getAttribLocation(program, 'a_heat'),
+            progress: gl.getAttribLocation(program, 'a_progress'),
+        };
+
+        program.uniforms = {
+            resolution: gl.getUniformLocation(program, 'u_resolution'),
+            time: gl.getUniformLocation(program, 'u_time'),
+            lineWidth: gl.getUniformLocation(program, 'u_lineWidth'),
+            center: gl.getUniformLocation(program, 'u_center'),
+            pathProgress: gl.getUniformLocation(program, 'u_pathProgress'),
+        };
+
+        return program;
+    },
+
+    // Resize canvas to match container
+    resize() {
+        if (!this.canvas) return;
+
+        const container = document.getElementById('map-container');
+        const width = container.offsetWidth;
+        const height = container.offsetHeight;
+
+        // Set canvas size (both CSS and buffer)
+        this.canvas.width = width;
+        this.canvas.height = height;
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+
+        if (this.gl) {
+            this.gl.viewport(0, 0, width, height);
+        }
+
+        this.uniforms.resolution = [width, height];
+    },
+
+    // Build edge geometry buffers from road network
+    buildEdgeBuffers() {
+        if (!this.initialized || !GameState.edgeList || GameState.edgeList.length === 0) {
+            return;
+        }
+
+        const gl = this.gl;
+        const edges = GameState.edgeList;
+        const map = GameState.map;
+
+        if (!map) return;
+
+        this.edgeCount = edges.length;
+        this.edgeKeyToIndex.clear();
+
+        // Each edge needs 4 vertices (2 triangles for thick line)
+        // Position: x, y for each vertex
+        // Normal: nx, ny for each vertex (perpendicular to line)
+        const positions = new Float32Array(edges.length * 8);  // 4 vertices * 2 coords
+        const normals = new Float32Array(edges.length * 8);
+        this.heatData = new Float32Array(edges.length * 4);    // 4 vertices per edge
+
+        for (let i = 0; i < edges.length; i++) {
+            const edge = edges[i];
+            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+
+            // Calculate perpendicular normal
+            const dx = toScreen.x - fromScreen.x;
+            const dy = toScreen.y - fromScreen.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            // Edge key for heat lookup
+            const edgeKey = `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`;
+            this.edgeKeyToIndex.set(edgeKey, i);
+
+            // 4 vertices per edge: from-left, from-right, to-left, to-right
+            const baseIdx = i * 8;
+
+            // From vertex - left side
+            positions[baseIdx + 0] = fromScreen.x;
+            positions[baseIdx + 1] = fromScreen.y;
+            normals[baseIdx + 0] = -nx;
+            normals[baseIdx + 1] = -ny;
+
+            // From vertex - right side
+            positions[baseIdx + 2] = fromScreen.x;
+            positions[baseIdx + 3] = fromScreen.y;
+            normals[baseIdx + 2] = nx;
+            normals[baseIdx + 3] = ny;
+
+            // To vertex - left side
+            positions[baseIdx + 4] = toScreen.x;
+            positions[baseIdx + 5] = toScreen.y;
+            normals[baseIdx + 4] = -nx;
+            normals[baseIdx + 5] = -ny;
+
+            // To vertex - right side
+            positions[baseIdx + 6] = toScreen.x;
+            positions[baseIdx + 7] = toScreen.y;
+            normals[baseIdx + 6] = nx;
+            normals[baseIdx + 7] = ny;
+
+            // Initialize heat to 0
+            this.heatData[i * 4 + 0] = 0;
+            this.heatData[i * 4 + 1] = 0;
+            this.heatData[i * 4 + 2] = 0;
+            this.heatData[i * 4 + 3] = 0;
+        }
+
+        // Build index buffer for batched drawing
+        // Each edge = 2 triangles = 6 indices
+        // Vertices per edge: 0=from-left, 1=from-right, 2=to-left, 3=to-right
+        // Triangle 1: 0, 1, 2  |  Triangle 2: 1, 3, 2
+        const indices = new Uint16Array(edges.length * 6);
+        for (let i = 0; i < edges.length; i++) {
+            const baseVertex = i * 4;
+            const baseIndex = i * 6;
+            // Triangle 1
+            indices[baseIndex + 0] = baseVertex + 0;
+            indices[baseIndex + 1] = baseVertex + 1;
+            indices[baseIndex + 2] = baseVertex + 2;
+            // Triangle 2
+            indices[baseIndex + 3] = baseVertex + 1;
+            indices[baseIndex + 4] = baseVertex + 3;
+            indices[baseIndex + 5] = baseVertex + 2;
+        }
+        this.indexCount = edges.length * 6;
+
+        // Upload to GPU
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.bufferData(gl.ARRAY_BUFFER, this.heatData, gl.DYNAMIC_DRAW);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+        console.log(`WebGL: Built buffers for ${edges.length} edges (${this.indexCount} indices)`);
+    },
+
+    // Update edge positions when map moves/zooms
+    updateEdgePositions() {
+        if (!this.initialized || !GameState.edgeList || this.edgeCount === 0) {
+            return;
+        }
+
+        const gl = this.gl;
+        const edges = GameState.edgeList;
+        const map = GameState.map;
+
+        if (!map) return;
+
+        const positions = new Float32Array(edges.length * 8);
+        const normals = new Float32Array(edges.length * 8);
+
+        for (let i = 0; i < edges.length; i++) {
+            const edge = edges[i];
+            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+
+            const dx = toScreen.x - fromScreen.x;
+            const dy = toScreen.y - fromScreen.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            const baseIdx = i * 8;
+
+            positions[baseIdx + 0] = fromScreen.x;
+            positions[baseIdx + 1] = fromScreen.y;
+            normals[baseIdx + 0] = -nx;
+            normals[baseIdx + 1] = -ny;
+
+            positions[baseIdx + 2] = fromScreen.x;
+            positions[baseIdx + 3] = fromScreen.y;
+            normals[baseIdx + 2] = nx;
+            normals[baseIdx + 3] = ny;
+
+            positions[baseIdx + 4] = toScreen.x;
+            positions[baseIdx + 5] = toScreen.y;
+            normals[baseIdx + 4] = -nx;
+            normals[baseIdx + 5] = -ny;
+
+            positions[baseIdx + 6] = toScreen.x;
+            positions[baseIdx + 7] = toScreen.y;
+            normals[baseIdx + 6] = nx;
+            normals[baseIdx + 7] = ny;
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
+    },
+
+    // Set heat value for an edge
+    setEdgeHeat(edgeKey, heat) {
+        const index = this.edgeKeyToIndex.get(edgeKey);
+        if (index === undefined || !this.heatData) return;
+
+        // Set heat for all 4 vertices of this edge
+        const baseIdx = index * 4;
+        this.heatData[baseIdx + 0] = heat;
+        this.heatData[baseIdx + 1] = heat;
+        this.heatData[baseIdx + 2] = heat;
+        this.heatData[baseIdx + 3] = heat;
+
+        this.needsHeatUpdate = true;
+    },
+
+    // Decay all heat values (GPU-friendly batch update)
+    decayHeat(decayRate, floor) {
+        if (!this.heatData) return;
+
+        for (let i = 0; i < this.heatData.length; i++) {
+            if (this.heatData[i] > 0) {
+                this.heatData[i] = Math.max(this.heatData[i] * decayRate, floor);
+            }
+        }
+        this.needsHeatUpdate = true;
+    },
+
+    // Clear all heat values
+    clearHeat() {
+        if (!this.heatData) return;
+        this.heatData.fill(0);
+        this.needsHeatUpdate = true;
+    },
+
+    // Upload heat data to GPU
+    uploadHeatData() {
+        if (!this.needsHeatUpdate || !this.heatData || !this.gl) return;
+
+        const gl = this.gl;
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.bufferData(gl.ARRAY_BUFFER, this.heatData, gl.DYNAMIC_DRAW);
+        this.needsHeatUpdate = false;
+    },
+
+    // Main render function
+    render(time) {
+        if (!this.initialized || !this.gl) return;
+
+        const gl = this.gl;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+
+        // Clear with transparency
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        if (this.edgeCount === 0) return;
+
+        // Upload any pending heat updates
+        this.uploadHeatData();
+
+        const timeSeconds = time * 0.001;
+
+        // Draw ambient roads first (base layer)
+        this.renderAmbientRoads(timeSeconds, width, height);
+
+        // Draw heat-mapped edges on top (additive blending)
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);  // Additive
+        this.renderHeatEdges(timeSeconds, width, height);
+
+        // Draw glow layer
+        this.renderGlow(timeSeconds, width, height);
+
+        // Reset blend mode
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    },
+
+    // Render ambient road network
+    renderAmbientRoads(time, width, height) {
+        const gl = this.gl;
+        const program = this.programs.roads;
+
+        gl.useProgram(program);
+
+        // Set uniforms
+        gl.uniform2f(program.uniforms.resolution, width, height);
+        gl.uniform1f(program.uniforms.time, time);
+        gl.uniform1f(program.uniforms.lineWidth, 3.0);
+        gl.uniform2f(program.uniforms.center, width / 2, height / 2);
+
+        // Bind position buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.enableVertexAttribArray(program.attributes.position);
+        gl.vertexAttribPointer(program.attributes.position, 2, gl.FLOAT, false, 0, 0);
+
+        // Bind normal buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.enableVertexAttribArray(program.attributes.normal);
+        gl.vertexAttribPointer(program.attributes.normal, 2, gl.FLOAT, false, 0, 0);
+
+        // Bind heat buffer (not used but required by shader)
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.enableVertexAttribArray(program.attributes.heat);
+        gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
+
+        // Bind index buffer and draw ALL edges in a single call
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+    },
+
+    // Render heat-mapped exploration edges
+    renderHeatEdges(time, width, height) {
+        const gl = this.gl;
+        const program = this.programs.heatEdges;
+
+        gl.useProgram(program);
+
+        gl.uniform2f(program.uniforms.resolution, width, height);
+        gl.uniform1f(program.uniforms.time, time);
+        gl.uniform1f(program.uniforms.lineWidth, 4.0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.enableVertexAttribArray(program.attributes.position);
+        gl.vertexAttribPointer(program.attributes.position, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.enableVertexAttribArray(program.attributes.normal);
+        gl.vertexAttribPointer(program.attributes.normal, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.enableVertexAttribArray(program.attributes.heat);
+        gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
+
+        // Single batched draw call
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+    },
+
+    // Render glow effect (wider, more transparent)
+    renderGlow(time, width, height) {
+        const gl = this.gl;
+        const program = this.programs.glow;
+
+        gl.useProgram(program);
+
+        gl.uniform2f(program.uniforms.resolution, width, height);
+        gl.uniform1f(program.uniforms.time, time);
+        gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.enableVertexAttribArray(program.attributes.position);
+        gl.vertexAttribPointer(program.attributes.position, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.enableVertexAttribArray(program.attributes.normal);
+        gl.vertexAttribPointer(program.attributes.normal, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.enableVertexAttribArray(program.attributes.heat);
+        gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
+
+        // Single batched draw call
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+    },
+
+    // Cleanup
+    destroy() {
+        if (!this.gl) return;
+
+        const gl = this.gl;
+
+        // Delete buffers
+        if (this.buffers.edgePositions) gl.deleteBuffer(this.buffers.edgePositions);
+        if (this.buffers.edgeNormals) gl.deleteBuffer(this.buffers.edgeNormals);
+        if (this.buffers.edgeHeats) gl.deleteBuffer(this.buffers.edgeHeats);
+        if (this.buffers.edgeIndices) gl.deleteBuffer(this.buffers.edgeIndices);
+
+        // Delete programs
+        for (const name in this.programs) {
+            if (this.programs[name]) gl.deleteProgram(this.programs[name]);
+        }
+
+        this.initialized = false;
+    }
+};
+
+// =============================================================================
 // SOUND ENGINE - Pure Web Audio API Synthesis
 // =============================================================================
 
@@ -1624,6 +2311,7 @@ const GameState = {
     drawCtx: null,
     vizCanvas: null,
     vizCtx: null,
+    useWebGL: false,        // Whether WebGL rendering is available
 
     // Road network
     nodes: new Map(),
@@ -1787,6 +2475,7 @@ function initMap() {
 
     GameState.map.on('move', () => {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
+        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
         updateMarkerPositions();
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
@@ -1794,6 +2483,7 @@ function initMap() {
     });
     GameState.map.on('zoom', () => {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
+        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
         updateMarkerPositions();
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
@@ -1808,6 +2498,14 @@ function initCanvases() {
     GameState.vizCanvas = document.getElementById('viz-canvas');
     GameState.vizCtx = GameState.vizCanvas.getContext('2d');
 
+    // Initialize WebGL renderer
+    if (!WebGLRenderer.init()) {
+        console.warn('WebGL initialization failed, falling back to Canvas 2D');
+        GameState.useWebGL = false;
+    } else {
+        GameState.useWebGL = true;
+    }
+
     resizeCanvases();
     window.addEventListener('resize', resizeCanvases);
 }
@@ -1821,6 +2519,11 @@ function resizeCanvases() {
     GameState.drawCanvas.height = height;
     GameState.vizCanvas.width = width;
     GameState.vizCanvas.height = height;
+
+    // Resize WebGL canvas
+    if (GameState.useWebGL) {
+        WebGLRenderer.resize();
+    }
 
     redrawUserPath();
 }
@@ -2084,6 +2787,11 @@ function processRoadData(data) {
 
     // Invalidate coordinate cache - new road data loaded
     ScreenCoordCache.invalidate();
+
+    // Build WebGL buffers for road network
+    if (GameState.useWebGL) {
+        WebGLRenderer.buildEdgeBuffers();
+    }
 
     // Draw road network if custom view is enabled
     if (GameState.showCustomRoads) {
@@ -2788,6 +3496,10 @@ async function runEpicVisualization(explored, path) {
             if (viz.exploredSet.has(neighbor)) {
                 const edgeKey = `${Math.min(nodeId, neighbor)}-${Math.max(nodeId, neighbor)}`;
                 viz.edgeHeat.set(edgeKey, 1.0);
+                // Sync to WebGL
+                if (GameState.useWebGL) {
+                    WebGLRenderer.setEdgeHeat(edgeKey, 1.0);
+                }
             }
         }
 
@@ -2964,33 +3676,6 @@ function renderVisualization() {
     const time = performance.now() * 0.001;
     const flicker = 0.85 + Math.sin(time * 30) * 0.02 + Math.sin(time * 7) * 0.03 + (Math.random() - 0.5) * 0.05;
 
-    // Draw ambient road network underneath - warm breathing effect
-    drawAmbientRoads(ctx, time, width, height);
-
-    // Use lighter composite for glow effect (no shadowBlur!)
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Batch render explored edges - simple 3-band system using cached coordinates
-    const edgesByHeat = { high: [], medium: [], low: [] };
-    const cachedEdges = ScreenCoordCache.getEdges();
-
-    for (let i = 0; i < cachedEdges.length; i++) {
-        const cached = cachedEdges[i];
-        const heat = viz.edgeHeat.get(cached.edgeKey) || 0;
-
-        if (heat < 0.03) continue;
-
-        if (heat > 0.7) {
-            edgesByHeat.high.push(cached);
-        } else if (heat > 0.3) {
-            edgesByHeat.medium.push(cached);
-        } else {
-            edgesByHeat.low.push(cached);
-        }
-    }
-
     // Decay heat values with floor - explored edges never fully fade
     const heatFloor = CONFIG.viz.heatFloor;
     for (const [nodeId, heat] of viz.nodeHeat) {
@@ -3000,63 +3685,100 @@ function renderVisualization() {
     for (const [edgeKey, heat] of viz.edgeHeat) {
         const newHeat = heat * CONFIG.viz.heatDecay;
         viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
+
+        // Sync to WebGL renderer
+        if (GameState.useWebGL) {
+            WebGLRenderer.setEdgeHeat(edgeKey, Math.max(newHeat, heatFloor));
+        }
     }
 
-    // High heat - bright cyan with glow
-    if (edgesByHeat.high.length > 0) {
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
-        ctx.lineWidth = 12;
-        ctx.beginPath();
-        for (const edge of edgesByHeat.high) {
-            ctx.moveTo(edge.from.x, edge.from.y);
-            ctx.lineTo(edge.to.x, edge.to.y);
-        }
-        ctx.stroke();
+    // Use WebGL for road and heat rendering
+    if (GameState.useWebGL) {
+        WebGLRenderer.render(performance.now());
+    } else {
+        // Canvas 2D fallback - draw ambient road network
+        drawAmbientRoads(ctx, time, width, height);
 
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        for (const edge of edgesByHeat.high) {
-            ctx.moveTo(edge.from.x, edge.from.y);
-            ctx.lineTo(edge.to.x, edge.to.y);
+        // Batch render explored edges
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const edgesByHeat = { high: [], medium: [], low: [] };
+        const cachedEdges = ScreenCoordCache.getEdges();
+
+        for (let i = 0; i < cachedEdges.length; i++) {
+            const cached = cachedEdges[i];
+            const heat = viz.edgeHeat.get(cached.edgeKey) || 0;
+
+            if (heat < 0.03) continue;
+
+            if (heat > 0.7) {
+                edgesByHeat.high.push(cached);
+            } else if (heat > 0.3) {
+                edgesByHeat.medium.push(cached);
+            } else {
+                edgesByHeat.low.push(cached);
+            }
         }
-        ctx.stroke();
+
+        // High heat - bright cyan with glow
+        if (edgesByHeat.high.length > 0) {
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.high) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.high) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+        }
+
+        // Medium heat - purple
+        if (edgesByHeat.medium.length > 0) {
+            ctx.strokeStyle = 'rgba(184, 41, 221, 0.25)';
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.medium) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(184, 41, 221, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.medium) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+        }
+
+        // Low heat - pink fading
+        if (edgesByHeat.low.length > 0) {
+            ctx.strokeStyle = 'rgba(255, 42, 109, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.low) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+        }
     }
 
-    // Medium heat - purple
-    if (edgesByHeat.medium.length > 0) {
-        ctx.strokeStyle = 'rgba(184, 41, 221, 0.25)';
-        ctx.lineWidth = 10;
-        ctx.beginPath();
-        for (const edge of edgesByHeat.medium) {
-            ctx.moveTo(edge.from.x, edge.from.y);
-            ctx.lineTo(edge.to.x, edge.to.y);
-        }
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(184, 41, 221, 0.8)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (const edge of edgesByHeat.medium) {
-            ctx.moveTo(edge.from.x, edge.from.y);
-            ctx.lineTo(edge.to.x, edge.to.y);
-        }
-        ctx.stroke();
-    }
-
-    // Low heat - pink fading
-    if (edgesByHeat.low.length > 0) {
-        ctx.strokeStyle = 'rgba(255, 42, 109, 0.4)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (const edge of edgesByHeat.low) {
-            ctx.moveTo(edge.from.x, edge.from.y);
-            ctx.lineTo(edge.to.x, edge.to.y);
-        }
-        ctx.stroke();
-    }
-
-    // Draw frontier nodes using sprites
+    // Draw frontier nodes using sprites (always on Canvas 2D)
+    ctx.globalCompositeOperation = 'lighter';
     const sprite = AmbientViz.sprites.glowCyan;
     const spriteSize = AmbientViz.spriteSize;
 
@@ -3079,7 +3801,7 @@ function renderVisualization() {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 
-    // Draw optimal path
+    // Draw optimal path (always on Canvas 2D)
     if (viz.phase === 'path' || viz.phase === 'complete') {
         drawOptimalPath(ctx);
     }
@@ -3261,6 +3983,11 @@ function clearVisualizationState() {
     viz.particles = [];
     viz.phase = 'idle';
     viz.pathProgress = 0;
+
+    // Clear WebGL heat data
+    if (GameState.useWebGL) {
+        WebGLRenderer.clearHeat();
+    }
 
     GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
 }
@@ -4100,10 +4827,16 @@ function sleep(ms) {
 /**
  * Draw the road network with cyberpunk CRT aesthetic.
  * Always visible as the base layer - the "canvas" for pathfinding.
- * Includes subtle CRT flicker and breathing effects.
+ * Uses WebGL when available, falls back to Canvas 2D.
  */
 function drawRoadNetwork(ctx) {
-    // Use passed context or default to vizCtx
+    // Use WebGL if available
+    if (GameState.useWebGL) {
+        WebGLRenderer.render(performance.now());
+        return;
+    }
+
+    // Canvas 2D fallback
     ctx = ctx || GameState.vizCtx;
     const width = GameState.vizCanvas.width;
     const height = GameState.vizCanvas.height;
