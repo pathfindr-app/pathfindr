@@ -1066,7 +1066,7 @@ const SoundEngine = {
 
         // Create gain node for soundtrack volume (slightly quieter than SFX)
         const gainNode = this.ctx.createGain();
-        gainNode.gain.value = 0.4;  // 40% volume for background music
+        gainNode.gain.value = 0.7;  // 70% volume for background music
 
         source.connect(gainNode);
         gainNode.connect(this.masterGain);
