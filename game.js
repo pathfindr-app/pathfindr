@@ -80,8 +80,8 @@ const CONFIG = {
 
     // Visualization settings - OPTIMIZED for performance
     viz: {
-        explorationDelay: 8,        // ms between exploration batches
-        batchSize: 4,               // nodes per batch (increased)
+        explorationDelay: 5,        // ms between exploration batches
+        batchSize: 8,               // nodes per batch
         nodeGlowRadius: 14,         // base glow radius (reduced)
         edgeWidth: 3,               // base edge width (reduced)
         heatDecay: 0.992,           // slower decay - explored edges persist longer
