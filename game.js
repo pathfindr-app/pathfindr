@@ -152,9 +152,10 @@ const WebGLRenderer = {
 
     // Shader programs
     programs: {
-        roads: null,      // Ambient road network
-        heatEdges: null,  // Heat-mapped exploration edges
-        glow: null,       // Glow effect pass
+        roads: null,       // Ambient road network
+        heatEdges: null,   // Heat-mapped exploration edges
+        glow: null,        // Glow effect pass
+        atmosphere: null,  // Soft atmospheric glow
     },
 
     // Buffers
@@ -211,7 +212,7 @@ const WebGLRenderer = {
             }
         `,
 
-        // Fragment shader for ambient roads
+        // Fragment shader for ambient roads - slow, meditative, ASMR energy
         ambientFragment: `
             precision mediump float;
 
@@ -226,17 +227,48 @@ const WebGLRenderer = {
                 // Distance from center for radial gradient
                 float dist = distance(v_position, u_center) / max(u_resolution.x, u_resolution.y);
 
-                // Breathing effect
-                float breathe = 0.85 + 0.15 * sin(u_time * 0.6);
+                // Very slow flow coordinate - glacial movement
+                float flowCoord = (v_position.x + v_position.y) * 0.003;
 
-                // Warm amber at center fading to purple at edges
-                vec3 warmCore = vec3(0.7, 0.4, 0.24);
-                vec3 coolEdge = vec3(0.24, 0.08, 0.32);
-                vec3 color = mix(warmCore, coolEdge, dist);
+                // Single slow wave - 60 second cycle (u_time * 0.1 = full cycle every ~63s)
+                float slowWave = sin(flowCoord * 1.0 - u_time * 0.1) * 0.5 + 0.5;
 
-                float alpha = mix(0.35, 0.1, dist) * breathe;
+                // Second even slower wave - 90 second cycle, opposite direction
+                float slowerWave = sin(flowCoord * 0.7 + u_time * 0.07) * 0.5 + 0.5;
 
-                gl_FragColor = vec4(color, alpha);
+                // Blend them gently
+                float energyFlow = slowWave * 0.6 + slowerWave * 0.4;
+
+                // Very slow breathing - 45 second cycle
+                float breathe = 0.92 + sin(u_time * 0.14) * 0.08;
+
+                // Color palette - warm amber core to cool purple edges
+                vec3 warmCore = vec3(1.0, 0.5, 0.15);    // Warm orange
+                vec3 midTone = vec3(0.9, 0.35, 0.5);     // Soft pink-orange
+                vec3 coolEdge = vec3(0.5, 0.2, 0.6);     // Muted purple
+                vec3 energyColor = vec3(0.3, 0.9, 1.0);  // Soft cyan
+
+                // Base color gradient from center
+                vec3 baseColor;
+                if (dist < 0.35) {
+                    baseColor = mix(warmCore, midTone, dist / 0.35);
+                } else {
+                    baseColor = mix(midTone, coolEdge, (dist - 0.35) / 0.65);
+                }
+
+                // Gentle energy color blend
+                float energyMix = energyFlow * 0.2 * (1.0 - dist * 0.4);
+                vec3 color = mix(baseColor, energyColor, energyMix);
+
+                // Strong base visibility
+                float baseAlpha = mix(0.7, 0.3, dist);
+
+                // Subtle energy boost
+                float energyBoost = energyFlow * 0.15;
+
+                float alpha = (baseAlpha + energyBoost) * breathe;
+
+                gl_FragColor = vec4(color * alpha, alpha);
             }
         `,
 
@@ -280,11 +312,12 @@ const WebGLRenderer = {
             }
         `,
 
-        // Fragment shader for glow effect
+        // Fragment shader for glow effect - gentle pulsing bloom
         glowFragment: `
             precision mediump float;
 
             uniform float u_time;
+            uniform vec2 u_resolution;
 
             varying float v_heat;
             varying vec2 v_position;
@@ -292,12 +325,23 @@ const WebGLRenderer = {
             void main() {
                 if (v_heat < 0.03) discard;
 
+                // Slow gentle pulse - 20 second cycle
+                float flowCoord = (v_position.x + v_position.y) * 0.005;
+                float pulse = sin(flowCoord - u_time * 0.3) * 0.2 + 0.8;
+
+                // Color based on heat
                 vec3 cyan = vec3(0.0, 0.94, 1.0);
                 vec3 purple = vec3(0.72, 0.16, 0.87);
-                vec3 color = mix(purple, cyan, v_heat);
+                vec3 pink = vec3(1.0, 0.2, 0.6);
 
-                // Soft glow falloff
-                float glow = v_heat * 0.3;
+                // Slow color shift - 30 second cycle
+                float colorShift = sin(u_time * 0.2 + flowCoord) * 0.5 + 0.5;
+                vec3 hotColor = mix(cyan, vec3(1.0, 1.0, 1.0), 0.3);
+                vec3 coolColor = mix(purple, pink, colorShift * 0.4);
+                vec3 color = mix(coolColor, hotColor, v_heat);
+
+                // Gentle glow
+                float glow = v_heat * 0.35 * pulse;
 
                 gl_FragColor = vec4(color * glow, glow);
             }
@@ -344,6 +388,41 @@ const WebGLRenderer = {
                 gl_FragColor = vec4(color, 1.0);
             }
         `,
+
+        // Fragment shader for soft atmospheric glow - very slow, calming
+        atmosphereFragment: `
+            precision mediump float;
+
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform vec2 u_center;
+
+            varying float v_heat;
+            varying vec2 v_position;
+
+            void main() {
+                // Distance from center for radial gradient
+                float dist = distance(v_position, u_center) / max(u_resolution.x, u_resolution.y);
+
+                // Very slow breathing - 50 second cycle
+                float breathe = 0.85 + 0.15 * sin(u_time * 0.125);
+
+                // Glacial flow effect - 75 second cycle
+                float flowCoord = (v_position.x + v_position.y) * 0.002;
+                float flow = sin(flowCoord - u_time * 0.085) * 0.1 + 0.9;
+
+                // Soft warm colors
+                vec3 warmGlow = vec3(0.7, 0.3, 0.12);   // Soft orange
+                vec3 coolGlow = vec3(0.25, 0.1, 0.3);   // Muted purple
+
+                vec3 color = mix(warmGlow, coolGlow, dist);
+
+                // Visible atmospheric glow
+                float alpha = mix(0.18, 0.04, dist) * breathe * flow;
+
+                gl_FragColor = vec4(color * alpha, alpha);
+            }
+        `,
     },
 
     // Initialize WebGL context and compile shaders
@@ -388,7 +467,12 @@ const WebGLRenderer = {
             this.shaders.glowFragment
         );
 
-        if (!this.programs.roads || !this.programs.heatEdges) {
+        this.programs.atmosphere = this.createProgram(
+            this.shaders.roadVertex,
+            this.shaders.atmosphereFragment
+        );
+
+        if (!this.programs.roads || !this.programs.heatEdges || !this.programs.atmosphere) {
             console.error('Failed to compile WebGL shaders');
             return false;
         }
@@ -716,6 +800,61 @@ const WebGLRenderer = {
 
         // Reset blend mode
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    },
+
+    // Render ONLY ambient roads (for continuous background rendering)
+    renderAmbient(time) {
+        if (!this.initialized || !this.gl) return;
+
+        const gl = this.gl;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+
+        // Clear with transparency
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        if (this.edgeCount === 0) return;
+
+        const timeSeconds = time * 0.001;
+
+        // Layer 1: Ambient glow (wider, softer) - additive blending
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        this.renderAmbientGlow(timeSeconds, width, height);
+
+        // Layer 2: Core roads with energy flow - standard blending
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        this.renderAmbientRoads(timeSeconds, width, height);
+    },
+
+    // Render soft ambient glow underneath roads
+    renderAmbientGlow(time, width, height) {
+        const gl = this.gl;
+        const program = this.programs.atmosphere;
+
+        gl.useProgram(program);
+
+        // Set uniforms - much wider line for soft atmospheric glow
+        gl.uniform2f(program.uniforms.resolution, width, height);
+        gl.uniform1f(program.uniforms.time, time);
+        gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wide soft glow
+        gl.uniform2f(program.uniforms.center, width / 2, height / 2);
+
+        // Bind buffers
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
+        gl.enableVertexAttribArray(program.attributes.position);
+        gl.vertexAttribPointer(program.attributes.position, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
+        gl.enableVertexAttribArray(program.attributes.normal);
+        gl.vertexAttribPointer(program.attributes.normal, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
+        gl.enableVertexAttribArray(program.attributes.heat);
+        gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
     },
 
     // Render ambient road network
@@ -1734,8 +1873,13 @@ const AmbientViz = {
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
 
-        // Layer 1: Orange road network (always visible, CRT style)
-        if (GameState.showCustomRoads) {
+        // Layer 0: WebGL road network (always render if available and we have edges)
+        if (GameState.useWebGL && GameState.edgeList && GameState.edgeList.length > 0) {
+            WebGLRenderer.renderAmbient(performance.now());
+        }
+
+        // Layer 1: Orange road network Canvas 2D fallback (if no WebGL)
+        if (!GameState.useWebGL && GameState.showCustomRoads) {
             drawRoadNetwork(ctx);
         }
 
