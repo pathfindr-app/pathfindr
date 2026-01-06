@@ -1943,3 +1943,438 @@ body::after {
 .glow-pink { text-shadow: var(--glow-pink); }
 .glow-gold { text-shadow: 0 0 15px rgba(255, 216, 102, 0.4), 0 0 30px rgba(255, 216, 102, 0.2); }
 .glow-warm { text-shadow: 0 0 15px rgba(252, 152, 103, 0.4), 0 0 30px rgba(252, 152, 103, 0.2); }
+
+/* =============================================================================
+   AUTH MODAL & USER SECTION
+   ============================================================================= */
+
+.hud-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.username-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px rgba(65, 217, 217, 0.4);
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.auth-modal {
+    max-width: 380px;
+    width: 90%;
+}
+
+.modal-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.25rem;
+    transition: color var(--transition-fast);
+}
+
+.modal-close:hover {
+    color: var(--neon-pink);
+}
+
+.auth-subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-group label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.form-group input {
+    background: var(--abyss);
+    border: 1px solid var(--elevated);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--text-bright);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 12px rgba(65, 217, 217, 0.2);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.auth-error {
+    color: var(--neon-pink);
+    font-size: 0.8rem;
+    min-height: 1.2em;
+    margin: 0;
+}
+
+.auth-switch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--elevated);
+}
+
+.auth-switch span {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
+
+.btn-link {
+    background: transparent;
+    border: none;
+    color: var(--neon-cyan);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    transition: color var(--transition-fast);
+}
+
+.btn-link:hover {
+    color: var(--sunset-warm);
+}
+
+/* Social Login */
+.social-login {
+    margin-top: 1.5rem;
+}
+
+.social-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.social-divider::before,
+.social-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--elevated);
+}
+
+.social-divider span {
+    padding: 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.social-buttons {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.social-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.social-btn:hover {
+    transform: translateY(-2px);
+}
+
+.social-btn.google {
+    background: #fff;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+.social-btn.google:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.social-btn.apple {
+    background: #000;
+    border: 1px solid #000;
+    color: #fff;
+}
+
+.social-btn.apple:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Logged-in user profile */
+.auth-logged-in {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-avatar {
+    width: 48px;
+    height: 48px;
+    background: var(--elevated);
+    border: 2px solid var(--neon-cyan);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 15px rgba(65, 217, 217, 0.25);
+}
+
+.user-avatar svg {
+    width: 24px;
+    height: 24px;
+    color: var(--neon-cyan);
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    color: var(--text-bright);
+}
+
+.user-status {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.user-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 1rem 0;
+    border-top: 1px solid var(--elevated);
+    border-bottom: 1px solid var(--elevated);
+}
+
+.user-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.stat-value {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px rgba(65, 217, 217, 0.3);
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-upgrade {
+    background: linear-gradient(135deg, var(--sunset-warm), var(--neon-pink));
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.875rem 1.5rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: 0 0 20px rgba(255, 140, 105, 0.3);
+}
+
+.btn-upgrade:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(255, 140, 105, 0.5);
+}
+
+.btn-upgrade:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--text-muted);
+    color: var(--text-dim);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-secondary:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+/* =============================================================================
+   LEADERBOARD MODAL
+   ============================================================================= */
+
+.leaderboard-modal {
+    max-width: 450px;
+    width: 90%;
+}
+
+.leaderboard-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 1rem;
+}
+
+.leaderboard-entry {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--abyss);
+    margin-bottom: 0.5rem;
+    transition: background var(--transition-fast);
+}
+
+.leaderboard-entry:hover {
+    background: var(--elevated);
+}
+
+.leaderboard-rank {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--sunset-gold);
+    min-width: 2rem;
+    text-align: center;
+}
+
+.leaderboard-entry:nth-child(1) .leaderboard-rank {
+    color: var(--sunset-gold);
+    text-shadow: 0 0 10px rgba(255, 216, 102, 0.5);
+}
+
+.leaderboard-entry:nth-child(2) .leaderboard-rank {
+    color: var(--text-dim);
+}
+
+.leaderboard-entry:nth-child(3) .leaderboard-rank {
+    color: var(--sunset-warm);
+}
+
+.leaderboard-name {
+    flex: 1;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.leaderboard-score {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--neon-cyan);
+}
+
+/* =============================================================================
+   AD BANNER
+   ============================================================================= */
+
+.ad-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--abyss);
+    border-top: 1px solid var(--elevated);
+    padding: 0.5rem;
+    z-index: 1000;
+    text-align: center;
+}
+
+.ad-placeholder {
+    background: var(--surface);
+    color: var(--text-muted);
+    padding: 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: var(--radius-sm);
+}
+
+/* Adjust game UI when ad banner is visible */
+body.has-ad-banner #results-panel {
+    bottom: 60px;
+}
+
+body.has-ad-banner #gameplay-hud {
+    /* No adjustment needed - it's at top */
+}
+
+/* =============================================================================
+   RESPONSIVE ADJUSTMENTS FOR AUTH
+   ============================================================================= */
+
+@media (max-width: 480px) {
+    .auth-modal {
+        padding: 1.5rem;
+    }
+
+    .user-stats {
+        padding: 0.75rem 0;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+    }
+
+    .leaderboard-modal {
+        padding: 1.5rem;
+    }
+
+    .leaderboard-list {
+        max-height: 300px;
+    }
+}

@@ -6,6 +6,15 @@
     <title>pathfindr</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
+
+    <!-- Capacitor (when running as native app) -->
+    <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
+
+    <!-- Supabase (for auth and database) -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Stripe (for web payments) -->
+    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
     <div id="app">
@@ -56,6 +65,15 @@
                         <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
                     </svg>
                 </button>
+            </div>
+            <div class="hud-section hud-user">
+                <button id="user-btn" class="hud-btn" title="Account">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </button>
+                <span id="username-display" class="username-label"></span>
             </div>
         </div>
 
@@ -130,6 +148,100 @@
                             <li>Your score is based on how close your route is to optimal!</li>
                         </ol>
                         <button id="start-game-btn" class="btn btn-primary">Start Game</button>
+                    </div>
+                </div>
+
+                <!-- Auth Modal -->
+                <div id="auth-modal" class="overlay hidden">
+                    <div class="overlay-content auth-modal">
+                        <button id="auth-close-btn" class="modal-close">&times;</button>
+                        <h2 id="auth-title">Sign In</h2>
+                        <p class="auth-subtitle">Track your scores and compete globally</p>
+
+                        <form id="auth-form" class="auth-form">
+                            <div class="form-group" id="username-group" style="display: none;">
+                                <label for="auth-username">Username</label>
+                                <input type="text" id="auth-username" placeholder="Choose a display name" minlength="3" maxlength="20">
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-email">Email</label>
+                                <input type="email" id="auth-email" placeholder="your@email.com" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-password">Password</label>
+                                <input type="password" id="auth-password" placeholder="Your password" required minlength="6">
+                            </div>
+                            <p id="auth-error" class="auth-error"></p>
+                            <button type="submit" id="auth-submit-btn" class="btn btn-primary">Sign In</button>
+                        </form>
+
+                        <div class="social-login">
+                            <div class="social-divider"><span>or continue with</span></div>
+                            <div class="social-buttons">
+                                <button type="button" class="social-btn google" data-provider="google">
+                                    <svg viewBox="0 0 24 24" width="20" height="20">
+                                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                                    </svg>
+                                    Google
+                                </button>
+                                <button type="button" class="social-btn apple" data-provider="apple">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                                    </svg>
+                                    Apple
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="auth-switch">
+                            <span id="auth-switch-text">Don't have an account?</span>
+                            <button id="auth-switch-btn" class="btn-link">Sign Up</button>
+                        </div>
+
+                        <div id="auth-logged-in" class="auth-logged-in" style="display: none;">
+                            <div class="user-profile">
+                                <div class="user-avatar">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="12" cy="7" r="4"/>
+                                    </svg>
+                                </div>
+                                <div class="user-info">
+                                    <span class="user-name" id="profile-username">Player</span>
+                                    <span class="user-status" id="profile-status">Free Account</span>
+                                </div>
+                            </div>
+                            <div class="user-stats">
+                                <div class="user-stat">
+                                    <span class="stat-value" id="profile-games">0</span>
+                                    <span class="stat-label">Games</span>
+                                </div>
+                                <div class="user-stat">
+                                    <span class="stat-value" id="profile-best">0%</span>
+                                    <span class="stat-label">Best</span>
+                                </div>
+                                <div class="user-stat">
+                                    <span class="stat-value" id="profile-rank">--</span>
+                                    <span class="stat-label">Rank</span>
+                                </div>
+                            </div>
+                            <button id="remove-ads-btn" class="btn btn-upgrade">Remove Ads - $2.99</button>
+                            <button id="logout-btn" class="btn btn-secondary">Log Out</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leaderboard Modal -->
+                <div id="leaderboard-modal" class="overlay hidden">
+                    <div class="overlay-content leaderboard-modal">
+                        <button id="leaderboard-close-btn" class="modal-close">&times;</button>
+                        <h2>Leaderboard</h2>
+                        <div id="leaderboard-list" class="leaderboard-list">
+                            <!-- Filled dynamically -->
+                        </div>
                     </div>
                 </div>
 
@@ -224,9 +336,174 @@
         <span id="drawn-points" class="hidden">0</span>
         <span id="distance-label" class="hidden">Distance</span>
         <span id="view-mode-text" class="hidden">Map View</span>
+
+        <!-- Ad Banner (Web - AdSense) -->
+        <div id="adsense-banner" class="ad-banner" style="display: none;">
+            <!-- AdSense ad unit will be inserted here -->
+            <div class="ad-placeholder">Advertisement</div>
+        </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="config.js"></script>
+    <script src="ads.js"></script>
+    <script src="auth.js"></script>
+    <script src="payments.js"></script>
     <script src="game.js"></script>
+
+    <!-- Initialize monetization modules after DOM ready -->
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize auth (will restore session if exists)
+            await PathfindrAuth.init();
+
+            // Initialize ads (after user interaction for audio policy)
+            document.body.addEventListener('click', async function initAdsOnInteraction() {
+                await PathfindrAds.init();
+                document.body.removeEventListener('click', initAdsOnInteraction);
+            }, { once: true });
+
+            // Wire up auth UI
+            const userBtn = document.getElementById('user-btn');
+            const authModal = document.getElementById('auth-modal');
+            const authCloseBtn = document.getElementById('auth-close-btn');
+            const authForm = document.getElementById('auth-form');
+            const authSwitchBtn = document.getElementById('auth-switch-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+            const usernameDisplay = document.getElementById('username-display');
+
+            let isSignUp = false;
+
+            // Open auth modal
+            userBtn?.addEventListener('click', () => {
+                authModal.classList.remove('hidden');
+                updateAuthUI();
+            });
+
+            // Close auth modal
+            authCloseBtn?.addEventListener('click', () => {
+                authModal.classList.add('hidden');
+            });
+
+            // Switch between login/signup
+            authSwitchBtn?.addEventListener('click', () => {
+                isSignUp = !isSignUp;
+                document.getElementById('auth-title').textContent = isSignUp ? 'Sign Up' : 'Sign In';
+                document.getElementById('auth-submit-btn').textContent = isSignUp ? 'Sign Up' : 'Sign In';
+                document.getElementById('auth-switch-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+                authSwitchBtn.textContent = isSignUp ? 'Sign In' : 'Sign Up';
+                document.getElementById('username-group').style.display = isSignUp ? 'block' : 'none';
+                document.getElementById('auth-error').textContent = '';
+            });
+
+            // Handle form submit
+            authForm?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('auth-email').value;
+                const password = document.getElementById('auth-password').value;
+                const username = document.getElementById('auth-username').value;
+                const errorEl = document.getElementById('auth-error');
+
+                if (isSignUp) {
+                    if (!username || username.length < 3) {
+                        errorEl.textContent = 'Username must be at least 3 characters';
+                        return;
+                    }
+                    const result = await PathfindrAuth.signUp(email, password, username);
+                    if (result.success) {
+                        errorEl.textContent = '';
+                        updateAuthUI();
+                    } else {
+                        errorEl.textContent = result.error;
+                    }
+                } else {
+                    const result = await PathfindrAuth.login(email, password);
+                    if (result.success) {
+                        errorEl.textContent = '';
+                        updateAuthUI();
+                    } else {
+                        errorEl.textContent = result.error;
+                    }
+                }
+            });
+
+            // Logout
+            logoutBtn?.addEventListener('click', async () => {
+                await PathfindrAuth.logout();
+                updateAuthUI();
+            });
+
+            // Social login buttons
+            document.querySelectorAll('.social-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const provider = btn.dataset.provider;
+                    const result = await PathfindrAuth.signInWithProvider(provider);
+                    if (!result.success && result.error) {
+                        document.getElementById('auth-error').textContent = result.error;
+                    }
+                });
+            });
+
+            // Remove Ads purchase
+            const removeAdsBtn = document.getElementById('remove-ads-btn');
+            removeAdsBtn?.addEventListener('click', async () => {
+                removeAdsBtn.disabled = true;
+                removeAdsBtn.textContent = 'Processing...';
+
+                await PathfindrPayments.init();
+                const result = await PathfindrPayments.purchaseRemoveAds();
+
+                if (!result.success) {
+                    removeAdsBtn.disabled = false;
+                    removeAdsBtn.textContent = 'Remove Ads - $2.99';
+                    if (result.error) {
+                        alert('Purchase failed: ' + result.error);
+                    }
+                }
+            });
+
+            // Update UI based on auth state
+            function updateAuthUI() {
+                const isLoggedIn = PathfindrAuth.isLoggedIn();
+                const formSection = document.getElementById('auth-form').parentElement;
+                const switchSection = document.querySelector('.auth-switch');
+                const loggedInSection = document.getElementById('auth-logged-in');
+
+                if (isLoggedIn) {
+                    formSection.querySelector('form').style.display = 'none';
+                    formSection.querySelector('.auth-subtitle').style.display = 'none';
+                    formSection.querySelector('h2').style.display = 'none';
+                    switchSection.style.display = 'none';
+                    loggedInSection.style.display = 'block';
+
+                    // Update profile display
+                    document.getElementById('profile-username').textContent = PathfindrAuth.getUsername();
+                    document.getElementById('profile-status').textContent =
+                        PathfindrAuth.hasPurchased() ? 'Premium (Ad-Free)' : 'Free Account';
+                    usernameDisplay.textContent = PathfindrAuth.getUsername();
+
+                    // Hide remove ads button if already purchased
+                    document.getElementById('remove-ads-btn').style.display =
+                        PathfindrAuth.hasPurchased() ? 'none' : 'block';
+                } else {
+                    formSection.querySelector('form').style.display = 'block';
+                    formSection.querySelector('.auth-subtitle').style.display = 'block';
+                    formSection.querySelector('h2').style.display = 'block';
+                    switchSection.style.display = 'flex';
+                    loggedInSection.style.display = 'none';
+                    usernameDisplay.textContent = '';
+                }
+            }
+
+            // Listen for auth changes
+            PathfindrAuth.onAuthStateChange(() => {
+                updateAuthUI();
+            });
+
+            // Initial UI update
+            updateAuthUI();
+        });
+    </script>
 </body>
 </html>

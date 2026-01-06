@@ -8,7 +8,18 @@
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
       "Bash(git push:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(node --check:*)",
+      "Bash(ls:*)",
+      "Bash(dir \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\*.wav\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npx cap init:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(git pull:*)",
+      "Bash(gh:*)"
     ]
   }
 }
