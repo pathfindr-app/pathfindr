@@ -982,11 +982,13 @@ const SoundEngine = {
     buffers: {
         scanning: null,
         found: null,
+        soundtrack: null,
     },
 
     // Active audio sources (so we can stop them)
     activeSources: {
         scanning: null,
+        soundtrack: null,
     },
 
     // Initialize AudioContext on first user interaction
@@ -1011,6 +1013,7 @@ const SoundEngine = {
     // Load external audio files
     async loadAudioFiles() {
         try {
+            // Load sound effects
             const [scanningResponse, foundResponse] = await Promise.all([
                 fetch('Scanning1.wav'),
                 fetch('Found1.wav')
@@ -1024,9 +1027,61 @@ const SoundEngine = {
             this.buffers.scanning = await this.ctx.decodeAudioData(scanningData);
             this.buffers.found = await this.ctx.decodeAudioData(foundData);
 
-            console.log('Audio files loaded successfully');
+            console.log('Sound effects loaded successfully');
+
+            // Load soundtrack separately (larger file)
+            this.loadSoundtrack();
         } catch (e) {
             console.warn('Could not load audio files:', e);
+        }
+    },
+
+    // Load soundtrack (separate to not block other audio)
+    async loadSoundtrack() {
+        try {
+            const response = await fetch('Pathfindr1.wav');
+            const data = await response.arrayBuffer();
+            this.buffers.soundtrack = await this.ctx.decodeAudioData(data);
+            console.log('Soundtrack loaded successfully');
+
+            // Auto-start soundtrack if not muted
+            if (!this.muted) {
+                this.playSoundtrack();
+            }
+        } catch (e) {
+            console.warn('Could not load soundtrack:', e);
+        }
+    },
+
+    // Play background soundtrack (looped)
+    playSoundtrack() {
+        if (!this.initialized || !this.buffers.soundtrack) return;
+
+        // Don't restart if already playing
+        if (this.activeSources.soundtrack) return;
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.buffers.soundtrack;
+        source.loop = true;  // Loop the soundtrack
+
+        // Create gain node for soundtrack volume (slightly quieter than SFX)
+        const gainNode = this.ctx.createGain();
+        gainNode.gain.value = 0.4;  // 40% volume for background music
+
+        source.connect(gainNode);
+        gainNode.connect(this.masterGain);
+        source.start();
+
+        this.activeSources.soundtrack = { source, gainNode };
+    },
+
+    // Stop soundtrack
+    stopSoundtrack() {
+        if (this.activeSources.soundtrack) {
+            try {
+                this.activeSources.soundtrack.source.stop();
+            } catch (e) {}
+            this.activeSources.soundtrack = null;
         }
     },
 
@@ -1117,6 +1172,13 @@ const SoundEngine = {
                 this.ctx.currentTime,
                 0.1
             );
+
+            // Start/stop soundtrack based on mute state
+            if (this.muted) {
+                this.stopSoundtrack();
+            } else if (this.buffers.soundtrack) {
+                this.playSoundtrack();
+            }
         }
         return this.muted;
     },
@@ -3050,14 +3112,14 @@ function selectRandomEndpoints() {
 
     const nodesToUse = eligibleNodes.length >= 20 ? eligibleNodes : nodeIds;
 
-    // Scale distance based on round number (round 1 = short, round 5 = long)
+    // Scale distance based on round number (round 1 = short, round 5 = epic cityscape)
     const round = GameState.currentRound || 1;
     const distanceScales = [
-        { min: 0.15, max: 0.4 },  // Round 1: short
-        { min: 0.25, max: 0.55 }, // Round 2
-        { min: 0.35, max: 0.7 },  // Round 3
-        { min: 0.45, max: 0.9 },  // Round 4
-        { min: 0.6, max: 1.2 }    // Round 5: longest
+        { min: 0.3, max: 0.6 },   // Round 1: warm up (~3-6 blocks)
+        { min: 0.5, max: 1.0 },   // Round 2: getting comfortable
+        { min: 1.0, max: 2.0 },   // Round 3: neighborhood scale
+        { min: 2.0, max: 3.5 },   // Round 4: cross-neighborhood
+        { min: 3.0, max: 6.0 }    // Round 5: epic cityscape (~quarter city)
     ];
     const scale = distanceScales[Math.min(round - 1, 4)];
 
