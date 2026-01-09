@@ -282,6 +282,176 @@ const PathfindrAds = {
       banner.style.display = 'none';
     }
   },
+
+  // ===========================================
+  // PLACEHOLDER AD (for development/testing)
+  // ===========================================
+
+  /**
+   * Show a placeholder interstitial ad
+   * Returns a promise that resolves when user closes the ad
+   * @returns {Promise<void>}
+   */
+  showPlaceholderAd() {
+    return new Promise((resolve) => {
+      // Don't show if user purchased ad-free
+      if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
+        console.log('[Ads] User is ad-free, skipping placeholder ad');
+        resolve();
+        return;
+      }
+
+      // Create overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'placeholder-ad-overlay';
+      overlay.innerHTML = `
+        <div class="placeholder-ad-container">
+          <div class="placeholder-ad-label">ADVERTISEMENT</div>
+          <div class="placeholder-ad-content">
+            <div class="placeholder-ad-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <path d="M8 21h8"/>
+                <path d="M12 17v4"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+            </div>
+            <div class="placeholder-ad-text">
+              <span class="ad-title">Pathfindr Premium</span>
+              <span class="ad-subtitle">Remove ads & support development</span>
+            </div>
+          </div>
+          <div class="placeholder-ad-timer">
+            <span id="ad-countdown">5</span>s
+          </div>
+          <button id="close-placeholder-ad" class="placeholder-ad-close" disabled>
+            Skip
+          </button>
+        </div>
+      `;
+
+      // Add styles if not already present
+      if (!document.getElementById('placeholder-ad-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'placeholder-ad-styles';
+        styles.textContent = `
+          #placeholder-ad-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          .placeholder-ad-container {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid #00f0ff33;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.15);
+          }
+          .placeholder-ad-label {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #666;
+            margin-bottom: 24px;
+          }
+          .placeholder-ad-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+          }
+          .placeholder-ad-icon svg {
+            width: 64px;
+            height: 64px;
+            stroke: #00f0ff;
+          }
+          .placeholder-ad-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
+          .ad-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+          }
+          .ad-subtitle {
+            font-size: 14px;
+            color: #888;
+          }
+          .placeholder-ad-timer {
+            font-size: 14px;
+            color: #00f0ff;
+            margin-bottom: 16px;
+          }
+          .placeholder-ad-close {
+            background: transparent;
+            border: 1px solid #444;
+            color: #666;
+            padding: 10px 32px;
+            border-radius: 6px;
+            cursor: not-allowed;
+            font-size: 14px;
+            transition: all 0.3s ease;
+          }
+          .placeholder-ad-close:not(:disabled) {
+            border-color: #00f0ff;
+            color: #00f0ff;
+            cursor: pointer;
+          }
+          .placeholder-ad-close:not(:disabled):hover {
+            background: #00f0ff22;
+          }
+        `;
+        document.head.appendChild(styles);
+      }
+
+      document.body.appendChild(overlay);
+
+      // Countdown timer
+      let countdown = 5;
+      const countdownEl = document.getElementById('ad-countdown');
+      const closeBtn = document.getElementById('close-placeholder-ad');
+
+      const timer = setInterval(() => {
+        countdown--;
+        if (countdownEl) countdownEl.textContent = countdown;
+
+        if (countdown <= 0) {
+          clearInterval(timer);
+          if (closeBtn) {
+            closeBtn.disabled = false;
+            closeBtn.textContent = 'Continue';
+          }
+        }
+      }, 1000);
+
+      // Close handler
+      closeBtn.addEventListener('click', () => {
+        if (closeBtn.disabled) return;
+        overlay.remove();
+        resolve();
+      });
+
+      console.log('[Ads] Showing placeholder ad');
+    });
+  },
 };
 
 // Export for use in other modules

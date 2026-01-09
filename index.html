@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
 
     <!-- Supabase (for auth and database) -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- Stripe (for web payments) -->
     <script src="https://js.stripe.com/v3/"></script>
@@ -193,6 +193,18 @@
                                     </svg>
                                     Apple
                                 </button>
+                                <button type="button" class="social-btn facebook" data-provider="facebook">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                    </svg>
+                                    Facebook
+                                </button>
+                                <button type="button" class="social-btn discord" data-provider="discord">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                                    </svg>
+                                    Discord
+                                </button>
                             </div>
                         </div>
 
@@ -202,35 +214,172 @@
                         </div>
 
                         <div id="auth-logged-in" class="auth-logged-in" style="display: none;">
-                            <div class="user-profile">
-                                <div class="user-avatar">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                        <circle cx="12" cy="7" r="4"/>
-                                    </svg>
+                            <!-- Holographic ID Card -->
+                            <div class="pilot-id-card">
+                                <div class="id-card-scanline"></div>
+                                <div class="id-card-noise"></div>
+
+                                <!-- Header Band -->
+                                <div class="id-card-header">
+                                    <span class="id-card-type">NAVIGATOR LICENSE</span>
+                                    <span class="id-card-serial">PATHFINDR-2026</span>
                                 </div>
-                                <div class="user-info">
-                                    <span class="user-name" id="profile-username">Player</span>
-                                    <span class="user-status" id="profile-status">Free Account</span>
+
+                                <!-- Main Identity Section -->
+                                <div class="id-card-identity">
+                                    <div class="pilot-avatar-frame">
+                                        <div class="avatar-hex-border"></div>
+                                        <div class="avatar-glow"></div>
+                                        <div class="avatar-inner">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                                <circle cx="12" cy="7" r="4"/>
+                                            </svg>
+                                        </div>
+                                        <div class="avatar-ring avatar-ring-1"></div>
+                                        <div class="avatar-ring avatar-ring-2"></div>
+                                    </div>
+                                    <div class="pilot-details">
+                                        <div class="callsign-row">
+                                            <span class="callsign-label">CALLSIGN</span>
+                                            <span class="callsign-value" id="profile-username">Player</span>
+                                        </div>
+                                        <div class="status-badge" id="profile-status-badge">
+                                            <span class="status-dot"></span>
+                                            <span class="status-text" id="profile-status">Free Account</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Stats Grid -->
+                                <div class="pilot-stats-grid">
+                                    <div class="pilot-stat" data-stat="cities">
+                                        <div class="stat-bar-bg">
+                                            <div class="stat-bar-fill" style="--fill-percent: 0%"></div>
+                                        </div>
+                                        <div class="stat-content">
+                                            <span class="stat-number" id="profile-cities">0</span>
+                                            <span class="stat-name">Cities</span>
+                                        </div>
+                                        <div class="stat-icon-glow"></div>
+                                    </div>
+                                    <div class="pilot-stat" data-stat="regions">
+                                        <div class="stat-bar-bg">
+                                            <div class="stat-bar-fill" style="--fill-percent: 0%"></div>
+                                        </div>
+                                        <div class="stat-content">
+                                            <span class="stat-number" id="profile-countries">0</span>
+                                            <span class="stat-name">Regions</span>
+                                        </div>
+                                        <div class="stat-icon-glow"></div>
+                                    </div>
+                                    <div class="pilot-stat" data-stat="distance">
+                                        <div class="stat-bar-bg">
+                                            <div class="stat-bar-fill" style="--fill-percent: 0%"></div>
+                                        </div>
+                                        <div class="stat-content">
+                                            <span class="stat-number" id="profile-distance">0<span class="stat-unit">km</span></span>
+                                            <span class="stat-name">Drawn</span>
+                                        </div>
+                                        <div class="stat-icon-glow"></div>
+                                    </div>
+                                    <div class="pilot-stat" data-stat="efficiency">
+                                        <div class="stat-bar-bg">
+                                            <div class="stat-bar-fill" style="--fill-percent: 0%"></div>
+                                        </div>
+                                        <div class="stat-content">
+                                            <span class="stat-number" id="profile-avg-efficiency">0<span class="stat-unit">%</span></span>
+                                            <span class="stat-name">Efficiency</span>
+                                        </div>
+                                        <div class="stat-icon-glow"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Navigation Log - Visited Locations -->
+                                <div class="navigation-log" id="navigation-log">
+                                    <div class="nav-log-frame">
+                                        <div class="nav-corner nav-corner-tl"></div>
+                                        <div class="nav-corner nav-corner-tr"></div>
+                                        <div class="nav-corner nav-corner-bl"></div>
+                                        <div class="nav-corner nav-corner-br"></div>
+                                    </div>
+                                    <div class="nav-log-header">
+                                        <span class="nav-log-label">
+                                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                                            </svg>
+                                            NAVIGATION LOG
+                                        </span>
+                                        <span class="nav-log-count" id="journey-rounds">0 rounds</span>
+                                    </div>
+                                    <div class="nav-log-list" id="nav-log-list">
+                                        <div class="nav-log-empty">
+                                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1">
+                                                <circle cx="12" cy="12" r="10" stroke-dasharray="2 2"/>
+                                                <circle cx="12" cy="12" r="2"/>
+                                                <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+                                            </svg>
+                                            <span>No navigation data yet</span>
+                                        </div>
+                                    </div>
+                                    <div class="nav-log-fade"></div>
+                                    <div class="nav-log-scanline"></div>
                                 </div>
                             </div>
-                            <div class="user-stats">
-                                <div class="user-stat">
-                                    <span class="stat-value" id="profile-games">0</span>
-                                    <span class="stat-label">Games</span>
-                                </div>
-                                <div class="user-stat">
-                                    <span class="stat-value" id="profile-best">0%</span>
-                                    <span class="stat-label">Best</span>
-                                </div>
-                                <div class="user-stat">
-                                    <span class="stat-value" id="profile-rank">--</span>
-                                    <span class="stat-label">Rank</span>
-                                </div>
+
+                            <!-- Action Buttons -->
+                            <div class="profile-actions">
+                                <button id="remove-ads-btn" class="btn-holo-upgrade">
+                                    <span class="btn-holo-bg"></span>
+                                    <span class="btn-holo-text">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                        </svg>
+                                        Go Premium · $2.99
+                                    </span>
+                                </button>
+                                <button id="logout-btn" class="btn-holo-secondary">Sign Out</button>
                             </div>
-                            <button id="remove-ads-btn" class="btn btn-upgrade">Remove Ads - $2.99</button>
-                            <button id="logout-btn" class="btn btn-secondary">Log Out</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Callsign Prompt Modal (for new users) -->
+                <div id="callsign-modal" class="overlay hidden">
+                    <div class="overlay-content callsign-modal">
+                        <div class="callsign-header">
+                            <div class="callsign-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                    <path d="M12 14l-2 2 2 2 2-2-2-2z" stroke-width="1"/>
+                                </svg>
+                            </div>
+                            <h2>Welcome to Pathfindr</h2>
+                            <p class="callsign-subtitle">Choose your callsign</p>
+                        </div>
+                        <form id="callsign-form" class="callsign-form">
+                            <div class="callsign-input-wrapper">
+                                <input
+                                    type="text"
+                                    id="callsign-input"
+                                    placeholder="Enter callsign..."
+                                    minlength="2"
+                                    maxlength="20"
+                                    pattern="[a-zA-Z0-9_-]+"
+                                    required
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+                                <div class="callsign-input-glow"></div>
+                            </div>
+                            <p class="callsign-hint">2-20 characters. Letters, numbers, underscore, dash only.</p>
+                            <p id="callsign-error" class="callsign-error"></p>
+                            <button type="submit" id="callsign-submit" class="btn btn-primary btn-glow">
+                                <span>Confirm Callsign</span>
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -445,6 +594,12 @@
                 });
             });
 
+            // Journey map click - show full animation
+            const journeyMapPreview = document.getElementById('journey-map-preview');
+            journeyMapPreview?.addEventListener('click', () => {
+                PathfindrAuth.showJourneyAnimation();
+            });
+
             // Remove Ads purchase
             const removeAdsBtn = document.getElementById('remove-ads-btn');
             removeAdsBtn?.addEventListener('click', async () => {
@@ -468,6 +623,7 @@
                 const isLoggedIn = PathfindrAuth.isLoggedIn();
                 const formSection = document.getElementById('auth-form').parentElement;
                 const switchSection = document.querySelector('.auth-switch');
+                const socialSection = document.querySelector('.social-login');
                 const loggedInSection = document.getElementById('auth-logged-in');
 
                 if (isLoggedIn) {
@@ -475,6 +631,7 @@
                     formSection.querySelector('.auth-subtitle').style.display = 'none';
                     formSection.querySelector('h2').style.display = 'none';
                     switchSection.style.display = 'none';
+                    if (socialSection) socialSection.style.display = 'none';
                     loggedInSection.style.display = 'block';
 
                     // Update profile display
@@ -486,11 +643,15 @@
                     // Hide remove ads button if already purchased
                     document.getElementById('remove-ads-btn').style.display =
                         PathfindrAuth.hasPurchased() ? 'none' : 'block';
+
+                    // Load and display profile stats
+                    PathfindrAuth.updateProfileUI();
                 } else {
                     formSection.querySelector('form').style.display = 'block';
                     formSection.querySelector('.auth-subtitle').style.display = 'block';
                     formSection.querySelector('h2').style.display = 'block';
                     switchSection.style.display = 'flex';
+                    if (socialSection) socialSection.style.display = 'block';
                     loggedInSection.style.display = 'none';
                     usernameDisplay.textContent = '';
                 }

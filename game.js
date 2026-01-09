@@ -4529,6 +4529,40 @@ function calculateAndShowScore() {
         GameState.userPathNodes
     );
 
+    // Submit score to Supabase (if logged in)
+    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn()) {
+        const mapCenter = GameState.map.getCenter();
+        const locationName = document.getElementById('current-location')?.textContent || 'Unknown';
+
+        // Convert node IDs to lat/lng coordinates for storage
+        const userPathCoords = GameState.userPathNodes
+            .map(nodeId => GameState.nodes.get(nodeId))
+            .filter(pos => pos != null)
+            .map(pos => ({ lat: pos.lat, lng: pos.lng }));
+
+        const optimalPathCoords = GameState.optimalPath
+            .map(nodeId => GameState.nodes.get(nodeId))
+            .filter(pos => pos != null)
+            .map(pos => ({ lat: pos.lat, lng: pos.lng }));
+
+        PathfindrAuth.submitScore({
+            efficiency: efficiency,
+            locationName: locationName,
+            centerLat: mapCenter.lat,
+            centerLng: mapCenter.lng,
+            zoomLevel: GameState.map.getZoom(),
+            roundNumber: GameState.currentRound,
+            userPath: userPathCoords,
+            optimalPath: optimalPathCoords,
+        }).then(result => {
+            if (result.success) {
+                console.log('[Game] Score submitted for round', GameState.currentRound);
+            }
+        }).catch(err => {
+            console.warn('[Game] Score submission failed:', err);
+        });
+    }
+
     // Play the path found sound
     SoundEngine.pathFound();
 
@@ -4914,7 +4948,12 @@ function hideResults() {
     document.getElementById('results-panel').classList.remove('visible');
 }
 
-function showGameOver() {
+async function showGameOver() {
+    // Show placeholder ad first (if ads module is available)
+    if (typeof PathfindrAds !== 'undefined' && PathfindrAds.showPlaceholderAd) {
+        await PathfindrAds.showPlaceholderAd();
+    }
+
     // Animate the final score count-up
     const finalScoreEl = document.getElementById('final-score');
     animateFinalScore(GameState.totalScore, finalScoreEl);
