@@ -5,7 +5,8 @@
   "main": "game.js",
   "scripts": {
     "start": "npx serve .",
-    "build": "npx cap sync",
+    "build": "echo 'Static site - no build required'",
+    "build:mobile": "npx cap sync",
     "ios": "npx cap open ios",
     "android": "npx cap open android"
   },
