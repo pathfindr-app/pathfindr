@@ -94,6 +94,147 @@
                     </div>
                 </div>
 
+                <!-- Mode Selector Overlay -->
+                <div id="mode-selector" class="overlay hidden">
+                    <div class="overlay-content mode-select">
+                        <h2>Select Mode</h2>
+                        <p class="mode-subtitle">How do you want to play?</p>
+                        <div class="mode-options">
+                            <button class="mode-btn" data-mode="competitive">
+                                <div class="mode-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
+                                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
+                                        <path d="M4 22h16"/>
+                                        <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
+                                        <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
+                                    </svg>
+                                </div>
+                                <span class="mode-title">Competitive</span>
+                                <span class="mode-desc">5 rounds, beat the algorithm</span>
+                            </button>
+                            <button class="mode-btn premium-mode" data-mode="explorer">
+                                <span class="premium-tag">PREMIUM</span>
+                                <div class="mode-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                                    </svg>
+                                </div>
+                                <span class="mode-title">Explorer</span>
+                                <span class="mode-desc">Drop your own markers, free-roam</span>
+                            </button>
+                            <button class="mode-btn premium-mode" data-mode="visualizer">
+                                <span class="premium-tag">PREMIUM</span>
+                                <div class="mode-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                </div>
+                                <span class="mode-title">Visualizer</span>
+                                <span class="mode-desc">Watch A* pathfinding automatically</span>
+                            </button>
+                        </div>
+
+                        <!-- Difficulty Selector -->
+                        <div class="difficulty-selector">
+                            <span class="difficulty-label">Draw Precision</span>
+                            <div class="difficulty-options">
+                                <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
+                                    <span class="diff-name">Hard</span>
+                                    <span class="diff-desc">Precise</span>
+                                </button>
+                                <button class="difficulty-btn active" data-difficulty="medium" title="500m max click distance">
+                                    <span class="diff-name">Medium</span>
+                                    <span class="diff-desc">Balanced</span>
+                                </button>
+                                <button class="difficulty-btn" data-difficulty="easy" title="1km max click distance">
+                                    <span class="diff-name">Easy</span>
+                                    <span class="diff-desc">Relaxed</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explorer Mode Badge (minimal floating indicator) -->
+                <div id="explorer-badge" class="explorer-floating-badge hidden">
+                    <span class="badge-text">EXPLORER</span>
+                    <span class="badge-hint">Click map for options</span>
+                </div>
+
+                <!-- Explorer Context Menu (unified - all controls) -->
+                <div id="explorer-context-menu" class="explorer-context-menu hidden">
+                    <div class="context-menu-inner">
+                        <!-- Marker placement -->
+                        <div class="context-section">
+                            <button class="context-option" data-action="start">
+                                <span class="option-pip start-pip"></span>
+                                <span class="option-label">START</span>
+                            </button>
+                            <button class="context-option" data-action="end">
+                                <span class="option-pip end-pip"></span>
+                                <span class="option-label">END</span>
+                            </button>
+                        </div>
+                        <!-- Actions (shown when markers placed) -->
+                        <div class="context-section context-actions" id="context-actions">
+                            <div class="context-divider"></div>
+                            <button class="context-option action-option" data-action="challenge">
+                                <span class="option-pip challenge-pip"></span>
+                                <span class="option-label">CHALLENGE</span>
+                            </button>
+                            <button class="context-option action-option" data-action="showroute">
+                                <span class="option-pip route-pip"></span>
+                                <span class="option-label">SHOW ROUTE</span>
+                            </button>
+                        </div>
+                        <!-- Utilities -->
+                        <div class="context-section">
+                            <div class="context-divider"></div>
+                            <button class="context-option util-option" data-action="clearpaths">
+                                <span class="option-label dim">CLEAR PATHS</span>
+                            </button>
+                            <button class="context-option util-option" data-action="reset">
+                                <span class="option-label dim">RESET</span>
+                            </button>
+                            <button class="context-option util-option" data-action="exit">
+                                <span class="option-label dim">EXIT</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- City Transition Overlay -->
+                <div id="city-transition" class="city-transition hidden">
+                    <div class="city-transition-content">
+                        <span class="transition-label">NEXT ARENA</span>
+                        <span class="transition-city" id="transition-city-name">Loading...</span>
+                        <div class="transition-stats">
+                            <span class="transition-stat">
+                                <span class="stat-label">Cities</span>
+                                <span class="stat-value" id="transition-cities-count">1</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Visualizer Mode UI (minimal floating controls) -->
+                <div id="visualizer-ui" class="visualizer-ui hidden">
+                    <div class="visualizer-header">
+                        <span class="visualizer-badge">VISUALIZER</span>
+                        <span class="visualizer-city" id="visualizer-city">Loading...</span>
+                        <span class="visualizer-count" id="visualizer-count">1/5</span>
+                    </div>
+                    <button id="visualizer-exit-btn" class="visualizer-exit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                        Exit
+                    </button>
+                </div>
+
                 <!-- Location Selector Overlay -->
                 <div id="location-selector" class="overlay hidden">
                     <div class="overlay-content location-select">

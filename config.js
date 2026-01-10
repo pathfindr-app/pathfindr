@@ -78,6 +78,16 @@ const PathfindrConfig = {
     playerJourney: true,
     rewardedAds: true,
   },
+
+  // ===========================================
+  // ADMIN CONFIGURATION
+  // ===========================================
+  admin: {
+    // Emails that have admin privileges (ad-free, all features, etc.)
+    emails: [
+      'pathfindr.game@gmail.com',
+    ],
+  },
 };
 
 // Detect platform
@@ -90,8 +100,18 @@ PathfindrConfig.platform = (() => {
 
 // Helper to check if user has purchased ad-free
 PathfindrConfig.isAdFree = () => {
+  // Admins are always ad-free
+  if (PathfindrConfig.isAdmin()) return true;
   // This will be set by auth.js when user data loads
   return window.pathfindrUser?.has_purchased === true;
+};
+
+// Helper to check if current user is an admin
+PathfindrConfig.isAdmin = () => {
+  const userEmail = window.pathfindrUser?.email ||
+                    (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.currentUser?.email);
+  if (!userEmail) return false;
+  return PathfindrConfig.admin.emails.includes(userEmail.toLowerCase());
 };
 
 // Export for use in other modules

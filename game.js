@@ -78,14 +78,21 @@ const CONFIG = {
     totalRounds: 5,
     minRoutePoints: 2,
 
+    // Segment distance limits by difficulty (in km)
+    segmentDistance: {
+        hard: 0.25,    // 250 meters - most granular, requires many clicks
+        medium: 0.5,   // 500 meters - balanced gameplay
+        easy: 1.0      // 1 kilometer - allows longer segments
+    },
+
     // Visualization settings - OPTIMIZED for performance
     viz: {
         explorationDelay: 5,        // ms between exploration batches
         batchSize: 8,               // nodes per batch
         nodeGlowRadius: 14,         // base glow radius (reduced)
         edgeWidth: 3,               // base edge width (reduced)
-        heatDecay: 0.992,           // slower decay - explored edges persist longer
-        heatFloor: 0.15,            // minimum heat - explored edges never fully fade
+        heatDecay: 0.997,           // very slow decay - explored edges persist much longer
+        heatFloor: 0.4,             // high minimum heat - explored edges stay clearly visible
         pulseSpeed: 0.05,           // pulse animation speed
         particleCount: 25,          // reduced particle count
         pathTraceSpeed: 15,         // ms per path segment
@@ -126,7 +133,7 @@ const CONFIG = {
         flickerIntensity: 0.15,     // line flicker amount
         arcFrequency: 0.02,         // chance of arc spark per frame
         wobbleAmount: 1.5,          // pixel wobble from noise
-        idleIntensity: 0.35,        // brightness of idle rounds
+        idleIntensity: 0.6,         // brightness of idle/persistent paths (higher = more visible)
         activeIntensity: 1.0,       // brightness of active round
     },
 
@@ -1075,7 +1082,7 @@ const SoundEngine = {
         this.activeSources.soundtrack = { source, gainNode };
     },
 
-    // Stop soundtrack
+    // Stop soundtrack (abrupt)
     stopSoundtrack() {
         if (this.activeSources.soundtrack) {
             try {
@@ -1083,6 +1090,30 @@ const SoundEngine = {
             } catch (e) {}
             this.activeSources.soundtrack = null;
         }
+    },
+
+    // Fade out soundtrack smoothly
+    fadeOutSoundtrack(duration = 1000) {
+        if (!this.activeSources.soundtrack) return Promise.resolve();
+
+        return new Promise(resolve => {
+            const { source, gainNode } = this.activeSources.soundtrack;
+            const now = this.ctx.currentTime;
+            const fadeTime = duration / 1000;
+
+            // Smoothly fade to 0
+            gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+            gainNode.gain.linearRampToValueAtTime(0, now + fadeTime);
+
+            // Stop after fade completes
+            setTimeout(() => {
+                try {
+                    source.stop();
+                } catch (e) {}
+                this.activeSources.soundtrack = null;
+                resolve();
+            }, duration + 50);
+        });
     },
 
     // Play scanning sound (for A* exploration)
@@ -1096,12 +1127,16 @@ const SoundEngine = {
         source.buffer = this.buffers.scanning;
         source.loop = false;  // Ensure no looping
 
-        // Full volume - no attenuation
-        source.connect(this.masterGain);
+        // Create gain node for fade out capability
+        const gainNode = this.ctx.createGain();
+        gainNode.gain.value = 1.0;
+
+        source.connect(gainNode);
+        gainNode.connect(this.masterGain);
         source.start();
 
-        // Track so we can stop it
-        this.activeSources.scanning = { source };
+        // Track so we can stop/fade it
+        this.activeSources.scanning = { source, gainNode };
 
         // Auto-cleanup when done
         source.onended = () => {
@@ -1109,7 +1144,7 @@ const SoundEngine = {
         };
     },
 
-    // Stop scanning sound
+    // Stop scanning sound (abrupt)
     stopScanning() {
         if (this.activeSources.scanning) {
             try {
@@ -1119,12 +1154,44 @@ const SoundEngine = {
         }
     },
 
+    // Fade out scanning sound smoothly
+    fadeOutScanning(duration = 500) {
+        if (!this.activeSources.scanning) return Promise.resolve();
+
+        return new Promise(resolve => {
+            const { source, gainNode } = this.activeSources.scanning;
+
+            // If no gainNode, just stop abruptly
+            if (!gainNode) {
+                this.stopScanning();
+                resolve();
+                return;
+            }
+
+            const now = this.ctx.currentTime;
+            const fadeTime = duration / 1000;
+
+            // Smoothly fade to 0
+            gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+            gainNode.gain.linearRampToValueAtTime(0, now + fadeTime);
+
+            // Stop after fade completes
+            setTimeout(() => {
+                try {
+                    source.stop();
+                } catch (e) {}
+                this.activeSources.scanning = null;
+                resolve();
+            }, duration + 50);
+        });
+    },
+
     // Play path found sound
     pathFound() {
         if (!this.initialized || this.muted || !this.buffers.found) return;
 
-        // Stop scanning sound when path is found
-        this.stopScanning();
+        // Fade out scanning sound when path is found (quick fade)
+        this.fadeOutScanning(200);
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.buffers.found;
@@ -1927,12 +1994,21 @@ const AmbientViz = {
         const width = GameState.vizCanvas.width;
         const height = GameState.vizCanvas.height;
 
-        // Update systems
+        // Update systems (always update regardless of viz state)
         this.updateProximityToEnd();
         RoundHistory.update(deltaTime);
+        ExplorerHistory.update(deltaTime);
+        VisualizerHistory.update(deltaTime);
         ElectricitySystem.update(deltaTime);
 
-        // Clear canvas
+        // When A* viz is active, let renderVisualization() handle ALL rendering
+        // to avoid two loops fighting over the canvas
+        if (GameState.vizState.active) {
+            this.animationId = requestAnimationFrame(() => this.loop());
+            return;
+        }
+
+        // Clear canvas (only when viz is NOT active)
         ctx.clearRect(0, 0, width, height);
 
         // Layer 0: WebGL road network (always render if available and we have edges)
@@ -1945,18 +2021,19 @@ const AmbientViz = {
             drawRoadNetwork(ctx);
         }
 
-        // Layer 2: Round history (persistent visualization from previous rounds)
-        // Always render - previous rounds should persist during new visualizations
-        this.renderRoundHistory(ctx, deltaTime, GameState.vizState.active);
-
-        // Layer 3: Current A* exploration OR ambient particles
-        if (GameState.vizState.active) {
-            // A* visualization is running - let renderVisualization handle it
-            // (it's called from its own loop)
+        // Layer 2: History rendering (persistent visualization from previous paths/rounds)
+        // Render the appropriate history based on game mode
+        if (GameState.gameMode === 'explorer') {
+            this.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
+        } else if (GameState.gameMode === 'visualizer') {
+            this.renderPathHistory(ctx, deltaTime, VisualizerHistory.getPaths(), false);
         } else {
-            // Ambient gameplay - particles and marker auras
-            this.render(ctx, width, height, deltaTime);
+            // Competitive mode - render round history
+            this.renderRoundHistory(ctx, deltaTime, false);
         }
+
+        // Layer 3: Ambient gameplay - particles and marker auras
+        this.render(ctx, width, height, deltaTime);
 
         // Layer 4: Arc sparks (always render on top)
         ElectricitySystem.renderArcs(ctx);
@@ -1964,8 +2041,8 @@ const AmbientViz = {
         // Layer 5: Trace animation for user path clicks
         renderTraceAnimation(ctx);
 
-        // Layer 6: Animate user path with electricity (when drawing, not during A* viz)
-        if (GameState.gameStarted && !GameState.vizState.active && GameState.userPathNodes.length >= 2) {
+        // Layer 6: Animate user path with electricity (when drawing)
+        if (GameState.gameStarted && GameState.userPathNodes.length >= 2) {
             redrawUserPath();
         }
 
@@ -2030,6 +2107,147 @@ const AmbientViz = {
                 }
             }
         }
+    },
+
+    // Render path history for Explorer/Visualizer modes (uses same structure as RoundHistory)
+    // OPTIMIZED: Uses cached screen coordinates and simplified idle rendering
+    renderPathHistory(ctx, deltaTime, paths, isVizActive = false) {
+        // During active visualization, dim previous paths to 40%
+        const vizDimFactor = isVizActive ? 0.4 : 1.0;
+
+        // Check if map moved (invalidates all caches)
+        const mapCenter = GameState.map.getCenter();
+        const mapZoom = GameState.map.getZoom();
+        const mapState = `${mapCenter.lat.toFixed(6)},${mapCenter.lng.toFixed(6)},${mapZoom}`;
+
+        for (const path of paths) {
+            // OPTIMIZATION: Use cached screen coordinates if map hasn't moved
+            if (!path.cacheValid || path.lastMapState !== mapState) {
+                // Rebuild cache
+                path.screenEdgesCache = [];
+                for (const edgeKey of path.exploredEdges) {
+                    const edge = GameState.edgeLookup.get(edgeKey);
+                    if (edge) {
+                        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
+                        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+                        path.screenEdgesCache.push({ from, to });
+                    }
+                }
+
+                // Cache optimal path points
+                if (path.optimalPath.length > 1) {
+                    path.optimalPointsCache = path.optimalPath.map(nodeId => {
+                        const pos = GameState.nodes.get(nodeId);
+                        if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                        return null;
+                    }).filter(p => p !== null);
+                }
+
+                // Cache user path points (Explorer mode)
+                if (path.userPath && path.userPath.length > 1) {
+                    path.userPointsCache = path.userPath.map(nodeId => {
+                        const pos = GameState.nodes.get(nodeId);
+                        if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                        return null;
+                    }).filter(p => p !== null);
+                }
+
+                path.lastMapState = mapState;
+                path.cacheValid = true;
+            }
+
+            const screenEdges = path.screenEdgesCache || [];
+            const isActive = path.state === 'surging' && !isVizActive;
+            const effectiveIntensity = path.intensity * vizDimFactor;
+
+            // OPTIMIZATION: Use simplified rendering for idle paths (no wobble/arcs)
+            if (path.state === 'idle' && !isActive) {
+                this.renderSimplifiedEdges(ctx, screenEdges, path.color, effectiveIntensity);
+            } else {
+                ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, path.color, effectiveIntensity, isActive);
+            }
+
+            // Render optimal path
+            const optimalPoints = path.optimalPointsCache;
+            if (optimalPoints && optimalPoints.length > 1) {
+                if (!path.optimalPulses) {
+                    path.optimalPulses = ElectricitySystem.createPulses(optimalPoints, path.color, 6);
+                }
+                // OPTIMIZATION: Simplified path rendering for idle paths
+                if (path.state === 'idle') {
+                    this.renderSimplifiedPath(ctx, optimalPoints, path.color, effectiveIntensity);
+                } else {
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, path.color, effectiveIntensity, path.optimalPulses);
+                }
+            }
+
+            // Render user path (if exists - Explorer mode)
+            const userPoints = path.userPointsCache;
+            if (userPoints && userPoints.length > 1) {
+                ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity);
+            }
+        }
+    },
+
+    // OPTIMIZATION: Simplified edge rendering for idle paths (no wobble, fewer layers)
+    renderSimplifiedEdges(ctx, edges, color, intensity) {
+        if (edges.length === 0) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Just 2 layers instead of 4-5
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * intensity})`;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        for (const edge of edges) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.4 * intensity})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const edge of edges) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    // OPTIMIZATION: Simplified path rendering for idle paths (2 layers instead of 5)
+    renderSimplifiedPath(ctx, points, color, intensity) {
+        if (points.length < 2) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Outer glow only
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * intensity})`;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Core
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * intensity})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
     },
 
     // Render optimal path with flowing electricity
@@ -2189,6 +2407,149 @@ const RoundHistory = {
 };
 
 // =============================================================================
+// EXPLORER HISTORY - Persistent Path Visualization for Explorer Mode
+// =============================================================================
+
+const ExplorerHistory = {
+    paths: [],      // Array of completed path data
+    pathIndex: 0,   // For cycling through colors
+
+    // Add completed path to history
+    addPath(exploredEdges, optimalPath, userPath = []) {
+        const color = CONFIG.roundColors[this.pathIndex % CONFIG.roundColors.length];
+        this.pathIndex++;
+
+        // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
+        const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
+
+        this.paths.push({
+            exploredEdges: new Set(sampledEdges),
+            optimalPath: [...optimalPath],
+            userPath: [...userPath],
+            color,
+            state: 'surging',
+            intensity: 1.0,
+            surgeStartTime: performance.now(),
+            optimalPulses: null,
+            // OPTIMIZATION: Cache screen coordinates
+            screenEdgesCache: null,
+            optimalPointsCache: null,
+            userPointsCache: null,
+            cacheValid: false,
+        });
+    },
+
+    // Update all path states (same state machine as RoundHistory)
+    update(deltaTime) {
+        const now = performance.now();
+
+        for (const path of this.paths) {
+            if (path.state === 'surging') {
+                const elapsed = now - path.surgeStartTime;
+                if (elapsed > 800) {
+                    path.state = 'settling';
+                    path.settleStartTime = now;
+                }
+            } else if (path.state === 'settling') {
+                const elapsed = now - path.settleStartTime;
+                const settleProgress = Math.min(1, elapsed / 1000);
+                path.intensity = 1.0 - (settleProgress * (1 - CONFIG.electricity.idleIntensity));
+
+                if (settleProgress >= 1) {
+                    path.state = 'idle';
+                    path.intensity = CONFIG.electricity.idleIntensity;
+                }
+            }
+        }
+    },
+
+    // Clear all history
+    clear() {
+        this.paths = [];
+        this.pathIndex = 0;
+    },
+
+    // Get all paths for rendering
+    getPaths() {
+        return this.paths;
+    },
+
+    // Check if there are paths to render
+    hasHistory() {
+        return this.paths.length > 0;
+    }
+};
+
+// =============================================================================
+// VISUALIZER HISTORY - Persistent Path Visualization for Visualizer Mode
+// =============================================================================
+
+const VisualizerHistory = {
+    paths: [],
+    pathIndex: 0,
+    lastMapState: null,  // Track map position for cache invalidation
+
+    addPath(exploredEdges, optimalPath) {
+        const color = CONFIG.roundColors[this.pathIndex % CONFIG.roundColors.length];
+        this.pathIndex++;
+
+        // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
+        // This dramatically reduces rendering load while maintaining visual effect
+        const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
+
+        this.paths.push({
+            exploredEdges: new Set(sampledEdges),
+            optimalPath: [...optimalPath],
+            color,
+            state: 'surging',
+            intensity: 1.0,
+            surgeStartTime: performance.now(),
+            optimalPulses: null,
+            // OPTIMIZATION: Cache screen coordinates (invalidated on map move)
+            screenEdgesCache: null,
+            optimalPointsCache: null,
+            cacheValid: false,
+        });
+    },
+
+    update(deltaTime) {
+        const now = performance.now();
+
+        for (const path of this.paths) {
+            if (path.state === 'surging') {
+                const elapsed = now - path.surgeStartTime;
+                if (elapsed > 800) {
+                    path.state = 'settling';
+                    path.settleStartTime = now;
+                }
+            } else if (path.state === 'settling') {
+                const elapsed = now - path.settleStartTime;
+                const settleProgress = Math.min(1, elapsed / 1000);
+                path.intensity = 1.0 - (settleProgress * (1 - CONFIG.electricity.idleIntensity));
+
+                if (settleProgress >= 1) {
+                    path.state = 'idle';
+                    path.intensity = CONFIG.electricity.idleIntensity;
+                }
+            }
+        }
+    },
+
+    clear() {
+        this.paths = [];
+        this.pathIndex = 0;
+    },
+
+    getPaths() {
+        return this.paths;
+    },
+
+    hasHistory() {
+        return this.paths.length > 0;
+    }
+};
+
+// =============================================================================
 // ELECTRICITY SYSTEM - Organic Electric Effects
 // =============================================================================
 
@@ -2198,11 +2559,18 @@ const ElectricitySystem = {
     arcs: [],          // Active arc sparks
     lastCrackle: 0,
 
-    // Simple noise function for organic movement
+    // Enhanced multi-octave noise for organic movement
     noise(x, y, t) {
-        return Math.sin(x * 0.1 + t) * Math.cos(y * 0.1 + t * 0.7) * 0.5 +
-               Math.sin(x * 0.05 - t * 0.5) * 0.3 +
-               Math.cos(y * 0.08 + t * 0.3) * 0.2;
+        // Layer 1: Large scale undulation
+        const large = Math.sin(x * 0.08 + t * 0.9) * Math.cos(y * 0.08 + t * 0.6) * 0.4;
+        // Layer 2: Medium frequency
+        const medium = Math.sin(x * 0.15 - t * 1.3) * Math.cos(y * 0.12 + t * 0.8) * 0.3;
+        // Layer 3: High frequency detail
+        const detail = Math.sin(x * 0.25 + t * 2.1) * Math.cos(y * 0.22 - t * 1.7) * 0.15;
+        // Layer 4: Rapid shimmer
+        const shimmer = Math.sin(x * 0.4 + y * 0.3 + t * 4) * 0.1;
+
+        return large + medium + detail + shimmer;
     },
 
     // Initialize pulses for a path
@@ -2270,12 +2638,23 @@ const ElectricitySystem = {
         }
     },
 
-    // Get flicker multiplier for organic pulsing
+    // Get flicker multiplier for organic pulsing - enhanced with more natural variation
     getFlicker() {
-        const base = Math.sin(this.time * 15) * 0.05;
-        const fast = Math.sin(this.time * 47) * 0.03;
-        const random = (Math.random() - 0.5) * CONFIG.electricity.flickerIntensity;
-        return 1 + base + fast + random;
+        const t = this.time;
+        // Slow breathing rhythm
+        const breath = Math.sin(t * 4.5) * 0.06;
+        // Primary electrical pulse
+        const pulse = Math.sin(t * 17) * 0.04;
+        // Fast high-frequency shimmer
+        const shimmer = Math.sin(t * 53) * 0.025;
+        // Very fast micro-flicker
+        const micro = Math.sin(t * 97) * 0.015;
+        // Organic randomness
+        const random = (Math.random() - 0.5) * CONFIG.electricity.flickerIntensity * 0.8;
+        // Occasional intensity spike
+        const spike = Math.max(0, Math.sin(t * 2.3) - 0.85) * 0.3;
+
+        return 1 + breath + pulse + shimmer + micro + random + spike;
     },
 
     // Get wobble offset for a point
@@ -2536,6 +2915,36 @@ const GameState = {
         largestComponent: 0,
     },
 
+    // Game mode
+    gameMode: 'competitive',  // 'competitive' | 'explorer' | 'visualizer'
+    difficulty: 'medium',     // 'easy' | 'medium' | 'hard' - controls max segment distance
+
+    // Visualizer mode state
+    visualizerState: {
+        active: false,
+        currentVisualization: 0,
+        maxPerCity: 5,
+        loopTimeout: null,
+        delayBetweenRuns: 3000,  // ms between visualizations
+    },
+
+    // Explorer mode state
+    explorerState: {
+        placingStart: false,
+        placingEnd: false,
+        customStart: null,
+        customEnd: null,
+    },
+
+    // Continuous play state
+    continuousPlay: {
+        enabled: false,
+        citiesCompleted: 0,
+        preloadedCity: null,
+        preloadedData: null,
+        cityScores: [],
+    },
+
     // Game state
     startNode: null,
     endNode: null,
@@ -2615,9 +3024,12 @@ document.addEventListener('DOMContentLoaded', () => {
     AmbientViz.init();  // Initialize glow sprites
     initEventListeners();
     initSoundListeners();
+    initModeSelector();
     initLocationSelector();
-    // Show location selector instead of loading immediately
-    showLocationSelector();
+    initVisualizerUI();
+    initExplorerUI();
+    // Show mode selector first
+    showModeSelector();
 });
 
 // Initialize sound on first user interaction
@@ -2899,7 +3311,16 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
 
         document.getElementById('current-location').textContent = location.name;
         hideLoading();
-        showInstructions();
+
+        // Handle different game modes after road network loads
+        if (GameState.gameMode === 'explorer') {
+            startExplorerMode();
+        } else if (GameState.gameMode === 'visualizer') {
+            // Visualizer handles its own flow
+        } else {
+            // Competitive mode - show instructions
+            showInstructions();
+        }
 
     } catch (error) {
         console.error(`Road network loading (server ${serverIndex + 1}, attempt ${retryCount + 1}):`, error);
@@ -3043,12 +3464,22 @@ function nextRound() {
         GameState.currentRound++;
         updateRoundDisplay();
 
+        // Trigger preload during round 4 if continuous play is enabled
+        if (GameState.currentRound === 4 && GameState.continuousPlay.enabled) {
+            preloadNextCity();
+        }
+
         // Stay in same city, just pick new endpoints with increased distance
         selectRandomEndpoints();
         enableDrawing();
     } else {
-        showGameOver();
-        AmbientViz.stop();
+        // End of 5 rounds - check for continuous play
+        if (GameState.continuousPlay.enabled) {
+            transitionToNextCity();
+        } else {
+            showGameOver();
+            AmbientViz.stop();
+        }
     }
 }
 
@@ -3076,8 +3507,15 @@ function playAgain() {
     // Clear persistent round history
     RoundHistory.clear();
 
-    // Show location selector for new game
-    showLocationSelector();
+    // Reset game mode to competitive
+    GameState.gameMode = 'competitive';
+
+    // Reset continuous play state and remove HUD indicator
+    disableContinuousPlay();
+    removeContinuousHUD();
+
+    // Show mode selector for new game
+    showModeSelector();
 }
 
 function selectRandomEndpoints() {
@@ -3113,15 +3551,22 @@ function selectRandomEndpoints() {
     const nodesToUse = eligibleNodes.length >= 20 ? eligibleNodes : nodeIds;
 
     // Scale distance based on round number (round 1 = short, round 5 = epic cityscape)
-    const round = GameState.currentRound || 1;
-    const distanceScales = [
-        { min: 0.3, max: 0.6 },   // Round 1: warm up (~3-6 blocks)
-        { min: 0.5, max: 1.0 },   // Round 2: getting comfortable
-        { min: 1.0, max: 2.0 },   // Round 3: neighborhood scale
-        { min: 2.0, max: 3.5 },   // Round 4: cross-neighborhood
-        { min: 3.0, max: 6.0 }    // Round 5: epic cityscape (~quarter city)
-    ];
-    const scale = distanceScales[Math.min(round - 1, 4)];
+    // EXCEPTION: Visualizer mode always uses epic distances
+    let scale;
+    if (GameState.gameMode === 'visualizer') {
+        // Visualizer always gets epic, cinematic routes
+        scale = { min: 3.0, max: 6.0 };
+    } else {
+        const round = GameState.currentRound || 1;
+        const distanceScales = [
+            { min: 0.3, max: 0.6 },   // Round 1: warm up (~3-6 blocks)
+            { min: 0.5, max: 1.0 },   // Round 2: getting comfortable
+            { min: 1.0, max: 2.0 },   // Round 3: neighborhood scale
+            { min: 2.0, max: 3.5 },   // Round 4: cross-neighborhood
+            { min: 3.0, max: 6.0 }    // Round 5: epic cityscape (~quarter city)
+        ];
+        scale = distanceScales[Math.min(round - 1, 4)];
+    }
 
     let attempts = 0;
     let minDistance = scale.min;
@@ -3806,33 +4251,20 @@ function startRenderLoop() {
     render();
 }
 
-// Ambient road network with warm radial glow - visible during A* visualization
+// Ambient road network - subtle glow that stays locked to roads
 function drawAmbientRoads(ctx, time, width, height) {
     const edges = ScreenCoordCache.getEdges();
     if (edges.length === 0) return;
 
-    const centerX = width / 2;
-    const centerY = height / 2;
-
     // Gentle breathing pulse
     const breathe = 0.85 + 0.15 * Math.sin(time * 0.6);
-
-    // Create radial gradient for warm center falloff
-    const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-
-    // Warm amber/orange at center fading to deep purple at edges
-    gradient.addColorStop(0, `rgba(180, 100, 60, ${0.35 * breathe})`);
-    gradient.addColorStop(0.3, `rgba(140, 60, 90, ${0.28 * breathe})`);
-    gradient.addColorStop(0.6, `rgba(100, 40, 120, ${0.20 * breathe})`);
-    gradient.addColorStop(1, `rgba(60, 20, 80, ${0.10 * breathe})`);
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Outer warm glow layer
-    ctx.strokeStyle = gradient;
+    // Outer warm glow layer - solid color (no screen-centered gradient)
+    ctx.strokeStyle = `rgba(120, 60, 90, ${0.2 * breathe})`;
     ctx.lineWidth = 6;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -3842,7 +4274,8 @@ function drawAmbientRoads(ctx, time, width, height) {
     }
     ctx.stroke();
 
-    // Mid glow layer - slightly brighter
+    // Mid glow layer
+    ctx.strokeStyle = `rgba(140, 70, 100, ${0.22 * breathe})`;
     ctx.lineWidth = 3;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -3852,13 +4285,8 @@ function drawAmbientRoads(ctx, time, width, height) {
     }
     ctx.stroke();
 
-    // Core roads - warm white/amber core
-    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-    coreGradient.addColorStop(0, `rgba(255, 200, 150, ${0.25 * breathe})`);
-    coreGradient.addColorStop(0.4, `rgba(200, 120, 100, ${0.18 * breathe})`);
-    coreGradient.addColorStop(1, `rgba(120, 60, 100, ${0.08 * breathe})`);
-
-    ctx.strokeStyle = coreGradient;
+    // Core roads - warm amber core
+    ctx.strokeStyle = `rgba(180, 100, 80, ${0.15 * breathe})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -3877,10 +4305,27 @@ function renderVisualization() {
 
     ctx.clearRect(0, 0, width, height);
 
+    // Render persistent history FIRST (underneath current visualization)
+    // This ensures previous paths stay visible during new visualizations
+    if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
+        AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), true);
+    } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
+        AmbientViz.renderPathHistory(ctx, 16, VisualizerHistory.getPaths(), true);
+    } else if (GameState.gameMode === 'competitive') {
+        // Competitive mode - render round history
+        AmbientViz.renderRoundHistory(ctx, 16, true);
+    }
+
     viz.pulsePhase += CONFIG.viz.pulseSpeed;
 
     const time = performance.now() * 0.001;
-    const flicker = 0.85 + Math.sin(time * 30) * 0.02 + Math.sin(time * 7) * 0.03 + (Math.random() - 0.5) * 0.05;
+    // Enhanced organic flicker - multiple layered sine waves with phase offsets
+    const flicker = 0.88 +
+        Math.sin(time * 23) * 0.03 +           // Primary pulse
+        Math.sin(time * 7.3) * 0.04 +          // Slow breathing
+        Math.sin(time * 47) * 0.015 +          // High frequency shimmer
+        Math.sin(time * 3.7 + 1.2) * 0.02 +    // Very slow undulation
+        (Math.random() - 0.5) * 0.04;          // Organic noise
 
     // Decay heat values with floor - explored edges never fully fade
     const heatFloor = CONFIG.viz.heatFloor;
@@ -3928,10 +4373,14 @@ function renderVisualization() {
             }
         }
 
-        // High heat - bright cyan with glow
+        // Enhanced layered heat with falloff zones - "Neural Network" aesthetic
+        // Each heat level gets multiple glow layers for depth
+
+        // High heat - bright cyan with layered falloff
         if (edgesByHeat.high.length > 0) {
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
-            ctx.lineWidth = 12;
+            // Outer atmospheric glow (falloff zone 3)
+            ctx.strokeStyle = 'rgba(0, 200, 255, 0.08)';
+            ctx.lineWidth = 24;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -3939,8 +4388,39 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+            // Secondary glow (falloff zone 2)
+            ctx.strokeStyle = 'rgba(0, 220, 255, 0.15)';
+            ctx.lineWidth = 16;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.high) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            // Primary glow (falloff zone 1)
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.high) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            // Hot core
+            ctx.strokeStyle = `rgba(0, 240, 255, ${0.85 * flicker})`;
             ctx.lineWidth = 4;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.high) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            // White hot center
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * flicker})`;
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -3949,9 +4429,20 @@ function renderVisualization() {
             ctx.stroke();
         }
 
-        // Medium heat - purple
+        // Medium heat - purple with layered falloff
         if (edgesByHeat.medium.length > 0) {
-            ctx.strokeStyle = 'rgba(184, 41, 221, 0.25)';
+            // Outer atmospheric glow
+            ctx.strokeStyle = 'rgba(160, 40, 200, 0.06)';
+            ctx.lineWidth = 18;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.medium) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            // Primary glow
+            ctx.strokeStyle = 'rgba(184, 41, 221, 0.2)';
             ctx.lineWidth = 10;
             ctx.beginPath();
             for (const edge of edgesByHeat.medium) {
@@ -3960,7 +4451,8 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            ctx.strokeStyle = 'rgba(184, 41, 221, 0.8)';
+            // Core
+            ctx.strokeStyle = `rgba(184, 41, 221, ${0.75 * flicker})`;
             ctx.lineWidth = 3;
             ctx.beginPath();
             for (const edge of edgesByHeat.medium) {
@@ -3970,9 +4462,20 @@ function renderVisualization() {
             ctx.stroke();
         }
 
-        // Low heat - pink fading
+        // Low heat - pink with subtle falloff
         if (edgesByHeat.low.length > 0) {
-            ctx.strokeStyle = 'rgba(255, 42, 109, 0.4)';
+            // Subtle outer glow
+            ctx.strokeStyle = 'rgba(255, 42, 109, 0.1)';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            for (const edge of edgesByHeat.low) {
+                ctx.moveTo(edge.from.x, edge.from.y);
+                ctx.lineTo(edge.to.x, edge.to.y);
+            }
+            ctx.stroke();
+
+            // Core
+            ctx.strokeStyle = `rgba(255, 42, 109, ${0.45 * flicker})`;
             ctx.lineWidth = 2;
             ctx.beginPath();
             for (const edge of edgesByHeat.low) {
@@ -4031,6 +4534,41 @@ function getHeatColor(heat) {
     };
 }
 
+// Helper: Draw smooth bezier curve through points
+function drawSmoothPath(ctx, points) {
+    if (points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    if (points.length === 2) {
+        // Just a line for 2 points
+        ctx.lineTo(points[1].x, points[1].y);
+    } else {
+        // Use quadratic bezier curves for smooth interpolation
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i];
+            const p1 = points[i + 1];
+
+            if (i === 0) {
+                // First segment - line to midpoint
+                const midX = (p0.x + p1.x) / 2;
+                const midY = (p0.y + p1.y) / 2;
+                ctx.lineTo(midX, midY);
+            } else if (i === points.length - 2) {
+                // Last segment - curve to end point
+                ctx.quadraticCurveTo(p0.x, p0.y, p1.x, p1.y);
+            } else {
+                // Middle segments - curve to midpoint of next segment
+                const p2 = points[i + 2];
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+                ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
+            }
+        }
+    }
+}
+
 function drawOptimalPath(ctx) {
     const path = GameState.optimalPath;
     const progress = GameState.vizState.pathProgress;
@@ -4055,9 +4593,10 @@ function drawOptimalPath(ctx) {
     // Use lighter composite for glow effect (NO shadowBlur!)
     ctx.globalCompositeOperation = 'lighter';
 
-    // Draw glow layers - wider and more transparent first
+    // Draw glow layers with smooth bezier curves - wider and more transparent first
     const layers = [
-        { color: 'rgba(0, 240, 255, 0.15)', width: 16 },
+        { color: 'rgba(0, 200, 255, 0.08)', width: 24 },   // Outer atmospheric
+        { color: 'rgba(0, 220, 255, 0.15)', width: 16 },
         { color: 'rgba(0, 240, 255, 0.3)', width: 10 },
         { color: 'rgba(0, 240, 255, 0.5)', width: 6 },
         { color: 'rgba(150, 255, 255, 0.8)', width: 3 },
@@ -4066,24 +4605,16 @@ function drawOptimalPath(ctx) {
     for (const layer of layers) {
         ctx.strokeStyle = layer.color;
         ctx.lineWidth = layer.width;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        drawSmoothPath(ctx, points);
         ctx.stroke();
     }
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // Bright white core
+    // Bright white core with smooth curve
     ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
+    drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Energy pulses along completed path using sprites
@@ -4237,6 +4768,20 @@ function addPointToUserPath(lat, lng) {
     // Avoid duplicate consecutive nodes
     if (targetNode === lastNode) return false;
 
+    // Check max segment distance (prevents clicking directly on endpoint)
+    if (GameState.gameMode !== 'explorer') {
+        const lastPos = GameState.nodes.get(lastNode);
+        const targetPos = GameState.nodes.get(targetNode);
+        if (lastPos && targetPos) {
+            const clickDistance = haversineDistance(lastPos.lat, lastPos.lng, targetPos.lat, targetPos.lng);
+            const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+            if (clickDistance > maxDistance) {
+                showDistanceRejectionFeedback();
+                return false;
+            }
+        }
+    }
+
     // Use micro A* to find the path along roads
     const microPath = findShortestPathBetween(lastNode, targetNode);
 
@@ -4283,16 +4828,43 @@ function addPointToUserPath(lat, lng) {
                 recalculateUserDistance();
                 updateAllDistanceDisplays();
             }
-            // Delay for trace animation to complete, then auto-submit
-            setTimeout(() => {
-                if (!GameState.vizState.active) {
-                    submitRoute();
-                }
-            }, 300);
+
+            // Handle completion based on game mode
+            if (GameState.gameMode === 'explorer') {
+                // In explorer mode, show comparison visualization
+                setTimeout(() => {
+                    if (!GameState.vizState.active) {
+                        showExplorerComparison();
+                    }
+                }, 300);
+            } else {
+                // Competitive mode - auto-submit
+                setTimeout(() => {
+                    if (!GameState.vizState.active) {
+                        submitRoute();
+                    }
+                }, 300);
+            }
         }
     }
 
     return true;
+}
+
+/**
+ * Show visual feedback when a click is rejected due to distance limit.
+ */
+function showDistanceRejectionFeedback() {
+    if (GameState.drawCanvas) {
+        GameState.drawCanvas.classList.add('distance-rejected');
+        setTimeout(() => {
+            GameState.drawCanvas.classList.remove('distance-rejected');
+        }, 300);
+    }
+    // Play a subtle error sound if audio is available
+    if (typeof playSound === 'function') {
+        playSound('error', 0.3);
+    }
 }
 
 /**
@@ -4814,6 +5386,1001 @@ function showLoading(text, allowHtml = false) {
 
 function hideLoading() {
     document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+// =============================================================================
+// MODE SELECTOR
+// =============================================================================
+
+function initModeSelector() {
+    // Mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+            selectGameMode(mode);
+        });
+    });
+
+    // Difficulty buttons
+    document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const difficulty = btn.dataset.difficulty;
+            setDifficulty(difficulty);
+        });
+    });
+}
+
+function setDifficulty(difficulty) {
+    // Update game state
+    GameState.difficulty = difficulty;
+
+    // Update button active states
+    document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        if (btn.dataset.difficulty === difficulty) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    console.log(`[Game] Difficulty set to: ${difficulty} (${CONFIG.segmentDistance[difficulty]}km max segment)`);
+}
+
+function showModeSelector() {
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('mode-selector').classList.remove('hidden');
+}
+
+function hideModeSelector() {
+    document.getElementById('mode-selector').classList.add('hidden');
+}
+
+function selectGameMode(mode) {
+    // Check premium access for explorer and visualizer modes
+    if ((mode === 'explorer' || mode === 'visualizer') && typeof PathfindrAuth !== 'undefined') {
+        if (!PathfindrAuth.hasPurchased()) {
+            // Show auth modal with premium prompt
+            const authModal = document.getElementById('auth-modal');
+            if (authModal) {
+                authModal.classList.remove('hidden');
+            }
+            return;
+        }
+    }
+
+    GameState.gameMode = mode;
+    hideModeSelector();
+
+    if (mode === 'visualizer') {
+        // Visualizer picks random cities automatically
+        startVisualizerMode();
+    } else if (mode === 'competitive') {
+        // Enable continuous play for competitive mode
+        enableContinuousPlay();
+        showLocationSelector();
+    } else {
+        // Explorer mode
+        disableContinuousPlay();
+        showLocationSelector();
+    }
+}
+
+// =============================================================================
+// VISUALIZER MODE
+// =============================================================================
+
+function initVisualizerUI() {
+    const exitBtn = document.getElementById('visualizer-exit-btn');
+    if (exitBtn) {
+        exitBtn.addEventListener('click', stopVisualizerMode);
+    }
+}
+
+function startVisualizerMode() {
+    GameState.visualizerState.active = true;
+    GameState.visualizerState.currentVisualization = 0;
+
+    // Hide regular HUD elements
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = 'none';
+
+    // Show visualizer UI
+    const vizUI = document.getElementById('visualizer-ui');
+    if (vizUI) vizUI.classList.remove('hidden');
+
+    // Pick a random city and start
+    const city = getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
+    GameState.currentCity = city;
+    updateVisualizerUI(city.name, 1);
+
+    // Load road network and start the loop
+    document.getElementById('loading-overlay').classList.remove('hidden');
+    document.getElementById('loading-text').textContent = 'Loading visualizer...';
+
+    GameState.map.setView([city.lat, city.lng], city.zoom || 15);
+    loadRoadNetwork(city).then(() => {
+        // Start ambient viz system for persistent history rendering
+        AmbientViz.start();
+        runVisualizerLoop();
+    });
+}
+
+function updateVisualizerUI(cityName, count) {
+    const cityEl = document.getElementById('visualizer-city');
+    const countEl = document.getElementById('visualizer-count');
+    if (cityEl) cityEl.textContent = cityName;
+    if (countEl) countEl.textContent = `${count}/${GameState.visualizerState.maxPerCity}`;
+}
+
+async function runVisualizerLoop() {
+    if (!GameState.visualizerState.active) return;
+
+    // Pick random start/end points
+    selectRandomEndpoints();
+
+    GameState.visualizerState.currentVisualization++;
+    updateVisualizerUI(
+        GameState.currentCity?.name || 'Unknown',
+        GameState.visualizerState.currentVisualization
+    );
+
+    // Run the A* visualization
+    await runVisualizerAStar();
+
+    // Check if we should load a new city
+    if (GameState.visualizerState.currentVisualization >= GameState.visualizerState.maxPerCity) {
+        GameState.visualizerState.currentVisualization = 0;
+        await loadNextVisualizerCity();
+    }
+
+    // Continue the loop after a delay
+    if (GameState.visualizerState.active) {
+        GameState.visualizerState.loopTimeout = setTimeout(
+            runVisualizerLoop,
+            GameState.visualizerState.delayBetweenRuns
+        );
+    }
+}
+
+async function runVisualizerAStar() {
+    // Clear previous visualization (but not history)
+    clearVisualization();
+
+    // Run A* and visualize
+    const result = runAStar(GameState.startNode, GameState.endNode);
+
+    if (result.path.length > 0) {
+        // Run the epic visualization (it's async)
+        await runEpicVisualization(result.explored, result.path);
+
+        // Add to persistent history for continuous visualization
+        const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
+        VisualizerHistory.addPath(exploredEdgeKeys, result.path);
+    }
+}
+
+async function loadNextVisualizerCity() {
+    if (!GameState.visualizerState.active) return;
+
+    // Clear current visualization and history for new city
+    clearVisualization();
+    VisualizerHistory.clear();
+
+    // Remove markers
+    if (GameState.startMarker) {
+        GameState.map.removeLayer(GameState.startMarker);
+        GameState.startMarker = null;
+    }
+    if (GameState.endMarker) {
+        GameState.map.removeLayer(GameState.endMarker);
+        GameState.endMarker = null;
+    }
+
+    // Pick a new random city
+    const city = getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
+    GameState.currentCity = city;
+
+    updateVisualizerUI(city.name, 1);
+
+    // Show loading briefly
+    document.getElementById('loading-overlay').classList.remove('hidden');
+    document.getElementById('loading-text').textContent = `Loading ${city.name}...`;
+
+    // Pan to new city and load road network
+    GameState.map.setView([city.lat, city.lng], city.zoom || 15);
+    await loadRoadNetwork(city);
+}
+
+function stopVisualizerMode() {
+    GameState.visualizerState.active = false;
+
+    // Clear any pending timeout
+    if (GameState.visualizerState.loopTimeout) {
+        clearTimeout(GameState.visualizerState.loopTimeout);
+        GameState.visualizerState.loopTimeout = null;
+    }
+
+    // CRITICAL: Stop the A* visualization if running
+    if (GameState.vizState) {
+        GameState.vizState.active = false;
+        GameState.vizState.paused = true;
+    }
+
+    // Stop ambient visualization system
+    if (typeof AmbientViz !== 'undefined') {
+        AmbientViz.stop();
+    }
+
+    // Fade out sounds smoothly
+    if (typeof SoundEngine !== 'undefined') {
+        SoundEngine.fadeOutScanning(400);
+        SoundEngine.fadeOutSoundtrack(800);
+    }
+
+    // Reset state
+    GameState.visualizerState.currentVisualization = 0;
+
+    // Hide visualizer UI
+    const vizUI = document.getElementById('visualizer-ui');
+    if (vizUI) vizUI.classList.add('hidden');
+
+    // Show regular HUD
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = '';
+
+    // Clear visualization and history
+    clearVisualization();
+    VisualizerHistory.clear();
+
+    // Remove markers (both Leaflet and DOM-based)
+    if (GameState.startMarker) {
+        GameState.map.removeLayer(GameState.startMarker);
+        GameState.startMarker = null;
+    }
+    if (GameState.endMarker) {
+        GameState.map.removeLayer(GameState.endMarker);
+        GameState.endMarker = null;
+    }
+    if (GameState.startMarkerEl) {
+        GameState.startMarkerEl.remove();
+        GameState.startMarkerEl = null;
+    }
+    if (GameState.endMarkerEl) {
+        GameState.endMarkerEl.remove();
+        GameState.endMarkerEl = null;
+    }
+
+    // Return to mode selector
+    GameState.gameMode = 'competitive';
+    showModeSelector();
+}
+
+// =============================================================================
+// EXPLORER MODE
+// =============================================================================
+
+function initExplorerUI() {
+    const challengeBtn = document.getElementById('explorer-challenge-btn');
+    const showRouteBtn = document.getElementById('explorer-show-route-btn');
+    const resetBtn = document.getElementById('explorer-reset-btn');
+    const exitBtn = document.getElementById('explorer-exit-btn');
+
+    if (challengeBtn) {
+        challengeBtn.addEventListener('click', startExplorerChallenge);
+    }
+    if (showRouteBtn) {
+        showRouteBtn.addEventListener('click', explorerShowRoute);
+    }
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetExplorer);
+    }
+    if (exitBtn) {
+        exitBtn.addEventListener('click', stopExplorerMode);
+    }
+
+    // Context menu event listeners
+    document.querySelectorAll('.context-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            handleContextMenuAction(action);
+        });
+    });
+
+    // Click outside to dismiss context menu (with debounce to prevent immediate close)
+    document.addEventListener('mousedown', (e) => {
+        const menu = document.getElementById('explorer-context-menu');
+        if (!menu || menu.classList.contains('hidden')) return;
+
+        // Check if click is inside the menu
+        if (menu.contains(e.target)) return;
+
+        // Check if menu was just shown (within 200ms)
+        const showTime = menu.dataset.showTime;
+        if (showTime && (Date.now() - parseInt(showTime)) < 200) return;
+
+        hideExplorerContextMenu();
+    });
+
+    // Keyboard shortcuts for context menu
+    document.addEventListener('keydown', (e) => {
+        const menu = document.getElementById('explorer-context-menu');
+        if (menu && !menu.classList.contains('hidden')) {
+            if (e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                handleContextMenuAction('start');
+            } else if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                handleContextMenuAction('end');
+            } else if (e.key === 'Escape') {
+                hideExplorerContextMenu();
+            }
+        }
+    });
+}
+
+function startExplorerMode() {
+    GameState.gameMode = 'explorer';
+    GameState.explorerState = {
+        placingStart: false,
+        placingEnd: false,
+        customStart: null,
+        customEnd: null,
+        pendingNode: null,
+        pendingLatLng: null,
+    };
+
+    // Hide regular HUD
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = 'none';
+
+    // Show floating explorer badge
+    const badge = document.getElementById('explorer-badge');
+    if (badge) badge.classList.remove('hidden');
+
+    // Start ambient viz system for persistent history rendering
+    AmbientViz.start();
+
+    // Enable map clicking for marker placement
+    GameState.map.on('click', handleExplorerMapClick);
+
+    updateExplorerButtons();
+}
+
+function setExplorerPlacingMode(mode) {
+    const startBtn = document.getElementById('place-start-btn');
+    const endBtn = document.getElementById('place-end-btn');
+
+    // Toggle the mode
+    if (mode === 'start') {
+        GameState.explorerState.placingStart = !GameState.explorerState.placingStart;
+        GameState.explorerState.placingEnd = false;
+    } else {
+        GameState.explorerState.placingEnd = !GameState.explorerState.placingEnd;
+        GameState.explorerState.placingStart = false;
+    }
+
+    // Update button states
+    if (startBtn) {
+        startBtn.classList.toggle('active', GameState.explorerState.placingStart);
+    }
+    if (endBtn) {
+        endBtn.classList.toggle('active', GameState.explorerState.placingEnd);
+    }
+
+    // Update cursor
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer) {
+        if (GameState.explorerState.placingStart || GameState.explorerState.placingEnd) {
+            mapContainer.style.cursor = 'crosshair';
+        } else {
+            mapContainer.style.cursor = '';
+        }
+    }
+}
+
+function handleExplorerMapClick(e) {
+    if (GameState.gameMode !== 'explorer') return;
+
+    const { lat, lng } = e.latlng;
+    const nearestNode = findNearestNode(lat, lng);
+
+    if (nearestNode === null) return;
+
+    const nodePos = GameState.nodes.get(nearestNode);
+    if (!nodePos) return;
+
+    // Store pending location for context menu
+    GameState.explorerState.pendingNode = nearestNode;
+    GameState.explorerState.pendingLatLng = { lat: nodePos.lat, lng: nodePos.lng };
+
+    // Get screen position for context menu
+    const containerPoint = GameState.map.latLngToContainerPoint(e.latlng);
+
+    // Show context menu at click position
+    showExplorerContextMenu(containerPoint.x, containerPoint.y, nodePos.lat, nodePos.lng);
+}
+
+function showExplorerContextMenu(x, y, lat, lng) {
+    const menu = document.getElementById('explorer-context-menu');
+
+    if (!menu) return;
+
+    // Update actions section visibility based on whether both markers are placed
+    const actionsSection = document.getElementById('context-actions');
+    const hasStart = GameState.explorerState.customStart !== null;
+    const hasEnd = GameState.explorerState.customEnd !== null;
+    const hasBoth = hasStart && hasEnd;
+
+    if (actionsSection) {
+        actionsSection.style.display = hasBoth ? 'flex' : 'none';
+    }
+
+    // Position menu - adjust to stay within viewport
+    const menuWidth = 160;
+    const menuHeight = hasBoth ? 200 : 100;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let posX = x - menuWidth / 2;
+    let posY = y - menuHeight - 10;
+
+    // Keep within horizontal bounds
+    if (posX < 10) posX = 10;
+    if (posX + menuWidth > viewportWidth - 10) posX = viewportWidth - menuWidth - 10;
+
+    // If would go above viewport, show below click instead
+    if (posY < 10) posY = y + 20;
+
+    menu.style.left = `${posX}px`;
+    menu.style.top = `${posY}px`;
+
+    // Track when menu was shown (for click-outside debounce)
+    menu.dataset.showTime = Date.now().toString();
+
+    // Show with animation
+    menu.classList.remove('hidden');
+    menu.classList.add('visible');
+}
+
+function hideExplorerContextMenu() {
+    const menu = document.getElementById('explorer-context-menu');
+    if (menu) {
+        menu.classList.remove('visible');
+        menu.classList.add('hidden');
+    }
+}
+
+function handleContextMenuAction(action) {
+    hideExplorerContextMenu();
+
+    // Handle marker placement actions
+    if (action === 'start' || action === 'end') {
+        const nodeId = GameState.explorerState.pendingNode;
+        const latlng = GameState.explorerState.pendingLatLng;
+
+        if (!nodeId || !latlng) return;
+
+        placeExplorerMarker(action, nodeId, latlng);
+
+        // Clear pending
+        GameState.explorerState.pendingNode = null;
+        GameState.explorerState.pendingLatLng = null;
+        return;
+    }
+
+    // Handle other actions
+    switch (action) {
+        case 'challenge':
+            startExplorerChallenge();
+            break;
+        case 'showroute':
+            explorerShowRoute();
+            break;
+        case 'clearpaths':
+            clearExplorerPaths();
+            break;
+        case 'reset':
+            resetExplorer();
+            break;
+        case 'exit':
+            stopExplorerMode();
+            break;
+    }
+}
+
+function clearExplorerPaths() {
+    // Clear the persistent path history
+    ExplorerHistory.clear();
+    // Also clear current visualization
+    clearVisualization();
+    console.log('[Explorer] Cleared all path history');
+}
+
+function placeExplorerMarker(type, nodeId, nodePos) {
+    const markerContainer = document.getElementById('marker-container');
+    if (!markerContainer) return;
+
+    if (type === 'start') {
+        // Remove old start marker (DOM element)
+        if (GameState.startMarkerEl) {
+            GameState.startMarkerEl.remove();
+        }
+        // Also remove Leaflet marker if exists
+        if (GameState.startMarker) {
+            GameState.map.removeLayer(GameState.startMarker);
+            GameState.startMarker = null;
+        }
+
+        GameState.startNode = nodeId;
+        GameState.explorerState.customStart = nodeId;
+
+        // Create DOM marker (same as competitive mode)
+        const marker = document.createElement('div');
+        marker.className = 'custom-marker start-marker';
+        marker.textContent = 'S';
+        markerContainer.appendChild(marker);
+
+        GameState.startMarkerEl = marker;
+        GameState.startMarkerLatLng = L.latLng(nodePos.lat, nodePos.lng);
+
+    } else {
+        // Remove old end marker (DOM element)
+        if (GameState.endMarkerEl) {
+            GameState.endMarkerEl.remove();
+        }
+        // Also remove Leaflet marker if exists
+        if (GameState.endMarker) {
+            GameState.map.removeLayer(GameState.endMarker);
+            GameState.endMarker = null;
+        }
+
+        GameState.endNode = nodeId;
+        GameState.explorerState.customEnd = nodeId;
+
+        // Create DOM marker (same as competitive mode)
+        const marker = document.createElement('div');
+        marker.className = 'custom-marker end-marker';
+        marker.textContent = 'E';
+        markerContainer.appendChild(marker);
+
+        GameState.endMarkerEl = marker;
+        GameState.endMarkerLatLng = L.latLng(nodePos.lat, nodePos.lng);
+    }
+
+    // Update marker positions on screen
+    updateMarkerPositions();
+
+    updateExplorerButtons();
+}
+
+function updateExplorerButtons() {
+    // Update context menu actions section visibility
+    const actionsSection = document.getElementById('context-actions');
+    const hasStart = GameState.explorerState.customStart !== null;
+    const hasEnd = GameState.explorerState.customEnd !== null;
+    const hasBoth = hasStart && hasEnd;
+
+    if (actionsSection) {
+        actionsSection.style.display = hasBoth ? 'flex' : 'none';
+    }
+}
+
+function startExplorerChallenge() {
+    if (!GameState.explorerState.customStart || !GameState.explorerState.customEnd) return;
+
+    // Clear any previous visualization state
+    if (GameState.vizState) {
+        GameState.vizState.active = false;
+        GameState.vizState.paused = true;
+    }
+    clearVisualization();
+    clearUserPath();
+
+    // Stop any playing sounds
+    if (typeof SoundEngine !== 'undefined') {
+        SoundEngine.stopScanning();
+    }
+
+    // CRITICAL: Set gameStarted to true so drawing works
+    GameState.gameStarted = true;
+
+    // Initialize user path from start
+    GameState.userPathNodes = [GameState.startNode];
+    GameState.userDrawnPoints = [];
+    GameState.userDistance = 0;
+
+    // Add the start position to drawn points
+    const startPos = GameState.nodes.get(GameState.startNode);
+    if (startPos) {
+        GameState.userDrawnPoints.push({ lat: startPos.lat, lng: startPos.lng });
+    }
+
+    // Enable drawing
+    enableDrawing();
+
+    // Hide context menu if open
+    hideExplorerContextMenu();
+
+    // Hide badge during challenge
+    const badge = document.getElementById('explorer-badge');
+    if (badge) badge.classList.add('hidden');
+
+    console.log('[Explorer] Challenge started - draw your path to the end marker!');
+}
+
+async function explorerShowRoute() {
+    if (!GameState.explorerState.customStart || !GameState.explorerState.customEnd) return;
+
+    // Clear any existing visualization
+    clearVisualization();
+    clearUserPath();
+
+    // Stop any playing sounds first
+    if (typeof SoundEngine !== 'undefined') {
+        SoundEngine.stopScanning();
+    }
+
+    // Run A* between the two points
+    const result = runAStar(GameState.startNode, GameState.endNode);
+
+    if (result.path.length > 0) {
+        // Run the visualization
+        await runEpicVisualization(result.explored, result.path);
+
+        // Add to persistent history for continuous visualization
+        const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
+        ExplorerHistory.addPath(exploredEdgeKeys, result.path, []);
+    }
+
+    // Stop sounds after visualization completes
+    if (typeof SoundEngine !== 'undefined') {
+        SoundEngine.stopScanning();
+    }
+
+    // Reset visualization state
+    if (GameState.vizState) {
+        GameState.vizState.active = false;
+        GameState.vizState.paused = true;
+    }
+}
+
+async function showExplorerComparison() {
+    // Disable further drawing
+    disableDrawing();
+
+    // Run A* to get optimal path
+    const result = runAStar(GameState.startNode, GameState.endNode);
+
+    // Calculate user's path distance vs optimal
+    const userDistance = GameState.userDistance;
+    let optimalDistance = 0;
+    for (let i = 1; i < result.path.length; i++) {
+        const from = GameState.nodes.get(result.path[i - 1]);
+        const to = GameState.nodes.get(result.path[i]);
+        if (from && to) {
+            optimalDistance += haversineDistance(from.lat, from.lng, to.lat, to.lng);
+        }
+    }
+
+    const efficiency = optimalDistance > 0 ? Math.min(100, (optimalDistance / userDistance) * 100) : 100;
+
+    console.log(`[Explorer] Your path: ${userDistance.toFixed(2)}km, Optimal: ${optimalDistance.toFixed(2)}km, Efficiency: ${efficiency.toFixed(1)}%`);
+
+    // Save user path before visualization clears it
+    const userPathCopy = [...GameState.userPathNodes];
+
+    // Show the A* visualization to compare
+    if (result.path.length > 0) {
+        await runEpicVisualization(result.explored, result.path);
+
+        // Add to persistent history (with user path)
+        const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
+        ExplorerHistory.addPath(exploredEdgeKeys, result.path, userPathCopy);
+    }
+
+    // Stop sounds after visualization completes
+    if (typeof SoundEngine !== 'undefined') {
+        SoundEngine.stopScanning();
+    }
+
+    // Reset visualization state so it doesn't block future challenges
+    if (GameState.vizState) {
+        GameState.vizState.active = false;
+        GameState.vizState.paused = true;
+    }
+
+    // Show badge again after challenge
+    const badge = document.getElementById('explorer-badge');
+    if (badge) badge.classList.remove('hidden');
+
+    // Reset game started state
+    GameState.gameStarted = false;
+}
+
+function resetExplorer() {
+    // Clear DOM-based markers
+    if (GameState.startMarkerEl) {
+        GameState.startMarkerEl.remove();
+        GameState.startMarkerEl = null;
+        GameState.startMarkerLatLng = null;
+    }
+    if (GameState.endMarkerEl) {
+        GameState.endMarkerEl.remove();
+        GameState.endMarkerEl = null;
+        GameState.endMarkerLatLng = null;
+    }
+
+    // Also clear Leaflet markers if they exist (legacy cleanup)
+    if (GameState.startMarker) {
+        GameState.map.removeLayer(GameState.startMarker);
+        GameState.startMarker = null;
+    }
+    if (GameState.endMarker) {
+        GameState.map.removeLayer(GameState.endMarker);
+        GameState.endMarker = null;
+    }
+
+    // Clear state
+    GameState.startNode = null;
+    GameState.endNode = null;
+    GameState.explorerState.customStart = null;
+    GameState.explorerState.customEnd = null;
+    GameState.explorerState.placingStart = false;
+    GameState.explorerState.placingEnd = false;
+    GameState.explorerState.pendingNode = null;
+    GameState.explorerState.pendingLatLng = null;
+
+    // Hide context menu if open
+    hideExplorerContextMenu();
+
+    // Clear visualization
+    clearVisualization();
+    clearUserPath();
+
+    // Update buttons
+    updateExplorerButtons();
+
+    // Reset cursor
+    const mapContainer = document.getElementById('map-container');
+    if (mapContainer) mapContainer.style.cursor = '';
+}
+
+function stopExplorerMode() {
+    // Remove map click listener
+    GameState.map.off('click', handleExplorerMapClick);
+
+    // Reset explorer
+    resetExplorer();
+
+    // Clear explorer history
+    ExplorerHistory.clear();
+
+    // Hide explorer badge
+    const badge = document.getElementById('explorer-badge');
+    if (badge) badge.classList.add('hidden');
+
+    // Hide context menu if open
+    hideExplorerContextMenu();
+
+    // Show regular HUD
+    const hud = document.getElementById('hud');
+    if (hud) hud.style.display = '';
+
+    // Return to mode selector
+    GameState.gameMode = 'competitive';
+    showModeSelector();
+}
+
+// =============================================================================
+// CONTINUOUS COMPETITIVE PLAY
+// =============================================================================
+
+function preloadNextCity() {
+    // Don't preload if already preloading
+    if (GameState.continuousPlay.preloadedCity) return;
+
+    // Pick next city based on location mode
+    const nextCity = getRandomCity(GameState.locationMode);
+    GameState.continuousPlay.preloadedCity = nextCity;
+
+    // Calculate bounds for the city
+    const zoom = nextCity.zoom || 15;
+    const latOffset = 0.015 * Math.pow(2, 15 - zoom);
+    const lngOffset = 0.02 * Math.pow(2, 15 - zoom);
+
+    const bounds = {
+        south: nextCity.lat - latOffset,
+        north: nextCity.lat + latOffset,
+        west: nextCity.lng - lngOffset,
+        east: nextCity.lng + lngOffset
+    };
+
+    // Build the query
+    const query = `
+        [out:json][timeout:25];
+        (
+            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+        );
+        out body;
+        >;
+        out skel qt;
+    `;
+
+    // Fetch in background
+    const servers = CONFIG.overpassServers;
+    const server = servers[Math.floor(Math.random() * servers.length)];
+
+    fetch(server, {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.elements && data.elements.length > 0) {
+            GameState.continuousPlay.preloadedData = data;
+            console.log(`Preloaded ${nextCity.name}: ${data.elements.length} elements`);
+        }
+    })
+    .catch(error => {
+        console.warn('City preload failed (will fetch fresh):', error);
+        GameState.continuousPlay.preloadedCity = null;
+        GameState.continuousPlay.preloadedData = null;
+    });
+}
+
+async function transitionToNextCity() {
+    // Store current city score
+    GameState.continuousPlay.cityScores.push({
+        city: GameState.currentCity?.name || 'Unknown',
+        score: GameState.totalScore
+    });
+    GameState.continuousPlay.citiesCompleted++;
+
+    // Show transition overlay
+    const overlay = document.getElementById('city-transition');
+    const cityName = document.getElementById('transition-city-name');
+    const citiesCount = document.getElementById('transition-cities-count');
+
+    // Determine next city
+    let nextCity = GameState.continuousPlay.preloadedCity;
+    if (!nextCity) {
+        nextCity = getRandomCity(GameState.locationMode);
+    }
+
+    if (cityName) cityName.textContent = nextCity.name;
+    if (citiesCount) citiesCount.textContent = GameState.continuousPlay.citiesCompleted;
+    if (overlay) overlay.classList.remove('hidden');
+
+    // Reset game state for new city
+    GameState.currentRound = 1;
+    GameState.totalScore = 0;
+    GameState.roundScores = [];
+    updateScoreDisplay();
+    updateRoundDisplay();
+    clearVisualization();
+    clearUserPath();
+
+    // Reset comparison bars
+    const userBar = document.getElementById('user-bar');
+    const optimalBar = document.getElementById('optimal-bar');
+    if (userBar) userBar.style.width = '0%';
+    if (optimalBar) optimalBar.style.width = '0%';
+
+    // Clear round history for new city
+    GameState.roundHistory = [];
+
+    // Wait for transition effect
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Move map to new city
+    GameState.currentCity = nextCity;
+    GameState.map.setView([nextCity.lat, nextCity.lng], nextCity.zoom || 15);
+    updateLocationDisplay(nextCity.name);
+
+    // Update HUD with new city number
+    updateContinuousHUD();
+
+    // Use preloaded data if available
+    if (GameState.continuousPlay.preloadedData) {
+        processRoadData(GameState.continuousPlay.preloadedData);
+        GameState.continuousPlay.preloadedCity = null;
+        GameState.continuousPlay.preloadedData = null;
+
+        // Hide transition, start new round
+        if (overlay) overlay.classList.add('hidden');
+        selectRandomEndpoints();
+        enableDrawing();
+    } else {
+        // Fetch fresh
+        if (overlay) overlay.classList.add('hidden');
+        showLoading('Mapping new territory...');
+        await loadRoadNetworkForContinuous(nextCity);
+    }
+}
+
+async function loadRoadNetworkForContinuous(location) {
+    const servers = CONFIG.overpassServers;
+    const server = servers[Math.floor(Math.random() * servers.length)];
+
+    const bounds = GameState.map.getBounds();
+    const query = `
+        [out:json][timeout:25];
+        (
+            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+        );
+        out body;
+        >;
+        out skel qt;
+    `;
+
+    try {
+        const response = await fetch(server, {
+            method: 'POST',
+            body: `data=${encodeURIComponent(query)}`,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
+        const data = await response.json();
+
+        if (data.elements && data.elements.length > 0) {
+            processRoadData(data);
+            hideLoading();
+            selectRandomEndpoints();
+            enableDrawing();
+        } else {
+            throw new Error('No road data');
+        }
+    } catch (error) {
+        console.error('Continuous load failed:', error);
+        hideLoading();
+        // Fall back to mode selector on failure
+        showModeSelector();
+    }
+}
+
+function enableContinuousPlay() {
+    GameState.continuousPlay.enabled = true;
+    GameState.continuousPlay.citiesCompleted = 0;
+    GameState.continuousPlay.cityScores = [];
+    GameState.continuousPlay.preloadedCity = null;
+    GameState.continuousPlay.preloadedData = null;
+
+    // Update HUD to show continuous mode
+    updateContinuousHUD();
+}
+
+function disableContinuousPlay() {
+    GameState.continuousPlay.enabled = false;
+    GameState.continuousPlay.preloadedCity = null;
+    GameState.continuousPlay.preloadedData = null;
+}
+
+function updateContinuousHUD() {
+    // Add city counter to HUD if continuous mode is active
+    const hudStats = document.querySelector('.hud-stats');
+    if (hudStats && GameState.continuousPlay.enabled) {
+        let cityIndicator = document.getElementById('city-indicator');
+        if (!cityIndicator) {
+            cityIndicator = document.createElement('div');
+            cityIndicator.id = 'city-indicator';
+            cityIndicator.className = 'city-indicator';
+            // Insert at beginning of hud-stats
+            hudStats.insertBefore(cityIndicator, hudStats.firstChild);
+        }
+        const cityNum = GameState.continuousPlay.citiesCompleted + 1;
+        cityIndicator.textContent = `CITY ${cityNum}`;
+    }
+}
+
+function removeContinuousHUD() {
+    const cityIndicator = document.getElementById('city-indicator');
+    if (cityIndicator) {
+        cityIndicator.remove();
+    }
 }
 
 // =============================================================================

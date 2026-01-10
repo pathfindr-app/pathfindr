@@ -455,11 +455,34 @@ const PathfindrAuth = {
   },
 
   /**
-   * Check if user has purchased ad-free
+   * Check if user has purchased ad-free / premium
+   * Also checks for dev override in localStorage
    * @returns {boolean}
    */
   hasPurchased() {
+    // Check for dev override first
+    if (localStorage.getItem('pathfindr_premium_override') === 'true') {
+      return true;
+    }
     return this.currentProfile?.has_purchased === true;
+  },
+
+  /**
+   * Enable premium features locally (for development/testing)
+   * Run in console: PathfindrAuth.enablePremiumOverride()
+   */
+  enablePremiumOverride() {
+    localStorage.setItem('pathfindr_premium_override', 'true');
+    console.log('[Auth] Premium override ENABLED. Refresh the page to access premium features.');
+    console.log('[Auth] To disable: PathfindrAuth.disablePremiumOverride()');
+  },
+
+  /**
+   * Disable premium override
+   */
+  disablePremiumOverride() {
+    localStorage.removeItem('pathfindr_premium_override');
+    console.log('[Auth] Premium override DISABLED.');
   },
 
   /**
