@@ -86,6 +86,7 @@ const PathfindrConfig = {
     // Emails that have admin privileges (ad-free, all features, etc.)
     emails: [
       'pathfindr.game@gmail.com',
+      'pathfinder.game@gmail.com',
     ],
   },
 };
