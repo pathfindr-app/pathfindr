@@ -269,14 +269,14 @@ const CONFIG = {
         flickerIntensity: 0.15,     // line flicker amount
         arcFrequency: 0.02,         // chance of arc spark per frame
         wobbleAmount: 1.5,          // pixel wobble from noise
-        idleIntensity: 0.6,         // brightness of idle/persistent paths (higher = more visible)
+        idleIntensity: 0.75,        // brightness of idle/persistent paths (BUMPED from 0.6)
         activeIntensity: 1.0,       // brightness of active round
     },
 
     // Living Network - keeps visualization alive after pathfinding completes
     livingNetwork: {
         breatheSpeed: 0.4,          // Speed of global breathing pulse (cycles/sec)
-        breatheMin: 0.5,            // Minimum brightness during breath
+        breatheMin: 0.7,            // Minimum brightness during breath (BUMPED from 0.5)
         breatheMax: 1.0,            // Maximum brightness during breath
         rippleInterval: 3000,       // ms between ripple waves
         rippleSpeed: 0.15,          // How fast ripples spread (0-1 per frame)
@@ -302,6 +302,242 @@ const CONFIG = {
 
     // Supabase Edge Function URL for random cities
     randomCityUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-random-city',
+};
+
+// =============================================================================
+// GAME CONTROLLER - Central State Machine & Animation Coordinator
+// =============================================================================
+// Fixes: Competing animation loops, race conditions, unclear phase transitions
+// All game state changes go through here for predictable behavior.
+
+const GamePhase = {
+    MENU: 'menu',           // Mode/location selection screens
+    LOADING: 'loading',     // Loading road network
+    PLAYING: 'playing',     // User drawing their path (competitive/explorer)
+    VISUALIZING: 'visualizing', // A* visualization running
+    RESULTS: 'results',     // Showing round results
+    IDLE: 'idle',           // Between actions (visualizer mode waiting)
+};
+
+const GameController = {
+    phase: GamePhase.MENU,
+    previousPhase: null,
+
+    // Cancellation token for async operations
+    abortController: null,
+
+    // Single animation frame ID - only ONE loop runs at a time
+    animationId: null,
+    lastFrameTime: 0,
+
+    // Frame budget tracking (target 60fps = 16.67ms per frame)
+    frameBudget: 16,
+    frameOverruns: 0,
+
+    // Phase transition with cleanup
+    enterPhase(newPhase, options = {}) {
+        if (this.phase === newPhase && !options.force) return;
+
+        const oldPhase = this.phase;
+        this.previousPhase = oldPhase;
+
+        // Exit cleanup for old phase
+        this._exitPhase(oldPhase);
+
+        // Enter new phase
+        this.phase = newPhase;
+        this._enterPhase(newPhase, options);
+
+        console.log(`[GameController] ${oldPhase} → ${newPhase}`);
+    },
+
+    _exitPhase(phase) {
+        switch (phase) {
+            case GamePhase.LOADING:
+                // Cancel any pending load operations
+                if (this.abortController) {
+                    this.abortController.abort();
+                    this.abortController = null;
+                }
+                break;
+            case GamePhase.VISUALIZING:
+                // Ensure viz state is cleaned up
+                if (GameState.vizState) {
+                    GameState.vizState.active = false;
+                }
+                break;
+        }
+    },
+
+    _enterPhase(phase, options) {
+        switch (phase) {
+            case GamePhase.LOADING:
+                this.abortController = new AbortController();
+                break;
+            case GamePhase.VISUALIZING:
+                if (GameState.vizState) {
+                    GameState.vizState.active = true;
+                }
+                break;
+            case GamePhase.PLAYING:
+                // Ensure ambient viz is running for gameplay
+                if (!AmbientViz.active) {
+                    AmbientViz.start();
+                }
+                break;
+        }
+    },
+
+    // Check if operation should continue (for async loops)
+    shouldContinue(expectedPhase) {
+        return this.phase === expectedPhase &&
+               (!this.abortController || !this.abortController.signal.aborted);
+    },
+
+    // Get abort signal for fetch operations
+    getAbortSignal() {
+        return this.abortController ? this.abortController.signal : null;
+    },
+
+    // =========================================================================
+    // UNIFIED ANIMATION LOOP
+    // =========================================================================
+    // Single requestAnimationFrame that dispatches to subsystems based on phase.
+    // This prevents competing loops and ensures consistent frame timing.
+
+    startLoop() {
+        if (this.animationId) return; // Already running
+
+        // Stop AmbientViz's independent loop if it's running
+        // GameController takes over all animation duties
+        if (AmbientViz.animationId) {
+            cancelAnimationFrame(AmbientViz.animationId);
+            AmbientViz.animationId = null;
+            console.log('[GameController] Took over from AmbientViz loop');
+        }
+
+        this.lastFrameTime = performance.now();
+        this._loop();
+    },
+
+    stopLoop() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+    },
+
+    _loop() {
+        const now = performance.now();
+        const deltaTime = now - this.lastFrameTime;
+        this.lastFrameTime = now;
+
+        const frameStart = now;
+
+        // Dispatch rendering based on current phase
+        this._renderFrame(deltaTime);
+
+        // Track frame budget (for debugging performance)
+        const frameTime = performance.now() - frameStart;
+        if (frameTime > this.frameBudget) {
+            this.frameOverruns++;
+        }
+
+        // Continue loop
+        this.animationId = requestAnimationFrame(() => this._loop());
+    },
+
+    _renderFrame(deltaTime) {
+        const ctx = GameState.vizCtx;
+        if (!ctx) return;
+
+        const width = GameState.vizCanvas?.width || 0;
+        const height = GameState.vizCanvas?.height || 0;
+
+        // Always update subsystems (they track their own state)
+        RoundHistory.update(deltaTime);
+        ExplorerHistory.update(deltaTime);
+        VisualizerHistory.update(deltaTime);
+        ElectricitySystem.update(deltaTime);
+        AmbientViz.updateProximityToEnd();
+
+        // Phase-specific rendering
+        switch (this.phase) {
+            case GamePhase.VISUALIZING:
+                // During A* visualization, renderVisualization handles everything
+                renderVisualization();
+                break;
+
+            case GamePhase.PLAYING:
+            case GamePhase.IDLE:
+            case GamePhase.RESULTS:
+                // Normal gameplay - AmbientViz handles all layers
+                this._renderAmbientFrame(ctx, width, height, deltaTime);
+                break;
+
+            case GamePhase.MENU:
+            case GamePhase.LOADING:
+                // Minimal rendering during menus/loading
+                ctx.clearRect(0, 0, width, height);
+                if (GameState.useWebGL && GameState.edgeList?.length > 0) {
+                    WebGLRenderer.renderAmbient(performance.now());
+                }
+                break;
+        }
+    },
+
+    _renderAmbientFrame(ctx, width, height, deltaTime) {
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+
+        // Layer 0: WebGL road network
+        if (GameState.useWebGL && GameState.edgeList?.length > 0) {
+            WebGLRenderer.renderAmbient(performance.now());
+        }
+
+        // Layer 1: Canvas 2D fallback
+        if (!GameState.useWebGL && GameState.showCustomRoads) {
+            drawRoadNetwork(ctx);
+        }
+
+        // Layer 2: History rendering based on game mode
+        if (GameState.gameMode === 'explorer') {
+            AmbientViz.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
+        } else if (GameState.gameMode === 'visualizer') {
+            AmbientViz.renderPathHistory(ctx, deltaTime, VisualizerHistory.getPaths(), false);
+        } else {
+            AmbientViz.renderRoundHistory(ctx, deltaTime, false);
+        }
+
+        // Layer 3: Ambient particles and marker auras
+        AmbientViz.render(ctx, width, height, deltaTime);
+
+        // Layer 4: Arc sparks
+        ElectricitySystem.renderArcs(ctx);
+
+        // Layer 5: Trace animation
+        renderTraceAnimation(ctx);
+
+        // Layer 6: User path
+        if (GameState.gameStarted && GameState.userPathNodes.length >= 2) {
+            redrawUserPath();
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+    },
+
+    // Performance monitoring
+    getFrameStats() {
+        return {
+            overruns: this.frameOverruns,
+            phase: this.phase,
+        };
+    },
+
+    resetStats() {
+        this.frameOverruns = 0;
+    }
 };
 
 // =============================================================================
@@ -2528,6 +2764,13 @@ const AmbientViz = {
             this.spawnParticle();
         }
 
+        // If GameController is running the unified loop, don't start our own
+        // GameController will call our render methods directly
+        if (GameController.animationId) {
+            console.log('[AmbientViz] Deferring to GameController loop');
+            return;
+        }
+
         this.loop();
     },
 
@@ -2606,7 +2849,7 @@ const AmbientViz = {
         const rounds = RoundHistory.getRounds();
 
         // During active visualization, dim previous rounds to 40% to not compete
-        const vizDimFactor = isVizActive ? 0.4 : 1.0;
+        const vizDimFactor = isVizActive ? 0.6 : 1.0;  // BUMPED from 0.4 for better visibility
 
         for (const round of rounds) {
             // Convert explored edges to screen coordinates (O(1) lookup via edgeLookup)
@@ -2665,7 +2908,7 @@ const AmbientViz = {
     // OPTIMIZED: Uses cached screen coordinates and simplified idle rendering
     renderPathHistory(ctx, deltaTime, paths, isVizActive = false) {
         // During active visualization, dim previous paths to 40%
-        const vizDimFactor = isVizActive ? 0.4 : 1.0;
+        const vizDimFactor = isVizActive ? 0.6 : 1.0;  // BUMPED from 0.4 for better visibility
 
         // Get the correct history object based on game mode for living network effects
         const historyObj = GameState.gameMode === 'explorer' ? ExplorerHistory : VisualizerHistory;
@@ -4441,7 +4684,11 @@ function startGame() {
     enableDrawing();
     selectRandomEndpoints();
 
-    // Start ambient visual system
+    // Start unified animation loop and enter PLAYING phase
+    GameController.startLoop();
+    GameController.enterPhase(GamePhase.PLAYING);
+
+    // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
 }
 
@@ -5139,11 +5386,17 @@ async function submitRoute() {
     GameState.optimalPath = path;
     GameState.exploredNodes = explored;
 
+    // Enter VISUALIZING phase (GameController handles vizState.active)
+    GameController.enterPhase(GamePhase.VISUALIZING);
+
     // Start visualization
     await runEpicVisualization(explored, path);
 
     // === COMPARISON MOMENT: Both paths pulse side-by-side ===
     await playComparisonAnimation();
+
+    // Enter RESULTS phase
+    GameController.enterPhase(GamePhase.RESULTS);
 
     calculateAndShowScore();
 }
@@ -5382,6 +5635,13 @@ function createParticle(pos, type) {
 }
 
 function startRenderLoop() {
+    // If GameController is running the unified loop, don't start a competing loop
+    // GameController._renderFrame() will call renderVisualization() when in VISUALIZING phase
+    if (GameController.animationId) {
+        console.log('[startRenderLoop] Deferring to GameController');
+        return;
+    }
+
     function render() {
         if (!GameState.vizState.active) return;
 
@@ -7036,15 +7296,18 @@ function startVisualizerMode() {
     updateModeStats(1, GameState.visualizerState.maxPerCity);
 
     // Load road network and start the loop
+    GameController.enterPhase(GamePhase.LOADING);
     document.getElementById('loading-overlay').classList.remove('hidden');
     document.getElementById('loading-text').textContent = 'Loading visualizer...';
 
     GameState.map.setView([city.lat, city.lng], city.zoom || 15);
     loadRoadNetwork(city).then(() => {
-        // Start ambient viz system for persistent history rendering
-        AmbientViz.start();
+        // Start unified animation loop (replaces AmbientViz.start())
+        GameController.startLoop();
         // Start facts ticker for visualizer mode
         CityFacts.startTicker(city.name);
+        // Enter IDLE phase, then start visualizer loop
+        GameController.enterPhase(GamePhase.IDLE);
         runVisualizerLoop();
     });
 }
@@ -7059,7 +7322,10 @@ function updateVisualizerUI(cityName, count) {
 }
 
 async function runVisualizerLoop() {
-    if (!GameState.visualizerState.active) return;
+    // Use GameController for clean exit checking (fixes race condition)
+    if (!GameState.visualizerState.active || !GameController.shouldContinue(GamePhase.IDLE)) {
+        return;
+    }
 
     // Pick random start/end points
     selectRandomEndpoints();
@@ -7073,24 +7339,34 @@ async function runVisualizerLoop() {
     // Run the A* visualization
     await runVisualizerAStar();
 
+    // Check again after async operation (user might have exited during viz)
+    if (!GameState.visualizerState.active) return;
+
     // Check if we should load a new city
     if (GameState.visualizerState.currentVisualization >= GameState.visualizerState.maxPerCity) {
         GameState.visualizerState.currentVisualization = 0;
         await loadNextVisualizerCity();
     }
 
+    // Check AGAIN after potential city load (user might have exited)
+    if (!GameState.visualizerState.active) return;
+
+    // Return to IDLE phase after visualization completes
+    GameController.enterPhase(GamePhase.IDLE);
+
     // Continue the loop after a delay
-    if (GameState.visualizerState.active) {
-        GameState.visualizerState.loopTimeout = setTimeout(
-            runVisualizerLoop,
-            GameState.visualizerState.delayBetweenRuns
-        );
-    }
+    GameState.visualizerState.loopTimeout = setTimeout(
+        runVisualizerLoop,
+        GameState.visualizerState.delayBetweenRuns
+    );
 }
 
 async function runVisualizerAStar() {
-    // Clear previous visualization (but not history)
-    clearVisualization();
+    // Clear previous visualization state (but not history)
+    clearVisualizationState();
+
+    // Enter VISUALIZING phase (enables viz rendering in GameController loop)
+    GameController.enterPhase(GamePhase.VISUALIZING);
 
     // Run A* and visualize
     const result = runAStar(GameState.startNode, GameState.endNode);
@@ -7103,6 +7379,9 @@ async function runVisualizerAStar() {
         const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
         VisualizerHistory.addPath(exploredEdgeKeys, result.path);
     }
+
+    // Exit VISUALIZING phase (GameController cleans up vizState.active)
+    // Phase transition happens in runVisualizerLoop after this returns
 }
 
 async function loadNextVisualizerCity() {
@@ -7141,30 +7420,24 @@ async function loadNextVisualizerCity() {
 }
 
 function stopVisualizerMode() {
+    // Mark visualizer as inactive FIRST (stops loop callbacks)
     GameState.visualizerState.active = false;
+
+    // Clear any pending timeout (prevents stale callbacks)
+    if (GameState.visualizerState.loopTimeout) {
+        clearTimeout(GameState.visualizerState.loopTimeout);
+        GameState.visualizerState.loopTimeout = null;
+    }
+
+    // Use GameController to cleanly exit VISUALIZING phase (if active)
+    // This handles vizState.active cleanup automatically
+    GameController.enterPhase(GamePhase.MENU);
 
     // Hide location search bar
     hideLocationSearch();
 
     // Stop facts ticker
     CityFacts.stopTicker();
-
-    // Clear any pending timeout
-    if (GameState.visualizerState.loopTimeout) {
-        clearTimeout(GameState.visualizerState.loopTimeout);
-        GameState.visualizerState.loopTimeout = null;
-    }
-
-    // CRITICAL: Stop the A* visualization if running
-    if (GameState.vizState) {
-        GameState.vizState.active = false;
-        GameState.vizState.paused = true;
-    }
-
-    // Stop ambient visualization system
-    if (typeof AmbientViz !== 'undefined') {
-        AmbientViz.stop();
-    }
 
     // Fade out sounds smoothly
     if (typeof SoundEngine !== 'undefined') {
@@ -7286,7 +7559,11 @@ function startExplorerMode() {
     // Show location search bar
     showLocationSearch();
 
-    // Start ambient viz system for persistent history rendering
+    // Start unified animation loop and enter IDLE phase (waiting for user to place markers)
+    GameController.startLoop();
+    GameController.enterPhase(GamePhase.IDLE);
+
+    // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
 
     // Enable map clicking for marker placement
@@ -7563,8 +7840,8 @@ function startExplorerChallenge() {
 async function explorerShowRoute() {
     if (!GameState.explorerState.customStart || !GameState.explorerState.customEnd) return;
 
-    // Clear any existing visualization
-    clearVisualization();
+    // Clear any existing visualization state
+    clearVisualizationState();
     clearUserPath();
 
     // Stop any playing sounds first
@@ -7576,23 +7853,23 @@ async function explorerShowRoute() {
     const result = runAStar(GameState.startNode, GameState.endNode);
 
     if (result.path.length > 0) {
+        // Enter VISUALIZING phase
+        GameController.enterPhase(GamePhase.VISUALIZING);
+
         // Run the visualization
         await runEpicVisualization(result.explored, result.path);
 
         // Add to persistent history for continuous visualization
         const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
         ExplorerHistory.addPath(exploredEdgeKeys, result.path, []);
+
+        // Return to IDLE phase (GameController cleans up vizState.active)
+        GameController.enterPhase(GamePhase.IDLE);
     }
 
     // Stop sounds after visualization completes
     if (typeof SoundEngine !== 'undefined') {
         SoundEngine.stopScanning();
-    }
-
-    // Reset visualization state
-    if (GameState.vizState) {
-        GameState.vizState.active = false;
-        GameState.vizState.paused = true;
     }
 }
 
@@ -7623,22 +7900,22 @@ async function showExplorerComparison() {
 
     // Show the A* visualization to compare
     if (result.path.length > 0) {
+        // Enter VISUALIZING phase
+        GameController.enterPhase(GamePhase.VISUALIZING);
+
         await runEpicVisualization(result.explored, result.path);
 
         // Add to persistent history (with user path)
         const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
         ExplorerHistory.addPath(exploredEdgeKeys, result.path, userPathCopy);
+
+        // Return to IDLE phase
+        GameController.enterPhase(GamePhase.IDLE);
     }
 
     // Stop sounds after visualization completes
     if (typeof SoundEngine !== 'undefined') {
         SoundEngine.stopScanning();
-    }
-
-    // Reset visualization state so it doesn't block future challenges
-    if (GameState.vizState) {
-        GameState.vizState.active = false;
-        GameState.vizState.paused = true;
     }
 
     // Show badge again after challenge
@@ -7698,6 +7975,9 @@ function resetExplorer() {
 }
 
 function stopExplorerMode() {
+    // Use GameController to cleanly exit current phase
+    GameController.enterPhase(GamePhase.MENU);
+
     // Hide location search bar
     hideLocationSearch();
 
