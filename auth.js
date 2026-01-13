@@ -539,8 +539,9 @@ const PathfindrAuth = {
 
       // On mobile or Capacitor WebView, redirect to deployed website
       // On actual web deployment, use current origin
+      // Using Vercel URL for testing until pathfindr.world is set up
       const redirectUrl = (isNativeMobile || isCapacitorWebView)
-        ? 'https://pathfindr.world/auth-callback'
+        ? 'https://pathfindralpha.vercel.app/auth-callback'
         : window.location.origin;
 
       console.log('[Auth] OAuth redirect URL:', redirectUrl, '(isNative:', isNativeMobile, ', isCapacitor:', isCapacitorWebView, ')');
