@@ -12,7 +12,7 @@ const PathfindrConfig = {
   // ===========================================
   supabase: {
     url: 'https://wxlglepsypmpnupxexoc.supabase.co',
-    anonKey: 'sb_publishable_ar9QuO_YNixX-wIosQYsJA_gQLMXxcE',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4bGdsZXBzeXBtcG51cHhleG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2ODgwMDIsImV4cCI6MjA4MzI2NDAwMn0.f_X3NWT6Gck2m4UDCqkvScJ-CwBH8oO22pELTflFxJ8',
   },
 
   // ===========================================

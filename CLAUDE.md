@@ -116,6 +116,34 @@ CONFIG.viz.explorationDelay = 8   // ms between batches
 - Keep particle counts limited (`CONFIG.viz.maxParticles = 80`)
 - Heat maps use Map objects for O(1) lookup
 
+## City Facts System
+
+The game displays interesting facts about cities during Explorer and Visualizer modes.
+
+### Architecture
+- **Wikipedia API** → **OpenAI (gpt-4o-mini)** → **Supabase PostgreSQL cache**
+- Facts are fetched via Supabase Edge Function (`supabase/functions/get-city-facts/`)
+- Once fetched, facts are cached permanently in the `city_facts` table
+
+### Testing Mode (IMPORTANT!)
+```javascript
+CityFacts.TESTING_MODE = true;  // In game.js
+```
+When `TESTING_MODE` is true:
+- Every city visited triggers an API call (cached locally per session)
+- The Edge Function checks Supabase first; only calls Wikipedia/OpenAI if no cached facts exist
+- This builds up the Supabase database with facts during testing
+- Console logs track unique cities queried this session
+
+**Goal**: By the time testing is complete, we should have a comprehensive database of facts for all US and global cities in the game.
+
+**Set to `false` in production** to reduce unnecessary API calls.
+
+### Relevant Files
+- `game.js` - `CityFacts` module (client-side)
+- `supabase/functions/get-city-facts/index.ts` - Edge Function
+- `supabase/migrations/001_city_facts.sql` - Database schema
+
 ---
 
 *This document is intended to help AI assistants understand the codebase quickly. The aesthetic is intentionally over-the-top cyberpunk - lean into the neon, the electricity, the Blade Runner vibes.*

@@ -23,6 +23,10 @@
             <div class="hud-section hud-brand">
                 <span class="brand-name">pathfindr</span>
             </div>
+            <!-- Mode Badge (Visualizer/Explorer) - hidden by default -->
+            <div class="hud-section hud-mode hidden" id="hud-mode-section">
+                <span class="mode-badge" id="hud-mode-badge">VISUALIZER</span>
+            </div>
             <div class="hud-section hud-location">
                 <svg class="location-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
@@ -30,7 +34,8 @@
                 </svg>
                 <span id="current-location">Seattle, WA</span>
             </div>
-            <div class="hud-section hud-stats">
+            <!-- Competitive Mode Stats -->
+            <div class="hud-section hud-stats" id="hud-competitive-stats">
                 <div class="hud-stat">
                     <span class="hud-label">Round</span>
                     <span class="hud-value"><span id="current-round">1</span><span class="hud-dim">/5</span></span>
@@ -46,17 +51,52 @@
                     <span class="hud-value hud-score" id="current-score">0</span>
                 </div>
             </div>
+            <!-- Round Legend - shows completed rounds with colors -->
+            <div class="hud-section hud-legend hidden" id="hud-round-legend">
+                <div class="legend-title">Rounds</div>
+                <div class="legend-items" id="legend-items">
+                    <!-- Populated by JS: colored dots with scores -->
+                </div>
+            </div>
+            <!-- Visualizer/Explorer Mode Stats -->
+            <div class="hud-section hud-mode-stats hidden" id="hud-mode-stats">
+                <div class="hud-stat">
+                    <span class="hud-label" id="mode-stat-label">Pathfind</span>
+                    <span class="hud-value"><span id="mode-stat-current">1</span><span class="hud-dim">/<span id="mode-stat-total">5</span></span></span>
+                </div>
+            </div>
+            <!-- Location Search (Visualizer/Explorer Mode) -->
+            <div class="hud-section hud-search hidden" id="hud-search">
+                <div class="search-container">
+                    <input type="text" id="location-search" class="search-input" placeholder="Search city..." autocomplete="off">
+                    <button id="search-btn" class="search-btn" title="Search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="search-results" class="search-results hidden"></div>
+            </div>
             <div class="hud-section hud-controls">
-                <button id="undo-btn" class="hud-btn" title="Undo (Ctrl+Z)">
+                <!-- Competitive Mode Controls -->
+                <button id="undo-btn" class="hud-btn competitive-control" title="Undo (Ctrl+Z)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                         <path d="M3 3v5h5"/>
                     </svg>
                 </button>
-                <button id="clear-btn" class="hud-btn" title="Clear Route">
+                <button id="clear-btn" class="hud-btn competitive-control" title="Clear Route">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
                     </svg>
+                </button>
+                <!-- Mode Exit Button (Visualizer/Explorer) -->
+                <button id="mode-exit-btn" class="hud-btn mode-exit-btn hidden" title="Exit Mode">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                    <span class="exit-text">Exit</span>
                 </button>
                 <button id="mute-btn" class="hud-btn" title="Toggle Sound (M)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -86,11 +126,13 @@
                 <canvas id="viz-canvas"></canvas>
                 <div id="marker-container"></div>
 
-                <!-- Loading Overlay -->
+                <!-- Loading Overlay with Map Transition -->
                 <div id="loading-overlay" class="overlay">
-                    <div class="overlay-content">
-                        <div class="spinner"></div>
+                    <div id="transition-map"></div>
+                    <canvas id="globe-canvas"></canvas>
+                    <div class="overlay-content globe-overlay-content">
                         <p id="loading-text">Loading road network...</p>
+                        <p id="loading-city" class="loading-city-name"></p>
                     </div>
                 </div>
 
@@ -158,11 +200,25 @@
                     </div>
                 </div>
 
-                <!-- Explorer Mode Badge (minimal floating indicator) -->
-                <div id="explorer-badge" class="explorer-floating-badge hidden">
-                    <span class="badge-text">EXPLORER</span>
-                    <span class="badge-hint">Click map for options</span>
+                <!-- Streaming Facts Ticker (Explorer/Visualizer) -->
+                <div id="facts-ticker" class="facts-ticker hidden">
+                    <div class="ticker-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4M12 8h.01"/>
+                        </svg>
+                    </div>
+                    <div class="ticker-content">
+                        <span class="ticker-text" id="ticker-text"></span>
+                    </div>
                 </div>
+
+                <!-- Fullscreen Button (Visualizer/Explorer) -->
+                <button id="fullscreen-btn" class="fullscreen-btn hidden" title="Enter Fullscreen (moves exit)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                    </svg>
+                </button>
 
                 <!-- Explorer Context Menu (unified - all controls) -->
                 <div id="explorer-context-menu" class="explorer-context-menu hidden">
@@ -209,8 +265,9 @@
                 <!-- City Transition Overlay -->
                 <div id="city-transition" class="city-transition hidden">
                     <div class="city-transition-content">
-                        <span class="transition-label">NEXT ARENA</span>
+                        <span class="transition-label">NEXT DESTINATION</span>
                         <span class="transition-city" id="transition-city-name">Loading...</span>
+                        <div class="transition-fact" id="transition-fact"></div>
                         <div class="transition-stats">
                             <span class="transition-stat">
                                 <span class="stat-label">Cities</span>
@@ -220,25 +277,10 @@
                     </div>
                 </div>
 
-                <!-- Visualizer Mode UI (minimal floating controls) -->
-                <div id="visualizer-ui" class="visualizer-ui hidden">
-                    <div class="visualizer-header">
-                        <span class="visualizer-badge">VISUALIZER</span>
-                        <span class="visualizer-city" id="visualizer-city">Loading...</span>
-                        <span class="visualizer-count" id="visualizer-count">1/5</span>
-                    </div>
-                    <button id="visualizer-exit-btn" class="visualizer-exit">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 6L6 18M6 6l12 12"/>
-                        </svg>
-                        Exit
-                    </button>
-                </div>
-
                 <!-- Location Selector Overlay -->
                 <div id="location-selector" class="overlay hidden">
                     <div class="overlay-content location-select">
-                        <h2>Choose Your Arena</h2>
+                        <h2>Choose Your Destination</h2>
                         <p class="location-subtitle">Where do you want to pathfind?</p>
                         <div class="location-options">
                             <button class="location-option" data-mode="local">
@@ -469,6 +511,36 @@
                                 </div>
                             </div>
 
+                            <!-- Game Mode Actions -->
+                            <div class="profile-mode-actions">
+                                <span class="mode-actions-label">Switch Mode</span>
+                                <div class="mode-action-buttons">
+                                    <button id="profile-mode-menu" class="mode-action-btn" title="Back to Menu">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                            <polyline points="9 22 9 12 15 12 15 22"/>
+                                        </svg>
+                                        Menu
+                                    </button>
+                                    <button id="profile-mode-explorer" class="mode-action-btn premium-mode-btn" title="Explorer Mode (Premium)">
+                                        <span class="mode-premium-badge">PRO</span>
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                                        </svg>
+                                        Explorer
+                                    </button>
+                                    <button id="profile-mode-visualizer" class="mode-action-btn premium-mode-btn" title="Visualizer Mode (Premium)">
+                                        <span class="mode-premium-badge">PRO</span>
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        Visualizer
+                                    </button>
+                                </div>
+                            </div>
+
                             <!-- Action Buttons -->
                             <div class="profile-actions">
                                 <button id="remove-ads-btn" class="btn-holo-upgrade">
@@ -591,6 +663,12 @@
                                     <span class="comparison-value" id="optimal-distance">0.00 km</span>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Location Fact -->
+                        <div id="location-fact" class="location-fact hidden">
+                            <span class="fact-icon">&#9733;</span>
+                            <span class="fact-text" id="fact-text"></span>
                         </div>
 
                         <!-- Progress & Total -->
@@ -757,6 +835,22 @@
                         alert('Purchase failed: ' + result.error);
                     }
                 }
+            });
+
+            // Mode switching buttons in profile
+            document.getElementById('profile-mode-menu')?.addEventListener('click', () => {
+                document.getElementById('auth-modal').classList.add('hidden');
+                if (typeof exitToMenu === 'function') exitToMenu();
+            });
+
+            document.getElementById('profile-mode-explorer')?.addEventListener('click', () => {
+                document.getElementById('auth-modal').classList.add('hidden');
+                if (typeof switchToExplorerMode === 'function') switchToExplorerMode();
+            });
+
+            document.getElementById('profile-mode-visualizer')?.addEventListener('click', () => {
+                document.getElementById('auth-modal').classList.add('hidden');
+                if (typeof switchToVisualizerMode === 'function') switchToVisualizerMode();
             });
 
             // Update UI based on auth state

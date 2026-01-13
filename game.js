@@ -16,11 +16,38 @@ const CONFIG = {
         name: "Seattle, WA"
     },
 
-    // US Cities for random selection
+    // US Cities for random selection (with optional districts)
     usCities: [
-        { lat: 40.7128, lng: -74.0060, name: "New York, NY", zoom: 15 },
-        { lat: 34.0522, lng: -118.2437, name: "Los Angeles, CA", zoom: 15 },
-        { lat: 41.8781, lng: -87.6298, name: "Chicago, IL", zoom: 15 },
+        {
+            lat: 40.7128, lng: -74.0060, name: "New York, NY", zoom: 15,
+            districts: [
+                { lat: 40.7580, lng: -73.9855, name: "Midtown Manhattan", zoom: 16 },
+                { lat: 40.7484, lng: -73.9857, name: "Times Square", zoom: 16 },
+                { lat: 40.7061, lng: -74.0087, name: "Financial District", zoom: 16 },
+                { lat: 40.7282, lng: -73.7949, name: "Queens", zoom: 15 },
+                { lat: 40.6782, lng: -73.9442, name: "Brooklyn", zoom: 15 },
+                { lat: 40.8448, lng: -73.8648, name: "The Bronx", zoom: 15 },
+            ]
+        },
+        {
+            lat: 34.0522, lng: -118.2437, name: "Los Angeles, CA", zoom: 15,
+            districts: [
+                { lat: 34.1022, lng: -118.3260, name: "Hollywood", zoom: 16 },
+                { lat: 34.0195, lng: -118.4912, name: "Santa Monica", zoom: 16 },
+                { lat: 34.0407, lng: -118.2468, name: "Downtown LA", zoom: 16 },
+                { lat: 34.0259, lng: -118.7798, name: "Malibu", zoom: 15 },
+                { lat: 33.9850, lng: -118.4695, name: "Venice Beach", zoom: 16 },
+            ]
+        },
+        {
+            lat: 41.8781, lng: -87.6298, name: "Chicago, IL", zoom: 15,
+            districts: [
+                { lat: 41.8827, lng: -87.6233, name: "The Loop", zoom: 16 },
+                { lat: 41.9142, lng: -87.6345, name: "Lincoln Park", zoom: 16 },
+                { lat: 41.8947, lng: -87.6116, name: "Magnificent Mile", zoom: 16 },
+                { lat: 41.8507, lng: -87.6512, name: "Pilsen", zoom: 16 },
+            ]
+        },
         { lat: 29.7604, lng: -95.3698, name: "Houston, TX", zoom: 15 },
         { lat: 33.4484, lng: -112.0740, name: "Phoenix, AZ", zoom: 15 },
         { lat: 39.9526, lng: -75.1652, name: "Philadelphia, PA", zoom: 15 },
@@ -28,7 +55,16 @@ const CONFIG = {
         { lat: 32.7767, lng: -96.7970, name: "Dallas, TX", zoom: 15 },
         { lat: 37.3382, lng: -121.8863, name: "San Jose, CA", zoom: 15 },
         { lat: 30.2672, lng: -97.7431, name: "Austin, TX", zoom: 15 },
-        { lat: 37.7749, lng: -122.4194, name: "San Francisco, CA", zoom: 15 },
+        {
+            lat: 37.7749, lng: -122.4194, name: "San Francisco, CA", zoom: 15,
+            districts: [
+                { lat: 37.7879, lng: -122.4074, name: "Financial District", zoom: 16 },
+                { lat: 37.7599, lng: -122.4148, name: "Mission District", zoom: 16 },
+                { lat: 37.8044, lng: -122.4194, name: "North Beach", zoom: 16 },
+                { lat: 37.7694, lng: -122.4862, name: "Golden Gate Park", zoom: 15 },
+                { lat: 37.7651, lng: -122.4195, name: "Castro", zoom: 16 },
+            ]
+        },
         { lat: 47.6062, lng: -122.3321, name: "Seattle, WA", zoom: 15 },
         { lat: 39.7392, lng: -104.9903, name: "Denver, CO", zoom: 15 },
         { lat: 42.3601, lng: -71.0589, name: "Boston, MA", zoom: 15 },
@@ -45,11 +81,48 @@ const CONFIG = {
         { lat: 43.0389, lng: -87.9065, name: "Milwaukee, WI", zoom: 15 },
     ],
 
-    // Global Cities for random selection
+    // Global Cities for random selection (with optional districts)
     globalCities: [
-        { lat: 51.5074, lng: -0.1278, name: "London, UK", zoom: 15 },
-        { lat: 48.8566, lng: 2.3522, name: "Paris, France", zoom: 15 },
-        { lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan", zoom: 15 },
+        {
+            lat: 30.0309, lng: 31.4725, name: "New Cairo, Egypt", zoom: 15,
+            wikiName: "New Cairo",  // For Wikipedia lookups
+            districts: [
+                { lat: 30.0309, lng: 31.4725, name: "Lotus District", zoom: 16, isDefault: true },
+                { lat: 30.0254, lng: 31.4615, name: "Fifth Settlement", zoom: 16 },
+                { lat: 30.0074, lng: 31.4934, name: "Rehab City", zoom: 16 },
+                { lat: 29.9870, lng: 31.4356, name: "Madinaty", zoom: 16 },
+            ]
+        },
+        {
+            lat: 51.5074, lng: -0.1278, name: "London, UK", zoom: 15,
+            districts: [
+                { lat: 51.5137, lng: -0.0984, name: "City of London", zoom: 16 },
+                { lat: 51.5014, lng: -0.1419, name: "Westminster", zoom: 16 },
+                { lat: 51.5083, lng: -0.0758, name: "Tower Bridge", zoom: 16 },
+                { lat: 51.5290, lng: -0.1255, name: "Camden", zoom: 16 },
+                { lat: 51.4613, lng: -0.1156, name: "Brixton", zoom: 16 },
+            ]
+        },
+        {
+            lat: 48.8566, lng: 2.3522, name: "Paris, France", zoom: 15,
+            districts: [
+                { lat: 48.8584, lng: 2.2945, name: "Eiffel Tower", zoom: 16 },
+                { lat: 48.8606, lng: 2.3376, name: "Le Marais", zoom: 16 },
+                { lat: 48.8867, lng: 2.3431, name: "Montmartre", zoom: 16 },
+                { lat: 48.8530, lng: 2.3499, name: "Latin Quarter", zoom: 16 },
+                { lat: 48.8738, lng: 2.2950, name: "Champs-Élysées", zoom: 16 },
+            ]
+        },
+        {
+            lat: 35.6762, lng: 139.6503, name: "Tokyo, Japan", zoom: 15,
+            districts: [
+                { lat: 35.6595, lng: 139.7004, name: "Shibuya", zoom: 16 },
+                { lat: 35.6938, lng: 139.7036, name: "Shinjuku", zoom: 16 },
+                { lat: 35.7100, lng: 139.8107, name: "Akihabara", zoom: 16 },
+                { lat: 35.6654, lng: 139.7707, name: "Ginza", zoom: 16 },
+                { lat: 35.7148, lng: 139.7967, name: "Ueno", zoom: 16 },
+            ]
+        },
         { lat: 52.5200, lng: 13.4050, name: "Berlin, Germany", zoom: 15 },
         { lat: 55.7558, lng: 37.6173, name: "Moscow, Russia", zoom: 15 },
         { lat: 39.9042, lng: 116.4074, name: "Beijing, China", zoom: 15 },
@@ -85,46 +158,109 @@ const CONFIG = {
         easy: 1.0      // 1 kilometer - allows longer segments
     },
 
-    // Visualization settings - OPTIMIZED for performance
+    // Visualization settings - ENHANCED for vibrant effects
     viz: {
-        explorationDelay: 5,        // ms between exploration batches
-        batchSize: 8,               // nodes per batch
-        nodeGlowRadius: 14,         // base glow radius (reduced)
-        edgeWidth: 3,               // base edge width (reduced)
-        heatDecay: 0.997,           // very slow decay - explored edges persist much longer
-        heatFloor: 0.4,             // high minimum heat - explored edges stay clearly visible
-        pulseSpeed: 0.05,           // pulse animation speed
-        particleCount: 25,          // reduced particle count
-        pathTraceSpeed: 15,         // ms per path segment
-        maxParticles: 80,           // cap total particles
+        explorationDelay: 12,       // ms between exploration batches (slower = more visible)
+        batchSize: 4,               // nodes per batch (fewer = more visible progression)
+        nodeGlowRadius: 22,         // ENHANCED: larger glow radius
+        edgeWidth: 5,               // ENHANCED: thicker edges
+        heatDecay: 0.998,           // VERY slow decay for maximum persistence
+        heatFloor: 0.6,             // HIGH floor so explored areas stay bright
+        pulseSpeed: 0.065,          // pulse animation speed
+        particleCount: 35,          // particles during exploration
+        pathTraceSpeed: 8,          // path tracing speed (slower for more drama)
+        maxParticles: 120,          // max particles allowed
+        glowIntensity: 1.6,         // glow multiplier (brighter)
+        saturationBoost: 1.3,       // color saturation boost
     },
 
-    // Blade Runner color palette (from hot to cold)
-    heatColors: [
-        { r: 255, g: 255, b: 255 },  // White hot
-        { r: 0, g: 240, b: 255 },    // Neon cyan
-        { r: 184, g: 41, b: 221 },   // Neon purple
-        { r: 255, g: 42, b: 109 },   // Neon pink
-        { r: 100, g: 20, b: 80 },    // Dark magenta
-        { r: 30, g: 10, b: 40 },     // Very dark
-    ],
+    // ═══════════════════════════════════════════════════════════════════════════
+    // UNIFIED COLOR SYSTEM - One color per round, three shades (hot/mid/cool)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COOL → HOT progression: difficulty increases as colors get warmer
+    color: {
+        // Base colors for each round - cool to hot progression
+        // Round colors - DISTINCT, no purple/magenta to avoid confusion
+        rounds: [
+            { r: 0,   g: 230, b: 255, name: 'Cyan'     },  // Round 1: Electric Cyan
+            { r: 100, g: 255, b: 100, name: 'Lime'     },  // Round 2: Bright Lime Green
+            { r: 255, g: 220, b: 0,   name: 'Gold'     },  // Round 3: Electric Gold
+            { r: 255, g: 100, b: 50,  name: 'Orange'   },  // Round 4: Neon Orange
+            { r: 255, g: 50,  b: 50,  name: 'Red'      },  // Round 5: Hot Red (no purple!)
+        ],
 
-    colors: {
-        userRoute: '#ff6b35',       // Neon orange
-        optimal: '#00f0ff',         // Neon cyan
-        optimalGlow: '#00f0ff',
-        start: '#39ff14',           // Neon green
-        end: '#ff2a6d'              // Neon pink
+        // Shade multipliers for the three intensity levels
+        // SIMPLIFIED: All shades use SAME hue, only brightness varies slightly
+        // This keeps each round visually unified
+        shades: {
+            hot:  { brightness: 1.0 },   // Optimal path - full brightness
+            mid:  { brightness: 1.0 },   // User path - same as optimal (distinguished by thickness)
+            cool: { brightness: 0.7 },   // Exploration falloff - slightly dimmer, SAME HUE
+        },
+
+        // Get base color for a round
+        getBase(roundNumber) {
+            return this.rounds[(roundNumber - 1) % this.rounds.length];
+        },
+
+        // Get base color by index (for explorer/visualizer)
+        getBaseByIndex(index) {
+            return this.rounds[index % this.rounds.length];
+        },
+
+        // Apply shade to base color (hot/mid/cool)
+        applyShade(base, shade) {
+            const s = this.shades[shade] || this.shades.mid;
+            return {
+                r: Math.round(Math.min(255, base.r * s.brightness)),
+                g: Math.round(Math.min(255, base.g * s.brightness)),
+                b: Math.round(Math.min(255, base.b * s.brightness)),
+            };
+        },
+
+        // Get full theme for a round with all three shades
+        getTheme(roundNumber) {
+            const base = this.getBase(roundNumber);
+            return {
+                base: base,
+                hot: this.applyShade(base, 'hot'),      // Optimal path
+                mid: this.applyShade(base, 'mid'),      // User path
+                cool: this.applyShade(base, 'cool'),    // Ambient history
+                name: base.name,
+            };
+        },
+
+        // Get theme by index (for explorer/visualizer history cycling)
+        getThemeByIndex(index) {
+            const base = this.getBaseByIndex(index);
+            return {
+                base: base,
+                hot: this.applyShade(base, 'hot'),
+                mid: this.applyShade(base, 'mid'),
+                cool: this.applyShade(base, 'cool'),
+                name: base.name,
+            };
+        },
+
+        // Ambient road colors - NEUTRAL dark grays so they don't compete with round colors
+        ambient: {
+            core:  { r: 80, g: 75, b: 70 },   // Warm dark gray
+            mid:   { r: 60, g: 55, b: 55 },   // Medium gray
+            outer: { r: 45, g: 42, b: 45 },   // Dark gray
+        },
+
+        // User path - ALWAYS WHITE for instant recognition
+        // This stays constant across all rounds so players always know "this is MY path"
+        userPath: { r: 255, g: 255, b: 255, name: 'White' },
+
+        getAmbient() {
+            return this.ambient;
+        },
+
+        getUserPathColor() {
+            return this.userPath;
+        },
     },
-
-    // Round-specific colors for persistent visualization
-    roundColors: [
-        { r: 0, g: 240, b: 255, hex: '#00F0FF' },    // Round 1: Cyan
-        { r: 255, g: 42, b: 109, hex: '#FF2A6D' },   // Round 2: Magenta
-        { r: 184, g: 41, b: 221, hex: '#B829DD' },   // Round 3: Purple
-        { r: 77, g: 159, b: 255, hex: '#4D9FFF' },   // Round 4: Blue
-        { r: 255, g: 215, b: 0, hex: '#FFD700' },    // Round 5: Gold
-    ],
 
     // Electricity effect settings
     electricity: {
@@ -137,6 +273,20 @@ const CONFIG = {
         activeIntensity: 1.0,       // brightness of active round
     },
 
+    // Living Network - keeps visualization alive after pathfinding completes
+    livingNetwork: {
+        breatheSpeed: 0.4,          // Speed of global breathing pulse (cycles/sec)
+        breatheMin: 0.5,            // Minimum brightness during breath
+        breatheMax: 1.0,            // Maximum brightness during breath
+        rippleInterval: 3000,       // ms between ripple waves
+        rippleSpeed: 0.15,          // How fast ripples spread (0-1 per frame)
+        rippleDuration: 1500,       // How long a ripple lasts (ms)
+        powerPulseSpeed: 0.008,     // Speed of energy pulses along optimal path
+        powerPulseCount: 12,        // Number of energy pulses per optimal path
+        powerGlowIntensity: 1.5,    // How bright the optimal path glows as power source
+        sparkChance: 0.015,         // Chance per frame of spark from optimal path
+    },
+
     maxScore: 1000,
     // Multiple Overpass servers for fallback reliability
     overpassServers: [
@@ -146,6 +296,387 @@ const CONFIG = {
     ],
     overpassUrl: 'https://overpass-api.de/api/interpreter', // Default, will rotate on failure
     nominatimUrl: 'https://nominatim.openstreetmap.org/search',
+
+    // Supabase Edge Function URL for city facts
+    cityFactsUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-city-facts',
+
+    // Supabase Edge Function URL for random cities
+    randomCityUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-random-city',
+};
+
+// =============================================================================
+// MAP TRANSITION - Smooth zoom animation during city loading
+// =============================================================================
+
+const MapTransition = {
+    active: false,
+    animationId: null,
+
+    // Simple approach: Just update city name, don't animate the map
+    // The map will be set to the correct position when road loading starts
+    start(lat, lng, cityName = '', zoom = 15) {
+        // Update city name display
+        const cityEl = document.getElementById('loading-city');
+        if (cityEl) cityEl.textContent = cityName || '';
+
+        // Set map to target position immediately (needed for road network bounds)
+        if (GameState.map) {
+            GameState.map.setView([lat, lng], zoom, { animate: false });
+        }
+    },
+
+    stop() {
+        // Nothing to stop anymore
+    }
+};
+
+// Alias for backward compatibility
+const GlobeAnimation = MapTransition;
+
+// =============================================================================
+// CITY FACTS - Fetches interesting facts about cities via Supabase Edge Function
+// =============================================================================
+
+const CityFacts = {
+    cache: new Map(),  // Local cache to avoid repeated requests
+    currentFact: null,
+    factIndex: 0,      // Rotate through facts for the same city
+
+    // =========================================================================
+    // TESTING MODE: Set to true to aggressively fetch facts for all cities
+    // This builds up the Supabase database with facts during testing.
+    // The Edge Function will skip re-fetching if facts already exist in DB,
+    // but this ensures we HIT the API for every unique city we visit.
+    // Set to false in production to reduce API calls.
+    // =========================================================================
+    TESTING_MODE: true,
+    citiesQueried: new Set(),  // Track unique cities queried this session
+
+    /**
+     * Fetch facts for a city from Supabase Edge Function
+     * Results are cached locally and on the server
+     */
+    async fetchFacts(cityName) {
+        // In testing mode, log every unique city we query
+        if (this.TESTING_MODE && !this.citiesQueried.has(cityName)) {
+            this.citiesQueried.add(cityName);
+            console.log(`[CityFacts] Testing mode: Queried ${this.citiesQueried.size} unique cities this session`);
+            console.log(`[CityFacts] Cities: ${Array.from(this.citiesQueried).join(', ')}`);
+        }
+
+        // Check local cache first (still cache locally for performance)
+        if (this.cache.has(cityName)) {
+            return this.cache.get(cityName);
+        }
+
+        try {
+            const response = await fetch(CONFIG.cityFactsUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
+                },
+                body: JSON.stringify({ city: cityName }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Facts API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const facts = data.facts || [];
+
+            // Cache locally
+            this.cache.set(cityName, facts);
+
+            return facts;
+        } catch (error) {
+            console.warn('Failed to fetch city facts:', error);
+            // Return fallback facts
+            return this.getFallbackFacts(cityName);
+        }
+    },
+
+    /**
+     * Get a random fact for the current city
+     */
+    async getRandomFact(cityName) {
+        const facts = await this.fetchFacts(cityName);
+        if (facts.length === 0) return null;
+
+        // Rotate through facts to avoid repetition
+        this.factIndex = (this.factIndex + 1) % facts.length;
+        this.currentFact = facts[this.factIndex];
+        return this.currentFact;
+    },
+
+    /**
+     * Display fact in the results panel
+     */
+    async showFactInResults(cityName) {
+        const factEl = document.getElementById('location-fact');
+        const factTextEl = document.getElementById('fact-text');
+
+        if (!factEl || !factTextEl) return;
+
+        // Use wikiName if available for better lookups
+        const lookupName = this.getWikiName(cityName);
+        const fact = await this.getRandomFact(lookupName);
+
+        if (fact) {
+            factTextEl.textContent = fact;
+            factEl.classList.remove('hidden');
+        } else {
+            factEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Get the Wikipedia-friendly name for a city
+     */
+    getWikiName(cityName) {
+        // Check if this is the current city and it has a wikiName
+        if (GameState.currentCity?.name === cityName && GameState.currentCity?.wikiName) {
+            return GameState.currentCity.wikiName;
+        }
+
+        // Check if we have a wikiName defined for this city in CONFIG
+        const allCities = [...CONFIG.usCities, ...CONFIG.globalCities];
+        const city = allCities.find(c => c.name === cityName);
+        if (city?.wikiName) return city.wikiName;
+
+        // Otherwise strip country/state suffix for better Wikipedia results
+        // "New York, NY" -> "New York"
+        // "Tokyo, Japan" -> "Tokyo"
+        return cityName.split(',')[0].trim();
+    },
+
+    /**
+     * Display fact in the transition overlay
+     */
+    async showFactInTransition(cityName) {
+        const factEl = document.getElementById('transition-fact');
+        if (!factEl) return;
+
+        const lookupName = this.getWikiName(cityName);
+        const fact = await this.getRandomFact(lookupName);
+        factEl.textContent = fact || '';
+    },
+
+    /**
+     * Fallback facts when API is unavailable
+     */
+    getFallbackFacts(cityName) {
+        return [
+            `Navigate the streets of ${cityName} and find the optimal path!`,
+            `${cityName}'s road network awaits your pathfinding skills.`,
+            `Every city has its own rhythm. Discover ${cityName}'s street patterns.`,
+            `Can you beat the A* algorithm in ${cityName}?`,
+            `Explore ${cityName}'s unique urban geography.`,
+        ];
+    },
+
+    /**
+     * Preload facts for a city (call during loading screens)
+     */
+    preload(cityName) {
+        // Fire and forget - just populate the cache
+        const lookupName = this.getWikiName(cityName);
+        this.fetchFacts(lookupName).catch(() => {});
+    },
+
+    // =========================================================================
+    // STREAMING FACTS TICKER (for Explorer/Visualizer modes)
+    // =========================================================================
+
+    ticker: {
+        active: false,
+        interval: null,
+        currentIndex: 0,
+        facts: [],
+        cityName: null,
+        intervalMs: 8000,  // 8 seconds between facts
+    },
+
+    /**
+     * Start the facts ticker for Explorer/Visualizer modes
+     */
+    async startTicker(cityName) {
+        const tickerEl = document.getElementById('facts-ticker');
+        const textEl = document.getElementById('ticker-text');
+        if (!tickerEl || !textEl) return;
+
+        // Stop any existing ticker
+        this.stopTicker();
+
+        // Get facts for this city
+        const lookupName = this.getWikiName(cityName);
+        this.ticker.facts = await this.fetchFacts(lookupName);
+        this.ticker.cityName = cityName;
+        this.ticker.currentIndex = 0;
+        this.ticker.active = true;
+
+        // Show first fact immediately
+        this.showNextTickerFact();
+
+        // Show the ticker
+        tickerEl.classList.remove('hidden');
+
+        // Start rotating facts
+        this.ticker.interval = setInterval(() => {
+            if (this.ticker.active) {
+                this.showNextTickerFact();
+            }
+        }, this.ticker.intervalMs);
+    },
+
+    /**
+     * Show the next fact in the ticker
+     */
+    showNextTickerFact() {
+        const textEl = document.getElementById('ticker-text');
+        if (!textEl || this.ticker.facts.length === 0) return;
+
+        // Get next fact
+        const fact = this.ticker.facts[this.ticker.currentIndex];
+        this.ticker.currentIndex = (this.ticker.currentIndex + 1) % this.ticker.facts.length;
+
+        // Animate the text change
+        textEl.style.animation = 'none';
+        textEl.offsetHeight; // Trigger reflow
+        textEl.style.animation = 'ticker-text-fade 0.4s ease-out';
+        textEl.textContent = fact;
+    },
+
+    /**
+     * Stop the facts ticker
+     */
+    stopTicker() {
+        const tickerEl = document.getElementById('facts-ticker');
+        if (tickerEl) tickerEl.classList.add('hidden');
+
+        if (this.ticker.interval) {
+            clearInterval(this.ticker.interval);
+            this.ticker.interval = null;
+        }
+        this.ticker.active = false;
+        this.ticker.facts = [];
+        this.ticker.currentIndex = 0;
+    },
+
+    /**
+     * Update ticker with new city (when map moves significantly)
+     */
+    async updateTickerCity(cityName) {
+        if (!this.ticker.active) return;
+        if (cityName === this.ticker.cityName) return;
+
+        // Fetch new facts
+        const lookupName = this.getWikiName(cityName);
+        const newFacts = await this.fetchFacts(lookupName);
+
+        if (newFacts.length > 0) {
+            this.ticker.facts = newFacts;
+            this.ticker.cityName = cityName;
+            this.ticker.currentIndex = 0;
+            this.showNextTickerFact();
+        }
+    },
+};
+
+// =============================================================================
+// CITY DATABASE - Fetch random cities from Supabase
+// =============================================================================
+
+const CityDB = {
+    // =========================================================================
+    // TESTING MODE: Set to true to use Supabase cities database
+    // When enabled, getRandomCity() will fetch from the DB instead of
+    // using the hardcoded lists. This allows access to 40,000+ cities.
+    // Set to false to use only the hardcoded CONFIG.usCities/globalCities.
+    // =========================================================================
+    enabled: true,
+
+    // Cache for fetched cities to avoid redundant API calls
+    cache: new Map(),
+
+    /**
+     * Fetch a random city from Supabase
+     * @param {Object} options - Filter options
+     * @param {string} options.countryCode - ISO country code (e.g., "US", "GB")
+     * @param {number} options.minPopulation - Minimum population filter
+     * @returns {Promise<Object>} City object with lat, lng, name, etc.
+     */
+    async getRandomCity(options = {}) {
+        const { countryCode, minPopulation = 10000 } = options;
+
+        try {
+            const params = new URLSearchParams();
+            if (countryCode) params.set('country_code', countryCode);
+            if (minPopulation) params.set('min_population', minPopulation.toString());
+
+            const url = `${CONFIG.randomCityUrl}?${params.toString()}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`City API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.city) {
+                // Convert to the format expected by the game
+                return {
+                    lat: parseFloat(data.city.lat),
+                    lng: parseFloat(data.city.lng),
+                    name: `${data.city.name}, ${data.city.country}`,
+                    zoom: this.getZoomForPopulation(data.city.population),
+                    population: data.city.population,
+                    fromDB: true,
+                };
+            }
+
+            return null;
+        } catch (error) {
+            console.error('[CityDB] Error fetching random city:', error);
+            return null;
+        }
+    },
+
+    /**
+     * Get appropriate zoom level based on city population
+     * Larger cities = lower zoom (more zoomed out)
+     * Smaller cities = higher zoom (more zoomed in)
+     */
+    getZoomForPopulation(population) {
+        if (!population) return 15;
+        if (population > 5000000) return 14;  // Megacities
+        if (population > 1000000) return 14;  // Major cities
+        if (population > 500000) return 15;   // Large cities
+        if (population > 100000) return 15;   // Medium cities
+        if (population > 50000) return 16;    // Small cities
+        return 16;                            // Towns
+    },
+
+    /**
+     * Get a random city for US mode
+     */
+    async getRandomUSCity() {
+        return this.getRandomCity({ countryCode: 'US', minPopulation: 25000 });
+    },
+
+    /**
+     * Get a random city for global/world mode
+     */
+    async getRandomWorldCity() {
+        return this.getRandomCity({ minPopulation: 50000 });
+    },
 };
 
 // =============================================================================
@@ -279,75 +810,75 @@ const WebGLRenderer = {
             }
         `,
 
-        // Fragment shader for heat-mapped exploration
+        // Fragment shader for heat-mapped exploration - uses ROUND COLOR with FRONTIER GLOW
         heatFragment: `
             precision mediump float;
 
             uniform float u_time;
             uniform vec2 u_resolution;
+            uniform vec3 u_roundColor;  // Current round's color (passed from JS)
 
             varying float v_heat;
             varying vec2 v_position;
 
-            // Heat color palette: cyan -> purple -> pink
-            vec3 getHeatColor(float heat) {
-                vec3 cyan = vec3(0.0, 0.94, 1.0);
-                vec3 purple = vec3(0.72, 0.16, 0.87);
-                vec3 pink = vec3(1.0, 0.16, 0.43);
-                vec3 dark = vec3(0.12, 0.04, 0.16);
-
-                if (heat > 0.7) {
-                    return mix(purple, cyan, (heat - 0.7) / 0.3);
-                } else if (heat > 0.3) {
-                    return mix(pink, purple, (heat - 0.3) / 0.4);
-                } else {
-                    return mix(dark, pink, heat / 0.3);
-                }
-            }
-
             void main() {
-                if (v_heat < 0.03) discard;
+                if (v_heat < 0.02) discard;
 
-                // Flicker effect
-                float flicker = 0.85 + sin(u_time * 30.0) * 0.02 + sin(u_time * 7.0) * 0.03;
+                // Base flicker for all edges
+                float flicker = 0.9 + sin(u_time * 8.0) * 0.05;
 
-                vec3 color = getHeatColor(v_heat);
-                float alpha = v_heat * flicker;
+                // FRONTIER GLOW: High-heat edges (frontier) get special treatment
+                float frontierThreshold = 0.6;
+                float isFrontier = smoothstep(frontierThreshold, 0.85, v_heat);
 
-                // Additive blending preparation
+                // Frontier edges pulse more dramatically
+                float frontierPulse = 1.0 + isFrontier * (sin(u_time * 12.0) * 0.3 + 0.2);
+
+                // Frontier edges are MUCH brighter - creates the "spreading fire" effect
+                float frontierBoost = 1.0 + isFrontier * 1.5;
+
+                // Base brightness from heat (dimmer for older exploration)
+                float baseBrightness = 0.25 + v_heat * 0.5;
+
+                // Combine: frontier edges glow bright, older edges fade to subtle
+                float brightness = baseBrightness * frontierBoost * frontierPulse;
+
+                vec3 color = u_roundColor * brightness;
+
+                // Add white-hot core to frontier edges
+                float whiteCore = isFrontier * 0.4;
+                color = mix(color, vec3(1.0), whiteCore);
+
+                // Alpha also boosted for frontier
+                float alpha = v_heat * flicker * (0.6 + isFrontier * 0.5);
+
                 gl_FragColor = vec4(color * alpha, alpha);
             }
         `,
 
-        // Fragment shader for glow effect - gentle pulsing bloom
+        // Fragment shader for glow effect - uses ROUND COLOR
         glowFragment: `
             precision mediump float;
 
             uniform float u_time;
             uniform vec2 u_resolution;
+            uniform vec3 u_roundColor;  // Current round's color
 
             varying float v_heat;
             varying vec2 v_position;
 
             void main() {
-                if (v_heat < 0.03) discard;
+                if (v_heat < 0.02) discard;
 
-                // Slow gentle pulse - 20 second cycle
-                float flowCoord = (v_position.x + v_position.y) * 0.005;
-                float pulse = sin(flowCoord - u_time * 0.3) * 0.2 + 0.8;
+                // Enhanced pulse with multiple waves
+                float flowCoord = (v_position.x + v_position.y) * 0.006;
+                float pulse = sin(flowCoord - u_time * 0.35) * 0.2 +
+                              sin(flowCoord * 1.5 - u_time * 0.5) * 0.08 + 0.85;
 
-                // Color based on heat
-                vec3 cyan = vec3(0.0, 0.94, 1.0);
-                vec3 purple = vec3(0.72, 0.16, 0.87);
-                vec3 pink = vec3(1.0, 0.2, 0.6);
+                // Use round color - just vary brightness by heat
+                vec3 color = u_roundColor * (0.4 + v_heat * 0.6);
 
-                // Slow color shift - 30 second cycle
-                float colorShift = sin(u_time * 0.2 + flowCoord) * 0.5 + 0.5;
-                vec3 hotColor = mix(cyan, vec3(1.0, 1.0, 1.0), 0.3);
-                vec3 coolColor = mix(purple, pink, colorShift * 0.4);
-                vec3 color = mix(coolColor, hotColor, v_heat);
-
-                // Gentle glow
+                // Glow intensity
                 float glow = v_heat * 0.35 * pulse;
 
                 gl_FragColor = vec4(color * glow, glow);
@@ -390,8 +921,15 @@ const WebGLRenderer = {
             void main() {
                 if (v_visible < 0.5) discard;
 
-                // Bright cyan core with white center
-                vec3 color = vec3(0.6, 1.0, 1.0);
+                // Electric pulse along path
+                float pulse = 0.9 + sin(u_time * 4.0) * 0.08 + sin(u_time * 12.0) * 0.02;
+
+                // Bright electric cyan with white hot center
+                vec3 color = vec3(0.4, 1.0, 1.0) * pulse;
+
+                // Add slight brightness boost
+                color = color * 1.15;
+
                 gl_FragColor = vec4(color, 1.0);
             }
         `,
@@ -543,6 +1081,7 @@ const WebGLRenderer = {
             lineWidth: gl.getUniformLocation(program, 'u_lineWidth'),
             center: gl.getUniformLocation(program, 'u_center'),
             pathProgress: gl.getUniformLocation(program, 'u_pathProgress'),
+            roundColor: gl.getUniformLocation(program, 'u_roundColor'),
         };
 
         return program;
@@ -908,6 +1447,11 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
 
+        // Pass current round's color to shader
+        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        const c = theme.base;
+        gl.uniform3f(program.uniforms.roundColor, c.r / 255, c.g / 255, c.b / 255);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
         gl.enableVertexAttribArray(program.attributes.position);
         gl.vertexAttribPointer(program.attributes.position, 2, gl.FLOAT, false, 0, 0);
@@ -935,6 +1479,11 @@ const WebGLRenderer = {
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
+
+        // Pass current round's color to shader
+        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        const c = theme.base;
+        gl.uniform3f(program.uniforms.roundColor, c.r / 255, c.g / 255, c.b / 255);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
         gl.enableVertexAttribArray(program.attributes.position);
@@ -2077,7 +2626,7 @@ const AmbientViz = {
             const effectiveIntensity = round.intensity * vizDimFactor;
             ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
-            // Render optimal path (dimmed during active viz)
+            // Render optimal path with contrasting color (dimmed during active viz)
             if (round.optimalPath.length > 1) {
                 const optimalPoints = round.optimalPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
@@ -2086,11 +2635,13 @@ const AmbientViz = {
                 }).filter(p => p !== null);
 
                 if (optimalPoints.length > 1) {
+                    // Use contrasting optimal color (fall back to exploration color if not set)
+                    const pathColor = round.hotColor || round.color;
                     // Initialize pulses for this path if not exists
                     if (!round.optimalPulses) {
-                        round.optimalPulses = ElectricitySystem.createPulses(optimalPoints, round.color, 6);
+                        round.optimalPulses = ElectricitySystem.createPulses(optimalPoints, pathColor, 6);
                     }
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, round.color, effectiveIntensity, round.optimalPulses);
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, pathColor, effectiveIntensity, round.optimalPulses);
                 }
             }
 
@@ -2103,7 +2654,8 @@ const AmbientViz = {
                 }).filter(p => p !== null);
 
                 if (userPoints.length > 1) {
-                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity);
+                    // Use stored userPathColor from round theme
+                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity, round.midColor);
                 }
             }
         }
@@ -2114,6 +2666,12 @@ const AmbientViz = {
     renderPathHistory(ctx, deltaTime, paths, isVizActive = false) {
         // During active visualization, dim previous paths to 40%
         const vizDimFactor = isVizActive ? 0.4 : 1.0;
+
+        // Get the correct history object based on game mode for living network effects
+        const historyObj = GameState.gameMode === 'explorer' ? ExplorerHistory : VisualizerHistory;
+
+        // Get breathing multiplier for living network effect
+        const breathe = historyObj.getBreathingMultiplier();
 
         // Check if map moved (invalidates all caches)
         const mapCenter = GameState.map.getCenter();
@@ -2158,35 +2716,48 @@ const AmbientViz = {
 
             const screenEdges = path.screenEdgesCache || [];
             const isActive = path.state === 'surging' && !isVizActive;
-            const effectiveIntensity = path.intensity * vizDimFactor;
 
-            // OPTIMIZATION: Use simplified rendering for idle paths (no wobble/arcs)
+            // LIVING NETWORK: Apply breathing + ripple boost for idle paths
+            let effectiveIntensity = path.intensity * vizDimFactor;
+            if (path.state === 'idle' && !isVizActive) {
+                // Breathing effect makes all idle paths pulse together
+                effectiveIntensity *= breathe;
+                // Ripple boost adds temporary brightness during waves
+                effectiveIntensity += path.rippleIntensity;
+                effectiveIntensity = Math.min(effectiveIntensity, 1.2);  // Cap to prevent blowout
+            }
+
+            // Render explored edges with living network effect
             if (path.state === 'idle' && !isActive) {
-                this.renderSimplifiedEdges(ctx, screenEdges, path.color, effectiveIntensity);
+                this.renderLivingEdges(ctx, screenEdges, path.color, effectiveIntensity, breathe);
             } else {
                 ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, path.color, effectiveIntensity, isActive);
             }
 
-            // Render optimal path
+            // Render optimal path as POWER SOURCE (always animated, never static)
             const optimalPoints = path.optimalPointsCache;
+            const optimalColor = path.hotColor || path.color;
             if (optimalPoints && optimalPoints.length > 1) {
                 if (!path.optimalPulses) {
-                    path.optimalPulses = ElectricitySystem.createPulses(optimalPoints, path.color, 6);
+                    path.optimalPulses = ElectricitySystem.createPulses(optimalPoints, optimalColor, 6);
                 }
-                // OPTIMIZATION: Simplified path rendering for idle paths
+                // LIVING NETWORK: Optimal path is always animated as power source
                 if (path.state === 'idle') {
-                    this.renderSimplifiedPath(ctx, optimalPoints, path.color, effectiveIntensity);
+                    this.renderPowerSourcePath(ctx, optimalPoints, optimalColor, effectiveIntensity, path.powerPulses, breathe);
                 } else {
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, path.color, effectiveIntensity, path.optimalPulses);
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, optimalColor, effectiveIntensity, path.optimalPulses);
                 }
             }
 
             // Render user path (if exists - Explorer mode)
             const userPoints = path.userPointsCache;
             if (userPoints && userPoints.length > 1) {
-                ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity);
+                ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity, path.midColor);
             }
         }
+
+        // Render sparks from living network
+        this.renderSparks(ctx, historyObj.sparks);
     },
 
     // OPTIMIZATION: Simplified edge rendering for idle paths (no wobble, fewer layers)
@@ -2261,9 +2832,19 @@ const AmbientViz = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
+        // Atmospheric bloom (widest, faintest)
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.08 * effectiveIntensity})`;
+        ctx.lineWidth = 28;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
         // Outer glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
-        ctx.lineWidth = 16;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
+        ctx.lineWidth = 18;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
@@ -2272,8 +2853,8 @@ const AmbientViz = {
         ctx.stroke();
 
         // Mid glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.4 * effectiveIntensity})`;
-        ctx.lineWidth = 8;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
+        ctx.lineWidth = 10;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
@@ -2282,8 +2863,8 @@ const AmbientViz = {
         ctx.stroke();
 
         // Core
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${1.0 * effectiveIntensity})`;
+        ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
@@ -2292,8 +2873,8 @@ const AmbientViz = {
         ctx.stroke();
 
         // White hot center
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.85 * effectiveIntensity})`;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
@@ -2303,6 +2884,205 @@ const AmbientViz = {
 
         // Traveling pulses
         ElectricitySystem.renderPulses(ctx, points, color, intensity, pulses);
+
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    // LIVING NETWORK: Render explored edges with breathing effect
+    renderLivingEdges(ctx, edges, color, intensity, breathe) {
+        if (edges.length === 0) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Subtle flicker synchronized with breathing
+        const flicker = 0.9 + breathe * 0.1;
+
+        // Outer atmospheric glow - pulses with breath
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.08 * intensity * flicker})`;
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        for (const edge of edges) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+
+        // Mid glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * intensity * flicker})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        for (const edge of edges) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+
+        // Core - stays relatively stable
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * intensity})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const edge of edges) {
+            ctx.moveTo(edge.from.x, edge.from.y);
+            ctx.lineTo(edge.to.x, edge.to.y);
+        }
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    // LIVING NETWORK: Render optimal path as continuous power source
+    renderPowerSourcePath(ctx, points, color, intensity, powerPulses, breathe) {
+        if (points.length < 2) return;
+
+        const cfg = CONFIG.livingNetwork;
+        const powerGlow = cfg.powerGlowIntensity;
+        const flicker = 0.92 + breathe * 0.08;
+        const effectiveIntensity = intensity * powerGlow * flicker;
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Wide atmospheric bloom - the "power" aura
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.1 * effectiveIntensity})`;
+        ctx.lineWidth = 24;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Outer glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.25 * effectiveIntensity})`;
+        ctx.lineWidth = 14;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Mid glow
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * effectiveIntensity})`;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Core line
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${1.0 * effectiveIntensity})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // White-hot center
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.stroke();
+
+        // Render power pulses traveling along the path
+        if (powerPulses && powerPulses.length > 0) {
+            this.renderPowerPulses(ctx, points, color, effectiveIntensity, powerPulses);
+        }
+
+        ctx.globalCompositeOperation = 'source-over';
+    },
+
+    // Render power pulses along the optimal path
+    renderPowerPulses(ctx, points, color, intensity, pulses) {
+        if (points.length < 2 || !pulses) return;
+
+        // Calculate total path length and segment lengths
+        const segmentLengths = [];
+        let totalLength = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+            const dx = points[i + 1].x - points[i].x;
+            const dy = points[i + 1].y - points[i].y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            segmentLengths.push(len);
+            totalLength += len;
+        }
+
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const pulse of pulses) {
+            // Find position along path
+            const targetDist = pulse.progress * totalLength;
+            let accum = 0;
+            let px = points[0].x;
+            let py = points[0].y;
+
+            for (let i = 0; i < segmentLengths.length; i++) {
+                if (accum + segmentLengths[i] >= targetDist) {
+                    const t = (targetDist - accum) / segmentLengths[i];
+                    px = points[i].x + (points[i + 1].x - points[i].x) * t;
+                    py = points[i].y + (points[i + 1].y - points[i].y) * t;
+                    break;
+                }
+                accum += segmentLengths[i];
+            }
+
+            // Draw pulse as bright dot with glow
+            const pulseSize = 6 * pulse.size;
+            const pulseIntensity = intensity * pulse.brightness;
+
+            // Outer glow
+            const gradient = ctx.createRadialGradient(px, py, 0, px, py, pulseSize * 2);
+            gradient.addColorStop(0, `rgba(255, 255, 255, ${0.8 * pulseIntensity})`);
+            gradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * pulseIntensity})`);
+            gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(px, py, pulseSize * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    // Render sparks from the living network
+    renderSparks(ctx, sparks) {
+        if (!sparks || sparks.length === 0) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const spark of sparks) {
+            const edge = spark.edge;
+            if (!edge) continue;
+
+            // Calculate spark position along edge
+            const t = Math.min(1, spark.progress);
+            const px = edge.from.x + (edge.to.x - edge.from.x) * t;
+            const py = edge.from.y + (edge.to.y - edge.from.y) * t;
+
+            const alpha = spark.life * spark.brightness;
+            const size = 4 * spark.life;
+
+            // Spark glow
+            const gradient = ctx.createRadialGradient(px, py, 0, px, py, size * 3);
+            gradient.addColorStop(0, `rgba(255, 255, 255, ${0.9 * alpha})`);
+            gradient.addColorStop(0.3, `rgba(${spark.color.r}, ${spark.color.g}, ${spark.color.b}, ${0.7 * alpha})`);
+            gradient.addColorStop(1, `rgba(${spark.color.r}, ${spark.color.g}, ${spark.color.b}, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(px, py, size * 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.globalCompositeOperation = 'source-over';
     },
@@ -2357,15 +3137,18 @@ const RoundHistory = {
 
     // Add completed round to history
     addRound(roundNumber, exploredEdges, optimalPath, userPath) {
-        const color = CONFIG.roundColors[(roundNumber - 1) % CONFIG.roundColors.length];
+        const theme = CONFIG.color.getTheme(roundNumber);
 
         this.rounds.push({
             roundNumber,
             exploredEdges: new Set(exploredEdges),  // Set of edge keys
             optimalPath: [...optimalPath],           // Array of node IDs
             userPath: [...userPath],                 // Array of node IDs
-            color,
-            state: 'surging',                        // 'surging' | 'settling' | 'idle'
+            color: theme.base,                // Base color (for heatmap/exploration)
+            hotColor: theme.hot,              // Hot shade (optimal path - brightest)
+            midColor: theme.mid,              // Mid shade (user path)
+            coolColor: theme.cool,            // Cool shade (ambient history falloff)
+            state: 'surging',                 // 'surging' | 'settling' | 'idle'
             intensity: 1.0,
             surgeStartTime: performance.now(),
         });
@@ -2414,23 +3197,46 @@ const ExplorerHistory = {
     paths: [],      // Array of completed path data
     pathIndex: 0,   // For cycling through colors
 
+    // Living Network state (shared with Visualizer for consistent effects)
+    breatheTime: 0,
+    ripples: [],
+    lastRipple: 0,
+    sparks: [],
+
     // Add completed path to history
     addPath(exploredEdges, optimalPath, userPath = []) {
-        const color = CONFIG.roundColors[this.pathIndex % CONFIG.roundColors.length];
+        const theme = CONFIG.color.getThemeByIndex(this.pathIndex);
         this.pathIndex++;
 
         // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
         const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
 
+        // Create power pulses for optimal path
+        const powerPulses = [];
+        const pulseCount = CONFIG.livingNetwork.powerPulseCount;
+        for (let i = 0; i < pulseCount; i++) {
+            powerPulses.push({
+                progress: i / pulseCount,
+                speed: CONFIG.livingNetwork.powerPulseSpeed * (0.7 + Math.random() * 0.6),
+                brightness: 0.6 + Math.random() * 0.4,
+                size: 1.0 + Math.random() * 0.5,
+            });
+        }
+
         this.paths.push({
             exploredEdges: new Set(sampledEdges),
             optimalPath: [...optimalPath],
             userPath: [...userPath],
-            color,
+            color: theme.base,            // Base color (for heatmap/exploration)
+            hotColor: theme.hot,          // Hot shade (optimal path - brightest)
+            midColor: theme.mid,          // Mid shade (user path)
+            coolColor: theme.cool,        // Cool shade (ambient history falloff)
             state: 'surging',
             intensity: 1.0,
             surgeStartTime: performance.now(),
             optimalPulses: null,
+            powerPulses: powerPulses,
+            rippleIntensity: 0,
             // OPTIMIZATION: Cache screen coordinates
             screenEdgesCache: null,
             optimalPointsCache: null,
@@ -2442,6 +3248,36 @@ const ExplorerHistory = {
     // Update all path states (same state machine as RoundHistory)
     update(deltaTime) {
         const now = performance.now();
+        const dt = deltaTime * 0.001;
+
+        // Update global breathing
+        this.breatheTime += dt * CONFIG.livingNetwork.breatheSpeed * Math.PI * 2;
+
+        // Spawn ripples periodically
+        if (this.paths.length > 0 && now - this.lastRipple > CONFIG.livingNetwork.rippleInterval) {
+            this.spawnRipple();
+            this.lastRipple = now;
+        }
+
+        // Update ripples
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+            const ripple = this.ripples[i];
+            ripple.progress += CONFIG.livingNetwork.rippleSpeed * dt;
+            ripple.age = now - ripple.startTime;
+            if (ripple.age > CONFIG.livingNetwork.rippleDuration) {
+                this.ripples.splice(i, 1);
+            }
+        }
+
+        // Update sparks
+        for (let i = this.sparks.length - 1; i >= 0; i--) {
+            const spark = this.sparks[i];
+            spark.life -= dt * 2;
+            spark.progress += spark.speed * dt;
+            if (spark.life <= 0) {
+                this.sparks.splice(i, 1);
+            }
+        }
 
         for (const path of this.paths) {
             if (path.state === 'surging') {
@@ -2460,13 +3296,68 @@ const ExplorerHistory = {
                     path.intensity = CONFIG.electricity.idleIntensity;
                 }
             }
+
+            // Update power pulses
+            if (path.powerPulses) {
+                for (const pulse of path.powerPulses) {
+                    pulse.progress += pulse.speed;
+                    if (pulse.progress > 1) pulse.progress -= 1;
+                }
+
+                // Spawn sparks
+                if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance && this.sparks.length < 20) {
+                    this.spawnSpark(path);
+                }
+            }
+
+            // Calculate ripple boost
+            path.rippleIntensity = 0;
+            for (const ripple of this.ripples) {
+                const rippleStrength = 1 - (ripple.age / CONFIG.livingNetwork.rippleDuration);
+                const wave = Math.sin(ripple.progress * Math.PI * 2) * 0.5 + 0.5;
+                path.rippleIntensity += rippleStrength * wave * 0.4;
+            }
         }
+    },
+
+    spawnRipple() {
+        if (this.paths.length === 0) return;
+        const pathIndex = Math.floor(Math.random() * this.paths.length);
+        this.ripples.push({
+            sourcePathIndex: pathIndex,
+            progress: 0,
+            startTime: performance.now(),
+            age: 0,
+        });
+    },
+
+    spawnSpark(path) {
+        if (!path.screenEdgesCache || path.screenEdgesCache.length === 0) return;
+        const edgeIndex = Math.floor(Math.random() * path.screenEdgesCache.length);
+        const edge = path.screenEdgesCache[edgeIndex];
+        this.sparks.push({
+            edge: edge,
+            color: path.color,
+            progress: 0,
+            speed: 2 + Math.random() * 2,
+            life: 1.0,
+            brightness: 0.8 + Math.random() * 0.4,
+        });
+    },
+
+    getBreathingMultiplier() {
+        const cfg = CONFIG.livingNetwork;
+        const breathe = (Math.sin(this.breatheTime) + 1) * 0.5;
+        return cfg.breatheMin + breathe * (cfg.breatheMax - cfg.breatheMin);
     },
 
     // Clear all history
     clear() {
         this.paths = [];
         this.pathIndex = 0;
+        this.ripples = [];
+        this.sparks = [];
+        this.lastRipple = 0;
     },
 
     // Get all paths for rendering
@@ -2489,22 +3380,44 @@ const VisualizerHistory = {
     pathIndex: 0,
     lastMapState: null,  // Track map position for cache invalidation
 
+    // Living Network state
+    breatheTime: 0,      // Global breathing phase
+    ripples: [],         // Active ripple waves
+    lastRipple: 0,       // Timestamp of last ripple spawn
+    sparks: [],          // Active sparks from optimal paths
+
     addPath(exploredEdges, optimalPath) {
-        const color = CONFIG.roundColors[this.pathIndex % CONFIG.roundColors.length];
+        const theme = CONFIG.color.getThemeByIndex(this.pathIndex);
         this.pathIndex++;
 
         // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
         // This dramatically reduces rendering load while maintaining visual effect
         const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
 
+        // Create power pulses for optimal path
+        const powerPulses = [];
+        const pulseCount = CONFIG.livingNetwork.powerPulseCount;
+        for (let i = 0; i < pulseCount; i++) {
+            powerPulses.push({
+                progress: i / pulseCount,  // 0-1 along path
+                speed: CONFIG.livingNetwork.powerPulseSpeed * (0.7 + Math.random() * 0.6),
+                brightness: 0.6 + Math.random() * 0.4,
+                size: 1.0 + Math.random() * 0.5,
+            });
+        }
+
         this.paths.push({
             exploredEdges: new Set(sampledEdges),
             optimalPath: [...optimalPath],
-            color,
+            color: theme.base,            // Base color (for heatmap/exploration)
+            hotColor: theme.hot,          // Hot shade (optimal path - brightest)
+            coolColor: theme.cool,        // Cool shade (ambient history falloff)
             state: 'surging',
             intensity: 1.0,
             surgeStartTime: performance.now(),
             optimalPulses: null,
+            powerPulses: powerPulses,     // Living network power pulses
+            rippleIntensity: 0,           // Current ripple boost for this path
             // OPTIMIZATION: Cache screen coordinates (invalidated on map move)
             screenEdgesCache: null,
             optimalPointsCache: null,
@@ -2514,7 +3427,40 @@ const VisualizerHistory = {
 
     update(deltaTime) {
         const now = performance.now();
+        const dt = deltaTime * 0.001;  // Convert to seconds
 
+        // Update global breathing
+        this.breatheTime += dt * CONFIG.livingNetwork.breatheSpeed * Math.PI * 2;
+
+        // Spawn ripples periodically when we have paths
+        if (this.paths.length > 0 && now - this.lastRipple > CONFIG.livingNetwork.rippleInterval) {
+            this.spawnRipple();
+            this.lastRipple = now;
+        }
+
+        // Update ripples
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+            const ripple = this.ripples[i];
+            ripple.progress += CONFIG.livingNetwork.rippleSpeed * dt;
+            ripple.age = now - ripple.startTime;
+
+            // Remove expired ripples
+            if (ripple.age > CONFIG.livingNetwork.rippleDuration) {
+                this.ripples.splice(i, 1);
+            }
+        }
+
+        // Update sparks
+        for (let i = this.sparks.length - 1; i >= 0; i--) {
+            const spark = this.sparks[i];
+            spark.life -= dt * 2;
+            spark.progress += spark.speed * dt;
+            if (spark.life <= 0) {
+                this.sparks.splice(i, 1);
+            }
+        }
+
+        // Update path states and power pulses
         for (const path of this.paths) {
             if (path.state === 'surging') {
                 const elapsed = now - path.surgeStartTime;
@@ -2532,12 +3478,77 @@ const VisualizerHistory = {
                     path.intensity = CONFIG.electricity.idleIntensity;
                 }
             }
+
+            // Update power pulses along optimal path
+            if (path.powerPulses) {
+                for (const pulse of path.powerPulses) {
+                    pulse.progress += pulse.speed;
+                    if (pulse.progress > 1) pulse.progress -= 1;
+                }
+
+                // Randomly spawn sparks from optimal path
+                if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance && this.sparks.length < 20) {
+                    this.spawnSpark(path);
+                }
+            }
+
+            // Calculate ripple boost for this path
+            path.rippleIntensity = 0;
+            for (const ripple of this.ripples) {
+                // Simple radial ripple effect - all paths get boosted by active ripples
+                const rippleStrength = 1 - (ripple.age / CONFIG.livingNetwork.rippleDuration);
+                const wave = Math.sin(ripple.progress * Math.PI * 2) * 0.5 + 0.5;
+                path.rippleIntensity += rippleStrength * wave * 0.4;
+            }
         }
+    },
+
+    // Spawn a ripple wave from a random optimal path
+    spawnRipple() {
+        if (this.paths.length === 0) return;
+
+        // Pick a random path to ripple from
+        const pathIndex = Math.floor(Math.random() * this.paths.length);
+
+        this.ripples.push({
+            sourcePathIndex: pathIndex,
+            progress: 0,
+            startTime: performance.now(),
+            age: 0,
+        });
+    },
+
+    // Spawn a spark that travels along an explored edge
+    spawnSpark(path) {
+        if (!path.screenEdgesCache || path.screenEdgesCache.length === 0) return;
+
+        // Pick random edge from explored edges
+        const edgeIndex = Math.floor(Math.random() * path.screenEdgesCache.length);
+        const edge = path.screenEdgesCache[edgeIndex];
+
+        this.sparks.push({
+            edge: edge,
+            color: path.color,
+            progress: 0,
+            speed: 2 + Math.random() * 2,
+            life: 1.0,
+            brightness: 0.8 + Math.random() * 0.4,
+        });
+    },
+
+    // Get the current breathing multiplier (0.5 - 1.0)
+    getBreathingMultiplier() {
+        const cfg = CONFIG.livingNetwork;
+        const breathe = (Math.sin(this.breatheTime) + 1) * 0.5;  // 0-1
+        return cfg.breatheMin + breathe * (cfg.breatheMax - cfg.breatheMin);
     },
 
     clear() {
         this.paths = [];
         this.pathIndex = 0;
+        this.ripples = [];
+        this.sparks = [];
+        this.lastRipple = 0;
     },
 
     getPaths() {
@@ -2788,42 +3799,33 @@ const ElectricitySystem = {
         }
     },
 
-    // Render user path with distinct electricity (more chaotic, orange/yellow)
-    renderUserPathElectricity(ctx, pathPoints, intensity) {
+    // Render user path - THINNER with different opacity to distinguish from optimal
+    // Uses SAME color as round for visual unity - NO dashed lines (better performance)
+    renderUserPathElectricity(ctx, pathPoints, intensity, userPathColor) {
         if (pathPoints.length < 2) return;
 
-        const color = { r: 255, g: 140, b: 50 };  // Orange
-        const flicker = this.getFlicker() * (1 + Math.random() * 0.2);  // More chaotic
+        // Use provided color EXACTLY - no adjustments to maintain round unity
+        const uc = userPathColor || CONFIG.color.getUserPathColor();
+        const flicker = this.getFlicker();
         const effectiveIntensity = intensity * flicker;
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
-        // Outer chaotic glow
-        ctx.strokeStyle = `rgba(255, 100, 30, ${0.25 * effectiveIntensity})`;
-        ctx.lineWidth = 16;
+        // User path is THINNER than optimal - distinguishes without dashing (better perf)
+        // Outer glow
+        ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.15 * effectiveIntensity})`;
+        ctx.lineWidth = 10;
         ctx.beginPath();
         ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
         for (let i = 1; i < pathPoints.length; i++) {
-            const w = this.getWobble(pathPoints[i].x, pathPoints[i].y);
-            ctx.lineTo(pathPoints[i].x + w.wx * 1.5, pathPoints[i].y + w.wy * 1.5);
+            ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
         }
         ctx.stroke();
 
-        // Mid glow
-        ctx.strokeStyle = `rgba(255, 140, 50, ${0.5 * effectiveIntensity})`;
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
-        for (let i = 1; i < pathPoints.length; i++) {
-            const w = this.getWobble(pathPoints[i].x, pathPoints[i].y);
-            ctx.lineTo(pathPoints[i].x + w.wx, pathPoints[i].y + w.wy);
-        }
-        ctx.stroke();
-
-        // Yellow-white core
-        ctx.strokeStyle = `rgba(255, 220, 150, ${0.9 * effectiveIntensity})`;
+        // Core - slightly dimmer than optimal to visually separate
+        ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.6 * effectiveIntensity})`;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
@@ -3011,7 +4013,8 @@ const GameState = {
 
     // Location settings
     locationMode: 'us',  // 'local', 'us', or 'global'
-    currentCity: null    // Current city object
+    currentCity: null,   // Current city object
+    hasPlayedGlobal: false,  // Track if user has played global mode (for New Cairo default)
 };
 
 // =============================================================================
@@ -3265,9 +4268,9 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
     ];
 
     if (retryCount === 0) {
-        showLoading(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
+        showLoading(loadingMessages[Math.floor(Math.random() * loadingMessages.length)], false, location);
     } else {
-        showLoading(retryMessages[Math.min(retryCount - 1, retryMessages.length - 1)]);
+        showLoading(retryMessages[Math.min(retryCount - 1, retryMessages.length - 1)], false, location);
     }
 
     // Rotate through servers on retries
@@ -3490,6 +4493,7 @@ function playAgain() {
     GameState.roundScores = []; // Reset round history
     GameState.gameStarted = false;
     updateScoreDisplay();
+    clearRoundLegend();
     updateRoundDisplay();
     clearVisualization();
     clearUserPath();
@@ -3810,13 +4814,26 @@ function redrawUserPath() {
 
     if (points.length < 2) return;
 
+    // ALWAYS use consistent warm orange for user path - instant recognition across all rounds
+    const uc = CONFIG.color.getUserPathColor();
+
     // Get animation state
     const elec = GameState.userPathElectricity;
     const time = performance.now() * 0.001;
     elec.phase = time;
 
-    // Organic flicker
-    const flicker = 0.85 + Math.sin(time * 25) * 0.05 + Math.sin(time * 7) * 0.05 + (Math.random() - 0.5) * 0.05;
+    // Organic flicker - more pronounced for "human" feel
+    const flicker = 0.88 + Math.sin(time * 18) * 0.04 + Math.sin(time * 5) * 0.04 + (Math.random() - 0.5) * 0.04;
+
+    // Add subtle wobble to points for "hand-drawn" feel
+    const wobblePoints = points.map((p, i) => {
+        // More wobble in the middle, less at endpoints
+        const edgeFactor = Math.min(i, points.length - 1 - i) / (points.length / 2);
+        const wobbleAmount = 1.5 * Math.min(edgeFactor, 1);
+        const wobbleX = Math.sin(time * 3 + i * 0.7) * wobbleAmount;
+        const wobbleY = Math.cos(time * 2.3 + i * 0.5) * wobbleAmount;
+        return { x: p.x + wobbleX, y: p.y + wobbleY };
+    });
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -3824,57 +4841,64 @@ function redrawUserPath() {
     // Use lighter composite for glow
     ctx.globalCompositeOperation = 'lighter';
 
-    // Outer glow - warm orange with flicker
-    ctx.strokeStyle = `rgba(255, 107, 53, ${0.15 * flicker})`;
-    ctx.lineWidth = 14;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
+    // Outer atmospheric glow - warm orange haze
+    ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.08 * flicker})`;
+    ctx.lineWidth = 20;
+    drawWobblyPath(ctx, wobblePoints);
     ctx.stroke();
 
-    // Mid glow
-    ctx.strokeStyle = `rgba(255, 140, 80, ${0.35 * flicker})`;
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
+    // Outer glow with flicker
+    ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.18 * flicker})`;
+    ctx.lineWidth = 12;
+    drawWobblyPath(ctx, wobblePoints);
     ctx.stroke();
 
-    // Inner glow - brighter
-    ctx.strokeStyle = `rgba(255, 180, 100, ${0.5 * flicker})`;
+    // Mid glow - slightly brighter, warmer
+    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 20)}, ${uc.b}, ${0.35 * flicker})`;
+    ctx.lineWidth = 7;
+    drawWobblyPath(ctx, wobblePoints);
+    ctx.stroke();
+
+    // Inner glow - brightest
+    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 40)}, ${uc.b}, ${0.55 * flicker})`;
     ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-    }
+    drawWobblyPath(ctx, wobblePoints);
     ctx.stroke();
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // Core line - bright with slight flicker
-    ctx.strokeStyle = `rgba(255, ${Math.floor(107 + 40 * flicker)}, 53, ${0.9 + 0.1 * flicker})`;
+    // Core line - bright warm orange with flicker
+    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 30)}, ${uc.b}, ${0.95})`;
     ctx.lineWidth = 2.5;
+    drawWobblyPath(ctx, wobblePoints);
+    ctx.stroke();
+
+    // White hot center for extra pop
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 * flicker})`;
+    ctx.lineWidth = 1;
+    drawWobblyPath(ctx, wobblePoints);
+    ctx.stroke();
+
+    // Energy pulses traveling along the path
+    renderUserPathPulses(ctx, points, time, uc);
+}
+
+// Helper to draw a slightly wobbly path (human feel)
+function drawWobblyPath(ctx, points) {
+    if (points.length < 2) return;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
         ctx.lineTo(points[i].x, points[i].y);
     }
-    ctx.stroke();
-
-    // Energy pulses traveling along the path
-    renderUserPathPulses(ctx, points, time);
 }
 
 // Render energy pulses along user path
-function renderUserPathPulses(ctx, points, time) {
+function renderUserPathPulses(ctx, points, time, userColor) {
     if (points.length < 2) return;
 
     const elec = GameState.userPathElectricity;
+    const uc = userColor || CONFIG.color.getTheme(1).mid; // Fallback to round 1 mid
 
     // Spawn new pulses periodically
     if (time - elec.lastPulseTime > 0.8) { // New pulse every 0.8 seconds
@@ -3942,10 +4966,11 @@ function renderUserPathPulses(ctx, points, time) {
             ctx.globalAlpha = pulseAlpha * 0.7;
             ctx.drawImage(sprite, pulseX - size/2, pulseY - size/2, size, size);
         } else {
+            // Use theme-based user path colors for gradient
             const gradient = ctx.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, size/2);
-            gradient.addColorStop(0, `rgba(255, 220, 180, ${pulseAlpha * 0.9})`);
-            gradient.addColorStop(0.5, `rgba(255, 140, 80, ${pulseAlpha * 0.5})`);
-            gradient.addColorStop(1, 'rgba(255, 107, 53, 0)');
+            gradient.addColorStop(0, `rgba(255, ${Math.min(255, uc.g + 80)}, ${Math.min(255, uc.b + 80)}, ${pulseAlpha * 0.9})`);
+            gradient.addColorStop(0.5, `rgba(${uc.r}, ${Math.min(255, uc.g + 30)}, ${uc.b}, ${pulseAlpha * 0.5})`);
+            gradient.addColorStop(1, `rgba(${uc.r}, ${uc.g}, ${uc.b}, 0)`);
 
             ctx.fillStyle = gradient;
             ctx.beginPath();
@@ -4093,13 +5118,21 @@ async function submitRoute() {
         .filter(pos => pos !== undefined)
         .map(pos => [pos.lat, pos.lng]);
 
+    // === HERO ANIMATION: User path "locks in" with dramatic effect ===
+    await playUserPathLockInAnimation();
+
+    // Use consistent warm orange for user path polyline
+    const uc = CONFIG.color.getUserPathColor();
     L.polyline(userLatLngs, {
-        color: CONFIG.colors.userRoute,
+        color: `rgb(${uc.r}, ${uc.g}, ${uc.b})`,
         weight: 4,
         opacity: 0.7
     }).addTo(GameState.userPathLayer);
 
     GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+
+    // Brief anticipation pause before A* begins
+    await sleep(400);
 
     // Run A*
     const { path, explored } = runAStar(GameState.startNode, GameState.endNode);
@@ -4109,7 +5142,114 @@ async function submitRoute() {
     // Start visualization
     await runEpicVisualization(explored, path);
 
+    // === COMPARISON MOMENT: Both paths pulse side-by-side ===
+    await playComparisonAnimation();
+
     calculateAndShowScore();
+}
+
+// Hero animation: User path "locks in" with flash and surge effect
+async function playUserPathLockInAnimation() {
+    const ctx = GameState.drawCtx;
+    const points = [];
+
+    for (let i = 0; i < GameState.userPathNodes.length; i++) {
+        const nodeId = GameState.userPathNodes[i];
+        const pos = GameState.nodes.get(nodeId);
+        if (!pos) continue;
+        points.push(GameState.map.latLngToContainerPoint([pos.lat, pos.lng]));
+    }
+
+    if (points.length < 2) return;
+
+    const uc = CONFIG.color.getUserPathColor();
+    const duration = 600; // ms
+    const startTime = performance.now();
+
+    // Animate flash and lock-in
+    return new Promise(resolve => {
+        function animate() {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            ctx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+
+            // Easing for dramatic effect
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            const flashIntensity = progress < 0.3 ? progress / 0.3 : 1 - ((progress - 0.3) / 0.7);
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Big flash at the start
+            if (flashIntensity > 0) {
+                ctx.strokeStyle = `rgba(255, 255, 255, ${flashIntensity * 0.5})`;
+                ctx.lineWidth = 30 + flashIntensity * 20;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                ctx.stroke();
+            }
+
+            // Path solidifies
+            const solidOpacity = easeOut;
+
+            // Outer glow
+            ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.2 * solidOpacity})`;
+            ctx.lineWidth = 16;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+
+            // Core
+            ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.9 * solidOpacity})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+
+            ctx.globalCompositeOperation = 'source-over';
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                resolve();
+            }
+        }
+        animate();
+    });
+}
+
+// Comparison animation: Both paths pulse together for easy comparison
+async function playComparisonAnimation() {
+    // This runs after the optimal path is drawn
+    // Just a brief moment where both paths pulse together
+    const duration = 800;
+    const startTime = performance.now();
+
+    return new Promise(resolve => {
+        function pulse() {
+            const elapsed = performance.now() - startTime;
+            if (elapsed >= duration) {
+                resolve();
+                return;
+            }
+
+            // The renderVisualization loop will handle the pulsing
+            // This just adds a brief delay for the comparison moment
+            requestAnimationFrame(pulse);
+        }
+        pulse();
+    });
 }
 
 async function runEpicVisualization(explored, path) {
@@ -4256,6 +5396,9 @@ function drawAmbientRoads(ctx, time, width, height) {
     const edges = ScreenCoordCache.getEdges();
     if (edges.length === 0) return;
 
+    // Get ambient colors from unified color system
+    const ambient = CONFIG.color.getAmbient();
+
     // Gentle breathing pulse
     const breathe = 0.85 + 0.15 * Math.sin(time * 0.6);
 
@@ -4263,8 +5406,8 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Outer warm glow layer - solid color (no screen-centered gradient)
-    ctx.strokeStyle = `rgba(120, 60, 90, ${0.2 * breathe})`;
+    // Outer warm glow layer - using ambient.outer
+    ctx.strokeStyle = `rgba(${ambient.outer.r}, ${ambient.outer.g}, ${ambient.outer.b}, ${0.2 * breathe})`;
     ctx.lineWidth = 6;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -4274,8 +5417,8 @@ function drawAmbientRoads(ctx, time, width, height) {
     }
     ctx.stroke();
 
-    // Mid glow layer
-    ctx.strokeStyle = `rgba(140, 70, 100, ${0.22 * breathe})`;
+    // Mid glow layer - using ambient.mid
+    ctx.strokeStyle = `rgba(${ambient.mid.r}, ${ambient.mid.g}, ${ambient.mid.b}, ${0.22 * breathe})`;
     ctx.lineWidth = 3;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -4285,8 +5428,8 @@ function drawAmbientRoads(ctx, time, width, height) {
     }
     ctx.stroke();
 
-    // Core roads - warm amber core
-    ctx.strokeStyle = `rgba(180, 100, 80, ${0.15 * breathe})`;
+    // Core roads - using ambient.core (warm amber)
+    ctx.strokeStyle = `rgba(${ambient.core.r}, ${ambient.core.g}, ${ambient.core.b}, ${0.15 * breathe})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -4373,14 +5516,17 @@ function renderVisualization() {
             }
         }
 
-        // Enhanced layered heat with falloff zones - "Neural Network" aesthetic
-        // Each heat level gets multiple glow layers for depth
+        // Get current round's BASE color - ONE color for the entire round
+        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        const c = theme.base;  // SINGLE color for all heat levels - unity!
+        const glowMult = CONFIG.viz.glowIntensity;
 
-        // High heat - bright cyan with layered falloff
+        // ENHANCED heat map - dramatic glow with multiple layers
+        // High heat - FRONTIER GLOW - brightest, most dramatic
         if (edgesByHeat.high.length > 0) {
-            // Outer atmospheric glow (falloff zone 3)
-            ctx.strokeStyle = 'rgba(0, 200, 255, 0.08)';
-            ctx.lineWidth = 24;
+            // Widest atmospheric bloom
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.12 * glowMult})`;
+            ctx.lineWidth = 20;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4388,9 +5534,9 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            // Secondary glow (falloff zone 2)
-            ctx.strokeStyle = 'rgba(0, 220, 255, 0.15)';
-            ctx.lineWidth = 16;
+            // Outer glow
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.2 * glowMult})`;
+            ctx.lineWidth = 12;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4398,9 +5544,9 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            // Primary glow (falloff zone 1)
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
-            ctx.lineWidth = 10;
+            // Core glow
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.5 * flicker * glowMult})`;
+            ctx.lineWidth = 5;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4408,19 +5554,9 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            // Hot core
-            ctx.strokeStyle = `rgba(0, 240, 255, ${0.85 * flicker})`;
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            for (const edge of edgesByHeat.high) {
-                ctx.moveTo(edge.from.x, edge.from.y);
-                ctx.lineTo(edge.to.x, edge.to.y);
-            }
-            ctx.stroke();
-
-            // White hot center
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * flicker})`;
-            ctx.lineWidth = 1.5;
+            // White-hot center for frontier
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * flicker})`;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             for (const edge of edgesByHeat.high) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4429,11 +5565,11 @@ function renderVisualization() {
             ctx.stroke();
         }
 
-        // Medium heat - purple with layered falloff
+        // Medium heat - explored areas, still visible
         if (edgesByHeat.medium.length > 0) {
-            // Outer atmospheric glow
-            ctx.strokeStyle = 'rgba(160, 40, 200, 0.06)';
-            ctx.lineWidth = 18;
+            // Outer glow
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.1 * glowMult})`;
+            ctx.lineWidth = 14;
             ctx.beginPath();
             for (const edge of edgesByHeat.medium) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4441,9 +5577,9 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            // Primary glow
-            ctx.strokeStyle = 'rgba(184, 41, 221, 0.2)';
-            ctx.lineWidth = 10;
+            // Mid glow
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.25 * flicker * glowMult})`;
+            ctx.lineWidth = 6;
             ctx.beginPath();
             for (const edge of edgesByHeat.medium) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4452,8 +5588,8 @@ function renderVisualization() {
             ctx.stroke();
 
             // Core
-            ctx.strokeStyle = `rgba(184, 41, 221, ${0.75 * flicker})`;
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.4 * flicker})`;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             for (const edge of edgesByHeat.medium) {
                 ctx.moveTo(edge.from.x, edge.from.y);
@@ -4462,10 +5598,9 @@ function renderVisualization() {
             ctx.stroke();
         }
 
-        // Low heat - pink with subtle falloff
+        // Low heat - ambient explored, keeps map "alive"
         if (edgesByHeat.low.length > 0) {
-            // Subtle outer glow
-            ctx.strokeStyle = 'rgba(255, 42, 109, 0.1)';
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.08 * glowMult})`;
             ctx.lineWidth = 8;
             ctx.beginPath();
             for (const edge of edgesByHeat.low) {
@@ -4474,8 +5609,7 @@ function renderVisualization() {
             }
             ctx.stroke();
 
-            // Core
-            ctx.strokeStyle = `rgba(255, 42, 109, ${0.45 * flicker})`;
+            ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${0.15 * flicker})`;
             ctx.lineWidth = 2;
             ctx.beginPath();
             for (const edge of edgesByHeat.low) {
@@ -4487,24 +5621,30 @@ function renderVisualization() {
     }
 
     // Draw frontier nodes using sprites (always on Canvas 2D)
+    // OPTIMIZED: Only render highest-heat nodes, limit total count
     ctx.globalCompositeOperation = 'lighter';
-    const sprite = AmbientViz.sprites.glowCyan;
     const spriteSize = AmbientViz.spriteSize;
+    const maxFrontierNodes = 50; // Limit to prevent performance issues on dense maps
+    let frontierCount = 0;
 
-    for (const [nodeId, heat] of viz.nodeHeat) {
-        if (heat < 0.4) continue;
+    // Only draw during active exploration phase, not during path/complete
+    if (viz.phase === 'exploring') {
+        for (const [nodeId, heat] of viz.nodeHeat) {
+            if (heat < 0.7) continue; // Higher threshold for better performance
+            if (frontierCount >= maxFrontierNodes) break;
 
-        const pos = GameState.nodes.get(nodeId);
-        if (!pos) continue;
+            const pos = GameState.nodes.get(nodeId);
+            if (!pos) continue;
 
-        const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
-        const size = spriteSize * heat * 0.8;
-        const spriteToUse = heat > 0.8 ? AmbientViz.sprites.glowWhite :
-                           heat > 0.5 ? AmbientViz.sprites.glowCyan :
-                           AmbientViz.sprites.glowPurple;
+            const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+            const size = spriteSize * heat * 0.8;
+            const spriteToUse = heat > 0.9 ? AmbientViz.sprites.glowWhite :
+                               AmbientViz.sprites.glowCyan;
 
-        ctx.globalAlpha = heat * flicker * 0.8;
-        ctx.drawImage(spriteToUse, screen.x - size / 2, screen.y - size / 2, size, size);
+            ctx.globalAlpha = heat * flicker * 0.8;
+            ctx.drawImage(spriteToUse, screen.x - size / 2, screen.y - size / 2, size, size);
+            frontierCount++;
+        }
     }
 
     ctx.globalAlpha = 1;
@@ -4520,17 +5660,17 @@ function renderVisualization() {
     drawParticles(ctx);
 }
 
+// LEGACY: Heat color interpolation - now uses current round's exploration color instead
+// Kept for potential future use, returns theme-based exploration color
 function getHeatColor(heat) {
-    const colors = CONFIG.heatColors;
-    const idx = (1 - heat) * (colors.length - 1);
-    const lower = Math.floor(idx);
-    const upper = Math.min(lower + 1, colors.length - 1);
-    const t = idx - lower;
-
+    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    const ec = theme.base;
+    // Modulate brightness by heat
+    const brightness = 0.3 + heat * 0.7;
     return {
-        r: Math.round(colors[lower].r + (colors[upper].r - colors[lower].r) * t),
-        g: Math.round(colors[lower].g + (colors[upper].g - colors[lower].g) * t),
-        b: Math.round(colors[lower].b + (colors[upper].b - colors[lower].b) * t)
+        r: Math.round(ec.r * brightness),
+        g: Math.round(ec.g * brightness),
+        b: Math.round(ec.b * brightness)
     };
 }
 
@@ -4576,6 +5716,10 @@ function drawOptimalPath(ctx) {
 
     if (path.length < 2) return;
 
+    // Get current round's optimal color (hot shade for visibility)
+    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    const oc = theme.hot;
+
     const drawTo = Math.min(progress + 1, path.length - 1);
 
     const points = [];
@@ -4589,43 +5733,69 @@ function drawOptimalPath(ctx) {
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
-    // Use lighter composite for glow effect (NO shadowBlur!)
     ctx.globalCompositeOperation = 'lighter';
 
-    // Draw glow layers with smooth bezier curves - wider and more transparent first
-    const layers = [
-        { color: 'rgba(0, 200, 255, 0.08)', width: 24 },   // Outer atmospheric
-        { color: 'rgba(0, 220, 255, 0.15)', width: 16 },
-        { color: 'rgba(0, 240, 255, 0.3)', width: 10 },
-        { color: 'rgba(0, 240, 255, 0.5)', width: 6 },
-        { color: 'rgba(150, 255, 255, 0.8)', width: 3 },
-    ];
+    // CLEAN OPTIMAL PATH TRACE - Simple, elegant layers
+    // Wide atmospheric bloom
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.08)`;
+    ctx.lineWidth = 24;
+    drawSmoothPath(ctx, points);
+    ctx.stroke();
 
-    for (const layer of layers) {
-        ctx.strokeStyle = layer.color;
-        ctx.lineWidth = layer.width;
-        drawSmoothPath(ctx, points);
-        ctx.stroke();
-    }
+    // Outer glow
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.18)`;
+    ctx.lineWidth = 12;
+    drawSmoothPath(ctx, points);
+    ctx.stroke();
 
-    ctx.globalCompositeOperation = 'source-over';
+    // Main colored line
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.7)`;
+    ctx.lineWidth = 5;
+    drawSmoothPath(ctx, points);
+    ctx.stroke();
 
-    // Bright white core with smooth curve
-    ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+    // Bright white core - crisp definition
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.lineWidth = 2;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
-    // Energy pulses along completed path using sprites
-    if (viz.phase === 'complete' && points.length > 1) {
-        ctx.globalCompositeOperation = 'lighter';
-        const sprite = AmbientViz.sprites.glowWhite;
-        const spriteSize = AmbientViz.spriteSize;
+    ctx.globalCompositeOperation = 'source-over';
 
-        const numPulses = 2;
-        for (let p = 0; p < numPulses; p++) {
-            const t = ((viz.pulsePhase * 0.25 + p / numPulses) % 1);
+    // LEAD POINT during tracing - clean bright dot
+    if (progress < path.length - 1 && points.length > 0) {
+        const leadPoint = points[points.length - 1];
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Simple clean glow
+        const radius = 14;
+        const gradient = ctx.createRadialGradient(leadPoint.x, leadPoint.y, 0, leadPoint.x, leadPoint.y, radius);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.3, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.8)`);
+        gradient.addColorStop(1, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0)`);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(leadPoint.x, leadPoint.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // COMPLETED STATE: Multiple traveling pulses for "living" feel
+    if (viz.phase === 'complete' && points.length > 1) {
+        const time = performance.now() * 0.001;
+        ctx.globalCompositeOperation = 'lighter';
+
+        // 3 pulses traveling at different speeds
+        const pulseConfigs = [
+            { speed: 0.15, size: 8, brightness: 0.7 },
+            { speed: 0.22, size: 6, brightness: 0.5 },
+            { speed: 0.08, size: 10, brightness: 0.6 },
+        ];
+
+        for (const cfg of pulseConfigs) {
+            const t = (time * cfg.speed) % 1;
             const totalLen = points.length - 1;
             const idx = Math.floor(t * totalLen);
             const frac = (t * totalLen) - idx;
@@ -4634,30 +5804,17 @@ function drawOptimalPath(ctx) {
                 const x = points[idx].x + (points[idx + 1].x - points[idx].x) * frac;
                 const y = points[idx].y + (points[idx + 1].y - points[idx].y) * frac;
 
-                const size = spriteSize * 0.6;
-                ctx.globalAlpha = 0.8;
-                ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, cfg.size);
+                gradient.addColorStop(0, `rgba(255, 255, 255, ${cfg.brightness})`);
+                gradient.addColorStop(0.5, `rgba(${oc.r}, ${oc.g}, ${oc.b}, ${cfg.brightness * 0.5})`);
+                gradient.addColorStop(1, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0)`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(x, y, cfg.size, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
-        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
-    }
-
-    // Leading point glow
-    if (progress < path.length - 1 && points.length > 0) {
-        const leadPoint = points[points.length - 1];
-        const pulse = 0.5 + 0.5 * Math.sin(viz.pulsePhase * 3);
-        const radius = 25 * pulse + 20;
-
-        const gradient = ctx.createRadialGradient(leadPoint.x, leadPoint.y, 0, leadPoint.x, leadPoint.y, radius);
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.3, 'rgba(0, 240, 255, 0.7)');
-        gradient.addColorStop(1, 'rgba(0, 240, 255, 0)');
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(leadPoint.x, leadPoint.y, radius, 0, Math.PI * 2);
-        ctx.fill();
     }
 }
 
@@ -4903,6 +6060,10 @@ function renderTraceAnimation(ctx) {
     const trace = GameState.traceAnimation;
     if (!trace.active || trace.segments.length === 0) return;
 
+    // Get current round's exploration color for trace animation
+    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    const tc = theme.base; // Trace uses exploration color
+
     const elapsed = performance.now() - trace.startTime;
     const totalDuration = trace.duration;
     trace.progress = Math.min(1, elapsed / totalDuration);
@@ -4923,8 +6084,8 @@ function renderTraceAnimation(ctx) {
         const from = GameState.map.latLngToContainerPoint([seg.fromLat, seg.fromLng]);
         const to = GameState.map.latLngToContainerPoint([seg.toLat, seg.toLng]);
 
-        // Glow
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+        // Glow - using exploration color
+        ctx.strokeStyle = `rgba(${tc.r}, ${tc.g}, ${tc.b}, 0.4)`;
         ctx.lineWidth = 12;
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
@@ -4932,7 +6093,7 @@ function renderTraceAnimation(ctx) {
         ctx.stroke();
 
         // Core
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+        ctx.strokeStyle = `rgba(${tc.r}, ${tc.g}, ${tc.b}, 0.9)`;
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
@@ -4951,7 +6112,7 @@ function renderTraceAnimation(ctx) {
         const currentY = from.y + (to.y - from.y) * currentSegmentProgress;
 
         // Trail glow
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+        ctx.strokeStyle = `rgba(${tc.r}, ${tc.g}, ${tc.b}, 0.3)`;
         ctx.lineWidth = 10;
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
@@ -4959,7 +6120,7 @@ function renderTraceAnimation(ctx) {
         ctx.stroke();
 
         // Trail core
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.strokeStyle = `rgba(${tc.r}, ${tc.g}, ${tc.b}, 0.8)`;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
@@ -5091,6 +6252,9 @@ function calculateAndShowScore() {
         userDistance: userDistance,
         optimalDistance: optimalDistance
     });
+
+    // Update the round legend in HUD
+    updateRoundLegend();
 
     // Save round to persistent history for visualization
     const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
@@ -5374,7 +6538,7 @@ async function searchLocation() {
 // UI HELPERS
 // =============================================================================
 
-function showLoading(text, allowHtml = false) {
+function showLoading(text, allowHtml = false, targetCity = null) {
     const loadingText = document.getElementById('loading-text');
     if (allowHtml || text.includes('<')) {
         loadingText.innerHTML = text;
@@ -5382,10 +6546,24 @@ function showLoading(text, allowHtml = false) {
         loadingText.textContent = text;
     }
     document.getElementById('loading-overlay').classList.remove('hidden');
+
+    // Update city name
+    const cityEl = document.getElementById('loading-city');
+    if (cityEl) cityEl.textContent = targetCity?.name || '';
+
+    // Start map zoom animation if we have valid coordinates
+    if (targetCity && targetCity.lat && targetCity.lng) {
+        MapTransition.start(targetCity.lat, targetCity.lng, targetCity.name || '', targetCity.zoom || 15);
+    }
 }
 
 function hideLoading() {
     document.getElementById('loading-overlay').classList.add('hidden');
+    MapTransition.stop();
+
+    // Clear city name
+    const cityEl = document.getElementById('loading-city');
+    if (cityEl) cityEl.textContent = '';
 }
 
 // =============================================================================
@@ -5435,15 +6613,43 @@ function hideModeSelector() {
     document.getElementById('mode-selector').classList.add('hidden');
 }
 
+// DEBUG: Set to true to bypass premium checks for testing
+const DEBUG_BYPASS_PREMIUM = false;
+
+function checkPremiumAccess(mode) {
+    // Debug bypass
+    if (DEBUG_BYPASS_PREMIUM) return true;
+
+    // Check if user has premium access
+    if (typeof PathfindrAuth !== 'undefined') {
+        // Admin users always have access
+        if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdmin()) {
+            return true;
+        }
+        // Purchased users have access
+        if (PathfindrAuth.hasPurchased()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function showPremiumRequired(modeName) {
+    // Show alert
+    alert(`${modeName} Mode requires Premium access.\n\nSign in and purchase Premium ($2.99) to unlock Explorer and Visualizer modes.`);
+
+    // Also show auth modal
+    const authModal = document.getElementById('auth-modal');
+    if (authModal) {
+        authModal.classList.remove('hidden');
+    }
+}
+
 function selectGameMode(mode) {
     // Check premium access for explorer and visualizer modes
-    if ((mode === 'explorer' || mode === 'visualizer') && typeof PathfindrAuth !== 'undefined') {
-        if (!PathfindrAuth.hasPurchased()) {
-            // Show auth modal with premium prompt
-            const authModal = document.getElementById('auth-modal');
-            if (authModal) {
-                authModal.classList.remove('hidden');
-            }
+    if ((mode === 'explorer' || mode === 'visualizer')) {
+        if (!checkPremiumAccess(mode)) {
+            showPremiumRequired(mode === 'explorer' ? 'Explorer' : 'Visualizer');
             return;
         }
     }
@@ -5470,28 +6676,364 @@ function selectGameMode(mode) {
 // =============================================================================
 
 function initVisualizerUI() {
+    // Old visualizer exit button (keeping for backwards compatibility)
     const exitBtn = document.getElementById('visualizer-exit-btn');
     if (exitBtn) {
         exitBtn.addEventListener('click', stopVisualizerMode);
     }
+
+    // New unified mode exit button in HUD
+    const modeExitBtn = document.getElementById('mode-exit-btn');
+    if (modeExitBtn) {
+        modeExitBtn.addEventListener('click', () => {
+            if (GameState.visualizerState.active) {
+                stopVisualizerMode();
+            } else if (GameState.gameMode === 'explorer') {
+                stopExplorerMode();
+            }
+        });
+    }
+
+    // Fullscreen button
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', enterFullscreenMode);
+    }
+
+    // Initialize location search
+    initLocationSearch();
+}
+
+// =============================================================================
+// LOCATION SEARCH - Search for cities in Visualizer/Explorer mode
+// =============================================================================
+
+let searchDebounceTimer = null;
+
+function initLocationSearch() {
+    const searchInput = document.getElementById('location-search');
+    const searchBtn = document.getElementById('search-btn');
+    const searchResults = document.getElementById('search-results');
+
+    if (!searchInput || !searchBtn) return;
+
+    // Search on input with debounce
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchDebounceTimer);
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            hideSearchResults();
+            return;
+        }
+
+        searchDebounceTimer = setTimeout(() => {
+            searchCities(query);
+        }, 300);
+    });
+
+    // Search on button click
+    searchBtn.addEventListener('click', () => {
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+            searchCities(query);
+        }
+    });
+
+    // Search on Enter key
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const query = searchInput.value.trim();
+            if (query.length >= 2) {
+                searchCities(query);
+            }
+        } else if (e.key === 'Escape') {
+            hideSearchResults();
+            searchInput.blur();
+        }
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.hud-search')) {
+            hideSearchResults();
+        }
+    });
+}
+
+async function searchCities(query) {
+    const resultsEl = document.getElementById('search-results');
+    if (!resultsEl) return;
+
+    try {
+        // Search Supabase cities table
+        const response = await fetch(
+            `${PathfindrConfig.supabase.url}/rest/v1/cities?name=ilike.*${encodeURIComponent(query)}*&limit=8&order=population.desc.nullslast`,
+            {
+                headers: {
+                    'apikey': PathfindrConfig.supabase.anonKey,
+                    'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
+                }
+            }
+        );
+
+        if (!response.ok) throw new Error('Search failed');
+
+        const cities = await response.json();
+
+        if (cities.length === 0) {
+            resultsEl.innerHTML = '<div class="search-result-item">No cities found</div>';
+            resultsEl.classList.remove('hidden');
+            return;
+        }
+
+        resultsEl.innerHTML = cities.map(city => `
+            <div class="search-result-item" data-lat="${city.lat}" data-lng="${city.lng}" data-name="${city.name}" data-country="${city.country || ''}">
+                ${city.name}<span class="search-result-country">${city.country || ''}</span>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        resultsEl.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const lat = parseFloat(item.dataset.lat);
+                const lng = parseFloat(item.dataset.lng);
+                const name = item.dataset.name;
+                const country = item.dataset.country;
+
+                navigateToCity({ name, lat, lng, country });
+                hideSearchResults();
+                document.getElementById('location-search').value = '';
+            });
+        });
+
+        resultsEl.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('City search error:', error);
+        resultsEl.innerHTML = '<div class="search-result-item">Search error</div>';
+        resultsEl.classList.remove('hidden');
+    }
+}
+
+function hideSearchResults() {
+    const resultsEl = document.getElementById('search-results');
+    if (resultsEl) {
+        resultsEl.classList.add('hidden');
+        resultsEl.innerHTML = '';
+    }
+}
+
+async function navigateToCity(city) {
+    console.log('Navigating to:', city.name);
+
+    // Update current city
+    GameState.currentCity = {
+        name: `${city.name}${city.country ? ', ' + city.country : ''}`,
+        lat: city.lat,
+        lng: city.lng,
+        zoom: 15
+    };
+
+    // Update location display
+    const locationEl = document.getElementById('current-location');
+    if (locationEl) locationEl.textContent = GameState.currentCity.name;
+
+    // Show loading with map transition (transition handles the map view)
+    showLoading('Discovering routes...', false, GameState.currentCity);
+
+    // Clear existing visualization
+    clearVisualization();
+    VisualizerHistory.clear();
+
+    try {
+        await loadRoadNetwork(GameState.currentCity);
+
+        // Start facts ticker for new city
+        CityFacts.startTicker(city.name);
+
+        // If in visualizer mode, restart the loop
+        if (GameState.visualizerState.active) {
+            GameState.visualizerState.currentVisualization = 0;
+            updateModeStats(1, GameState.visualizerState.maxPerCity);
+            runVisualizerLoop();
+        }
+    } catch (error) {
+        console.error('Failed to load city:', error);
+    }
+}
+
+function showLocationSearch() {
+    const searchEl = document.getElementById('hud-search');
+    if (searchEl) searchEl.classList.remove('hidden');
+}
+
+function hideLocationSearch() {
+    const searchEl = document.getElementById('hud-search');
+    if (searchEl) searchEl.classList.add('hidden');
+    hideSearchResults();
+}
+
+// =============================================================================
+// FULLSCREEN MODE - Immersive visualization viewing
+// =============================================================================
+
+const FullscreenMode = {
+    active: false,
+    mouseMoveHandler: null,
+    hintElement: null,
+
+    enter() {
+        if (this.active) return;
+        this.active = true;
+
+        // Add fullscreen class to body
+        document.body.classList.add('fullscreen-mode');
+
+        // Show hint
+        this.showHint();
+
+        // Set up mouse movement listener (with small delay to prevent immediate exit)
+        setTimeout(() => {
+            this.mouseMoveHandler = () => this.exit();
+            document.addEventListener('mousemove', this.mouseMoveHandler, { once: true });
+        }, 500);
+    },
+
+    exit() {
+        if (!this.active) return;
+        this.active = false;
+
+        // Remove fullscreen class
+        document.body.classList.remove('fullscreen-mode');
+
+        // Remove hint if still present
+        if (this.hintElement) {
+            this.hintElement.remove();
+            this.hintElement = null;
+        }
+
+        // Clean up listener if still attached
+        if (this.mouseMoveHandler) {
+            document.removeEventListener('mousemove', this.mouseMoveHandler);
+            this.mouseMoveHandler = null;
+        }
+    },
+
+    showHint() {
+        // Create hint element
+        this.hintElement = document.createElement('div');
+        this.hintElement.className = 'fullscreen-exit-hint';
+        this.hintElement.innerHTML = 'Fullscreen Mode<span>MOVE MOUSE TO EXIT</span>';
+        document.body.appendChild(this.hintElement);
+
+        // Remove hint after animation
+        setTimeout(() => {
+            if (this.hintElement) {
+                this.hintElement.remove();
+                this.hintElement = null;
+            }
+        }, 3000);
+    }
+};
+
+function enterFullscreenMode() {
+    FullscreenMode.enter();
+}
+
+function exitFullscreenMode() {
+    FullscreenMode.exit();
+}
+
+// =============================================================================
+// HUD MODE MANAGEMENT
+// =============================================================================
+
+/**
+ * Set HUD to display a specific mode (visualizer, explorer, or competitive)
+ * @param {string} mode - 'visualizer', 'explorer', or 'competitive'
+ */
+function setHUDMode(mode) {
+    const modeSection = document.getElementById('hud-mode-section');
+    const modeBadge = document.getElementById('hud-mode-badge');
+    const competitiveStats = document.getElementById('hud-competitive-stats');
+    const modeStats = document.getElementById('hud-mode-stats');
+    const modeExitBtn = document.getElementById('mode-exit-btn');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const competitiveControls = document.querySelectorAll('.competitive-control');
+
+    if (mode === 'competitive') {
+        // Hide mode elements, show competitive elements
+        if (modeSection) modeSection.classList.add('hidden');
+        if (competitiveStats) competitiveStats.classList.remove('hidden');
+        if (modeStats) modeStats.classList.add('hidden');
+        if (modeExitBtn) modeExitBtn.classList.add('hidden');
+        if (fullscreenBtn) fullscreenBtn.classList.add('hidden');
+        competitiveControls.forEach(el => el.classList.remove('hidden'));
+
+        // Exit fullscreen mode if active
+        FullscreenMode.exit();
+    } else {
+        // Show mode elements, hide competitive elements
+        if (modeSection) modeSection.classList.remove('hidden');
+        if (competitiveStats) competitiveStats.classList.add('hidden');
+        if (modeExitBtn) modeExitBtn.classList.remove('hidden');
+        if (fullscreenBtn) fullscreenBtn.classList.remove('hidden');
+        competitiveControls.forEach(el => el.classList.add('hidden'));
+
+        // Set badge style and text
+        if (modeBadge) {
+            modeBadge.classList.remove('visualizer', 'explorer');
+            modeBadge.classList.add(mode);
+            modeBadge.textContent = mode.toUpperCase();
+        }
+
+        // Show/hide mode stats based on mode
+        // Visualizer has a counter, Explorer doesn't
+        if (modeStats) {
+            if (mode === 'visualizer') {
+                modeStats.classList.remove('hidden');
+            } else {
+                modeStats.classList.add('hidden');
+            }
+        }
+    }
+}
+
+/**
+ * Update the mode stats display (pathfind counter)
+ * @param {number} current - Current pathfind number
+ * @param {number} total - Total pathfinds per city
+ * @param {string} label - Label text (e.g., "Pathfind")
+ */
+function updateModeStats(current, total, label = 'Pathfind') {
+    const labelEl = document.getElementById('mode-stat-label');
+    const currentEl = document.getElementById('mode-stat-current');
+    const totalEl = document.getElementById('mode-stat-total');
+
+    if (labelEl) labelEl.textContent = label;
+    if (currentEl) currentEl.textContent = current;
+    if (totalEl) totalEl.textContent = total;
 }
 
 function startVisualizerMode() {
     GameState.visualizerState.active = true;
     GameState.visualizerState.currentVisualization = 0;
 
-    // Hide regular HUD elements
-    const hud = document.getElementById('hud');
-    if (hud) hud.style.display = 'none';
+    // Switch HUD to visualizer mode
+    setHUDMode('visualizer');
 
-    // Show visualizer UI
-    const vizUI = document.getElementById('visualizer-ui');
-    if (vizUI) vizUI.classList.remove('hidden');
+    // Show location search bar
+    showLocationSearch();
 
     // Pick a random city and start
     const city = getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
     GameState.currentCity = city;
-    updateVisualizerUI(city.name, 1);
+
+    // Update location and stats
+    const locationEl = document.getElementById('current-location');
+    if (locationEl) locationEl.textContent = city.name;
+    updateModeStats(1, GameState.visualizerState.maxPerCity);
 
     // Load road network and start the loop
     document.getElementById('loading-overlay').classList.remove('hidden');
@@ -5501,15 +7043,19 @@ function startVisualizerMode() {
     loadRoadNetwork(city).then(() => {
         // Start ambient viz system for persistent history rendering
         AmbientViz.start();
+        // Start facts ticker for visualizer mode
+        CityFacts.startTicker(city.name);
         runVisualizerLoop();
     });
 }
 
 function updateVisualizerUI(cityName, count) {
-    const cityEl = document.getElementById('visualizer-city');
-    const countEl = document.getElementById('visualizer-count');
-    if (cityEl) cityEl.textContent = cityName;
-    if (countEl) countEl.textContent = `${count}/${GameState.visualizerState.maxPerCity}`;
+    // Update location in main HUD
+    const locationEl = document.getElementById('current-location');
+    if (locationEl) locationEl.textContent = cityName;
+
+    // Update mode stats counter
+    updateModeStats(count, GameState.visualizerState.maxPerCity);
 }
 
 async function runVisualizerLoop() {
@@ -5582,6 +7128,9 @@ async function loadNextVisualizerCity() {
 
     updateVisualizerUI(city.name, 1);
 
+    // Update facts ticker for new city
+    CityFacts.updateTickerCity(city.name);
+
     // Show loading briefly
     document.getElementById('loading-overlay').classList.remove('hidden');
     document.getElementById('loading-text').textContent = `Loading ${city.name}...`;
@@ -5593,6 +7142,12 @@ async function loadNextVisualizerCity() {
 
 function stopVisualizerMode() {
     GameState.visualizerState.active = false;
+
+    // Hide location search bar
+    hideLocationSearch();
+
+    // Stop facts ticker
+    CityFacts.stopTicker();
 
     // Clear any pending timeout
     if (GameState.visualizerState.loopTimeout) {
@@ -5620,13 +7175,8 @@ function stopVisualizerMode() {
     // Reset state
     GameState.visualizerState.currentVisualization = 0;
 
-    // Hide visualizer UI
-    const vizUI = document.getElementById('visualizer-ui');
-    if (vizUI) vizUI.classList.add('hidden');
-
-    // Show regular HUD
-    const hud = document.getElementById('hud');
-    if (hud) hud.style.display = '';
+    // Reset HUD to competitive mode
+    setHUDMode('competitive');
 
     // Clear visualization and history
     clearVisualization();
@@ -5730,19 +7280,20 @@ function startExplorerMode() {
         pendingLatLng: null,
     };
 
-    // Hide regular HUD
-    const hud = document.getElementById('hud');
-    if (hud) hud.style.display = 'none';
+    // Switch HUD to explorer mode
+    setHUDMode('explorer');
 
-    // Show floating explorer badge
-    const badge = document.getElementById('explorer-badge');
-    if (badge) badge.classList.remove('hidden');
+    // Show location search bar
+    showLocationSearch();
 
     // Start ambient viz system for persistent history rendering
     AmbientViz.start();
 
     // Enable map clicking for marker placement
     GameState.map.on('click', handleExplorerMapClick);
+
+    // Start facts ticker for explorer mode
+    CityFacts.startTicker(GameState.currentCity?.name);
 
     updateExplorerButtons();
 }
@@ -6147,6 +7698,12 @@ function resetExplorer() {
 }
 
 function stopExplorerMode() {
+    // Hide location search bar
+    hideLocationSearch();
+
+    // Stop facts ticker
+    CityFacts.stopTicker();
+
     // Remove map click listener
     GameState.map.off('click', handleExplorerMapClick);
 
@@ -6156,16 +7713,11 @@ function stopExplorerMode() {
     // Clear explorer history
     ExplorerHistory.clear();
 
-    // Hide explorer badge
-    const badge = document.getElementById('explorer-badge');
-    if (badge) badge.classList.add('hidden');
-
     // Hide context menu if open
     hideExplorerContextMenu();
 
-    // Show regular HUD
-    const hud = document.getElementById('hud');
-    if (hud) hud.style.display = '';
+    // Reset HUD to competitive mode
+    setHUDMode('competitive');
 
     // Return to mode selector
     GameState.gameMode = 'competitive';
@@ -6232,6 +7784,31 @@ function preloadNextCity() {
 }
 
 async function transitionToNextCity() {
+    // For local mode, stay in the same location - just reset rounds
+    if (GameState.locationMode === 'local') {
+        GameState.continuousPlay.citiesCompleted++;
+        GameState.currentRound = 1;
+        GameState.totalScore = 0;
+        GameState.roundScores = [];
+        updateScoreDisplay();
+        updateRoundDisplay();
+        clearRoundLegend();
+        clearVisualization();
+        clearUserPath();
+        RoundHistory.clear();
+
+        // Reset comparison bars
+        const userBar = document.getElementById('user-bar');
+        const optimalBar = document.getElementById('optimal-bar');
+        if (userBar) userBar.style.width = '0%';
+        if (optimalBar) optimalBar.style.width = '0%';
+
+        // Stay in same location, pick new endpoints
+        selectRandomEndpoints();
+        enableDrawing();
+        return;
+    }
+
     // Store current city score
     GameState.continuousPlay.cityScores.push({
         city: GameState.currentCity?.name || 'Unknown',
@@ -6254,12 +7831,16 @@ async function transitionToNextCity() {
     if (citiesCount) citiesCount.textContent = GameState.continuousPlay.citiesCompleted;
     if (overlay) overlay.classList.remove('hidden');
 
+    // Show a fact about the next city in the transition
+    CityFacts.showFactInTransition(nextCity.name);
+
     // Reset game state for new city
     GameState.currentRound = 1;
     GameState.totalScore = 0;
     GameState.roundScores = [];
     updateScoreDisplay();
     updateRoundDisplay();
+    clearRoundLegend();
     clearVisualization();
     clearUserPath();
 
@@ -6296,7 +7877,7 @@ async function transitionToNextCity() {
     } else {
         // Fetch fresh
         if (overlay) overlay.classList.add('hidden');
-        showLoading('Mapping new territory...');
+        showLoading('Mapping new territory...', false, nextCity);
         await loadRoadNetworkForContinuous(nextCity);
     }
 }
@@ -6411,9 +7992,10 @@ function selectLocationMode(mode) {
     GameState.locationMode = mode;
     hideLocationSelector();
 
-    // Show loading overlay with calming message
+    // Show loading overlay (no map animation yet - we don't have the city)
     document.getElementById('loading-overlay').classList.remove('hidden');
-    document.getElementById('loading-text').textContent = 'Preparing your journey...';
+    document.getElementById('loading-text').textContent = 'Finding your destination...';
+    document.getElementById('loading-city').textContent = '';
 
     if (mode === 'local') {
         // Use browser geolocation
@@ -6446,17 +8028,120 @@ function selectLocationMode(mode) {
             startGameWithLocation(fallback);
         }
     } else if (mode === 'us') {
-        const city = getRandomCity('us');
-        startGameWithLocation(city);
+        // Use async version to potentially fetch from city database
+        getRandomCityAsync('us').then(city => {
+            startGameWithLocation(city);
+        });
     } else if (mode === 'global') {
-        const city = getRandomCity('global');
-        startGameWithLocation(city);
+        // Use async version to potentially fetch from city database
+        getRandomCityAsync('global').then(city => {
+            startGameWithLocation(city);
+        });
     }
 }
 
 function getRandomCity(mode) {
     const cities = mode === 'us' ? CONFIG.usCities : CONFIG.globalCities;
-    return cities[Math.floor(Math.random() * cities.length)];
+
+    // For global mode: use New Cairo Lotus District on first play, then random
+    if (mode === 'global' && !GameState.hasPlayedGlobal) {
+        GameState.hasPlayedGlobal = true;
+        const city = cities[0];  // New Cairo is first
+        // Use the default district (Lotus District) for first play
+        return pickDefaultDistrict(city);
+    }
+
+    const city = cities[Math.floor(Math.random() * cities.length)];
+    return maybePickDistrict(city);
+}
+
+/**
+ * Async version of getRandomCity that optionally uses the Supabase cities database
+ * Falls back to hardcoded lists if DB is disabled or fails
+ */
+async function getRandomCityAsync(mode) {
+    // Try database if enabled
+    if (CityDB.enabled) {
+        try {
+            let city = null;
+
+            if (mode === 'us') {
+                city = await CityDB.getRandomUSCity();
+            } else if (mode === 'global') {
+                city = await CityDB.getRandomWorldCity();
+            }
+
+            if (city) {
+                console.log(`[CityDB] Got city from database: ${city.name}`);
+                return city;
+            }
+        } catch (error) {
+            console.warn('[CityDB] Database fetch failed, using fallback:', error);
+        }
+    }
+
+    // Fallback to hardcoded lists
+    return getRandomCity(mode);
+}
+
+/**
+ * Pick the default district for a city (used for first-time visits)
+ */
+function pickDefaultDistrict(city) {
+    if (!city.districts || city.districts.length === 0) {
+        return city;
+    }
+
+    // Find the default district, or use the first one
+    const defaultDistrict = city.districts.find(d => d.isDefault) || city.districts[0];
+
+    return {
+        lat: defaultDistrict.lat,
+        lng: defaultDistrict.lng,
+        zoom: defaultDistrict.zoom || city.zoom,
+        name: `${defaultDistrict.name}, ${city.name.split(',')[0]}`,
+        parentCity: city.name,
+        wikiName: city.wikiName,
+        isDistrict: true,
+    };
+}
+
+/**
+ * If a city has districts, randomly decide whether to use the main city
+ * or one of its districts (50% chance of using a district)
+ */
+function maybePickDistrict(city) {
+    if (!city.districts || city.districts.length === 0) {
+        return city;
+    }
+
+    // 50% chance to pick a district, 50% to use the main city center
+    if (Math.random() < 0.5) {
+        return city;  // Use main city
+    }
+
+    // Pick a random district
+    const district = city.districts[Math.floor(Math.random() * city.districts.length)];
+
+    // Return district with parent city info for display
+    return {
+        lat: district.lat,
+        lng: district.lng,
+        zoom: district.zoom || city.zoom,
+        name: `${district.name}, ${city.name.split(',')[0]}`,  // e.g. "Shibuya, Tokyo"
+        parentCity: city.name,
+        wikiName: city.wikiName,
+        isDistrict: true,
+    };
+}
+
+/**
+ * Get all districts for a city (for future district selector UI)
+ */
+function getCityDistricts(cityName) {
+    const allCities = [...CONFIG.usCities, ...CONFIG.globalCities];
+    const city = allCities.find(c => c.name === cityName);
+    return city?.districts || [];
 }
 
 async function reverseGeocode(lat, lng) {
@@ -6488,8 +8173,14 @@ async function reverseGeocode(lat, lng) {
 function startGameWithLocation(location) {
     GameState.currentCity = location;
     updateLocationDisplay(location.name);
-    document.getElementById('loading-text').textContent = 'Loading road network...';
-    GameState.map.setView([location.lat, location.lng], location.zoom || 15);
+
+    // Start the map transition animation with the target city
+    // The transition handles the map view, zooming from global to street level
+    showLoading('Discovering routes...', false, location);
+
+    // Preload facts for this city (non-blocking)
+    CityFacts.preload(location.name);
+
     loadRoadNetwork(location);
 }
 
@@ -6509,6 +8200,11 @@ function hideInstructions() {
 function showResults() {
     SoundEngine.slide();
     document.getElementById('results-panel').classList.add('visible');
+
+    // Show a city fact in the results panel
+    if (GameState.currentCity?.name) {
+        CityFacts.showFactInResults(GameState.currentCity.name);
+    }
 }
 
 function hideResults() {
@@ -6577,6 +8273,47 @@ function updateScoreDisplay() {
 
 function updateRoundDisplay() {
     document.getElementById('current-round').textContent = GameState.currentRound;
+}
+
+// Update the round legend showing completed rounds with colors and scores
+function updateRoundLegend() {
+    const legendEl = document.getElementById('hud-round-legend');
+    const itemsEl = document.getElementById('legend-items');
+
+    if (!legendEl || !itemsEl) return;
+
+    // Only show legend if there are completed rounds
+    if (!GameState.roundScores || GameState.roundScores.length === 0) {
+        legendEl.classList.add('hidden');
+        return;
+    }
+
+    // Show the legend
+    legendEl.classList.remove('hidden');
+
+    // Build legend items
+    itemsEl.innerHTML = GameState.roundScores.map(r => {
+        const theme = CONFIG.color.getTheme(r.round);
+        const color = theme.base;
+        const colorStr = `rgb(${color.r}, ${color.g}, ${color.b})`;
+
+        return `
+            <div class="legend-item" title="Round ${r.round}: ${r.efficiency.toFixed(0)}% efficiency">
+                <span class="legend-round">R${r.round}</span>
+                <span class="legend-dot solid" style="background: ${colorStr}; color: ${colorStr};"></span>
+                <span class="legend-score">${r.score}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// Clear the round legend (for new games)
+function clearRoundLegend() {
+    const legendEl = document.getElementById('hud-round-legend');
+    const itemsEl = document.getElementById('legend-items');
+
+    if (legendEl) legendEl.classList.add('hidden');
+    if (itemsEl) itemsEl.innerHTML = '';
 }
 
 function updateMuteButton(muted) {
@@ -7122,3 +8859,117 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 1000);
 });
+
+// =============================================================================
+// MODE SWITCHING FROM PROFILE
+// =============================================================================
+
+/**
+ * Exit current game and return to main menu
+ */
+function exitToMenu() {
+    // Stop any active modes
+    if (GameState.gameMode === 'explorer') {
+        stopExplorerMode();
+        return; // stopExplorerMode already shows mode selector
+    }
+    if (GameState.gameMode === 'visualizer') {
+        stopVisualizerMode();
+        return; // stopVisualizerMode already shows mode selector
+    }
+
+    // For competitive mode, reset and show menu
+    hideResults();
+    hideGameOver();
+    clearVisualization();
+    clearUserPath();
+    AmbientViz.stop();
+    RoundHistory.clear();
+
+    // Reset game state
+    GameState.currentRound = 1;
+    GameState.totalScore = 0;
+    GameState.roundScores = [];
+    GameState.gameStarted = false;
+    GameState.canDraw = false;
+    clearRoundLegend();
+    disableContinuousPlay();
+    removeContinuousHUD();
+
+    // Reset comparison bars
+    const userBar = document.getElementById('user-bar');
+    const optimalBar = document.getElementById('optimal-bar');
+    if (userBar) userBar.style.width = '0%';
+    if (optimalBar) optimalBar.style.width = '0%';
+
+    showModeSelector();
+}
+
+/**
+ * Switch directly to explorer mode
+ */
+function switchToExplorerMode() {
+    // Check premium access
+    if (!checkPremiumAccess('explorer')) {
+        showPremiumRequired('Explorer');
+        return;
+    }
+
+    // Exit current mode if active
+    if (GameState.gameMode === 'visualizer') {
+        GameState.visualizerState.active = false;
+        if (GameState.visualizerState.loopTimeout) {
+            clearTimeout(GameState.visualizerState.loopTimeout);
+        }
+        const vizUI = document.getElementById('visualizer-ui');
+        if (vizUI) vizUI.classList.add('hidden');
+        VisualizerHistory.clear();
+    }
+
+    // Reset competitive state if needed
+    hideResults();
+    hideGameOver();
+    clearVisualization();
+    clearUserPath();
+    RoundHistory.clear();
+    disableContinuousPlay();
+    removeContinuousHUD();
+
+    // Start explorer mode
+    GameState.gameMode = 'explorer';
+    startExplorerMode();
+}
+
+/**
+ * Switch directly to visualizer mode
+ */
+function switchToVisualizerMode() {
+    // Check premium access
+    if (!checkPremiumAccess('visualizer')) {
+        showPremiumRequired('Visualizer');
+        return;
+    }
+
+    // Exit explorer mode if active
+    if (GameState.gameMode === 'explorer') {
+        GameState.map.off('click', handleExplorerMapClick);
+        resetExplorer();
+        ExplorerHistory.clear();
+        const badge = document.getElementById('explorer-badge');
+        if (badge) badge.classList.add('hidden');
+        hideExplorerContextMenu();
+    }
+
+    // Reset competitive state if needed
+    hideResults();
+    hideGameOver();
+    clearVisualization();
+    clearUserPath();
+    RoundHistory.clear();
+    disableContinuousPlay();
+    removeContinuousHUD();
+
+    // Start visualizer mode
+    GameState.gameMode = 'visualizer';
+    startVisualizerMode();
+}
