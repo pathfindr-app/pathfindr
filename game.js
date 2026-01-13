@@ -948,6 +948,7 @@ const WebGLRenderer = {
     edgeKeyToIndex: new Map(),  // Map edgeKey -> index in buffer
     heatData: null,             // Float32Array for heat values
     needsHeatUpdate: false,
+    globalOpacity: 1.0,         // For settling transition fadeout
 
     // Uniforms
     uniforms: {
@@ -1539,6 +1540,11 @@ const WebGLRenderer = {
         if (!this.heatData) return;
         this.heatData.fill(0);
         this.needsHeatUpdate = true;
+    },
+
+    // Set global opacity for settling transition
+    setGlobalOpacity(opacity) {
+        this.globalOpacity = opacity;
     },
 
     // Upload heat data to GPU
@@ -5601,7 +5607,17 @@ async function runEpicVisualization(explored, path) {
         }
     }
 
-    await sleep(800 / speed);
+    // Brief pause at full brightness
+    await sleep(500 / speed);
+
+    // === SETTLING PHASE: Smooth transition to ambient ===
+    // Heat map "drains" gradually while ambient fades in
+    viz.phase = 'settling';
+    viz.settleStartTime = performance.now();
+    viz.settleDuration = 1200; // 1.2 seconds of smooth transition
+
+    // Wait for settling to complete (renderVisualization handles the animation)
+    await sleep(viz.settleDuration / speed);
 }
 
 async function replayVisualization() {
@@ -5730,14 +5746,39 @@ function renderVisualization() {
         Math.sin(time * 3.7 + 1.2) * 0.02 +    // Very slow undulation
         (Math.random() - 0.5) * 0.04;          // Organic noise
 
+    // === SETTLING PHASE: Calculate crossfade progress ===
+    let settleProgress = 0;
+    let heatOpacity = 1.0;
+    let ambientOpacity = 0.0;
+
+    if (viz.phase === 'settling') {
+        const elapsed = performance.now() - viz.settleStartTime;
+        settleProgress = Math.min(1, elapsed / (viz.settleDuration || 1200));
+
+        // Ease-out curve for smooth deceleration
+        const easeOut = 1 - Math.pow(1 - settleProgress, 2);
+
+        // Heat map fades out, ambient fades in
+        heatOpacity = 1 - easeOut;
+        ambientOpacity = easeOut;
+    }
+
     // Decay heat values with floor - explored edges never fully fade
-    const heatFloor = CONFIG.viz.heatFloor;
+    // During settling, use ACCELERATED decay for "draining" effect
+    const baseDecay = CONFIG.viz.heatDecay;
+    const settlingDecay = viz.phase === 'settling'
+        ? Math.pow(baseDecay, 1 + settleProgress * 3)  // Up to 4x faster decay
+        : baseDecay;
+    const heatFloor = viz.phase === 'settling'
+        ? CONFIG.viz.heatFloor * (1 - settleProgress)  // Floor drops to 0 during settling
+        : CONFIG.viz.heatFloor;
+
     for (const [nodeId, heat] of viz.nodeHeat) {
-        const newHeat = heat * CONFIG.viz.heatDecay;
+        const newHeat = heat * settlingDecay;
         viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
     }
     for (const [edgeKey, heat] of viz.edgeHeat) {
-        const newHeat = heat * CONFIG.viz.heatDecay;
+        const newHeat = heat * settlingDecay;
         viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
 
         // Sync to WebGL renderer
@@ -5746,9 +5787,33 @@ function renderVisualization() {
         }
     }
 
+    // During settling, render ambient underneath with increasing opacity
+    if (viz.phase === 'settling' && ambientOpacity > 0.1) {
+        ctx.save();
+        ctx.globalAlpha = ambientOpacity;
+
+        // Render ambient history layer
+        if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
+            AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), false);
+        } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
+            AmbientViz.renderPathHistory(ctx, 16, VisualizerHistory.getPaths(), false);
+        } else if (GameState.gameMode === 'competitive') {
+            AmbientViz.renderRoundHistory(ctx, 16, false);
+        }
+
+        ctx.restore();
+    }
+
     // Use WebGL for road and heat rendering
     if (GameState.useWebGL) {
+        // During settling, reduce WebGL opacity
+        if (viz.phase === 'settling') {
+            WebGLRenderer.setGlobalOpacity(heatOpacity);
+        }
         WebGLRenderer.render(performance.now());
+        if (viz.phase === 'settling') {
+            WebGLRenderer.setGlobalOpacity(1.0);
+        }
     } else {
         // Canvas 2D fallback - draw ambient road network
         drawAmbientRoads(ctx, time, width, height);
@@ -5757,6 +5822,12 @@ function renderVisualization() {
         ctx.globalCompositeOperation = 'lighter';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+
+        // Apply heat opacity during settling phase (fades out heat map)
+        if (viz.phase === 'settling') {
+            ctx.save();
+            ctx.globalAlpha = heatOpacity;
+        }
 
         const edgesByHeat = { high: [], medium: [], low: [] };
         const cachedEdges = ScreenCoordCache.getEdges();
@@ -5878,6 +5949,11 @@ function renderVisualization() {
             }
             ctx.stroke();
         }
+
+        // Restore context after settling opacity changes
+        if (viz.phase === 'settling') {
+            ctx.restore();
+        }
     }
 
     // Draw frontier nodes using sprites (always on Canvas 2D)
@@ -5911,8 +5987,16 @@ function renderVisualization() {
     ctx.globalCompositeOperation = 'source-over';
 
     // Draw optimal path (always on Canvas 2D)
-    if (viz.phase === 'path' || viz.phase === 'complete') {
+    // During settling, fade out the path along with the heat map
+    if (viz.phase === 'path' || viz.phase === 'complete' || viz.phase === 'settling') {
+        if (viz.phase === 'settling') {
+            ctx.save();
+            ctx.globalAlpha = heatOpacity;
+        }
         drawOptimalPath(ctx);
+        if (viz.phase === 'settling') {
+            ctx.restore();
+        }
     }
 
     // Update and draw particles
