@@ -5,10 +5,12 @@
   "main": "game.js",
   "scripts": {
     "start": "npx serve .",
-    "build": "echo 'Static site - no build required'",
-    "build:mobile": "npx cap sync",
-    "ios": "npx cap open ios",
-    "android": "npx cap open android"
+    "build": "node scripts/build.js",
+    "build:mobile": "npm run build && npx cap sync",
+    "ios": "npm run build:mobile && npx cap open ios",
+    "android": "npm run build:mobile && npx cap open android",
+    "add:ios": "npx cap add ios",
+    "add:android": "npx cap add android"
   },
   "keywords": [
     "game",
@@ -21,8 +23,13 @@
   "private": true,
   "dependencies": {
     "@capacitor-community/admob": "^7.2.0",
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@revenuecat/purchases-capacitor": "^12.0.3",
     "@supabase/supabase-js": "^2.89.0"
   }
 }

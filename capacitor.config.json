@@ -1,5 +1,11 @@
 {
-  "appId": "com.pathfindr.app",
+  "appId": "world.pathfindr.app",
   "appName": "Pathfindr",
-  "webDir": "."
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Haptics": {}
+  }
 }

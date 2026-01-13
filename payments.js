@@ -3,13 +3,14 @@
  *
  * Handles payments across platforms:
  * - Web: Stripe Checkout
- * - iOS: Apple In-App Purchase
- * - Android: Google Play Billing
+ * - iOS: Apple In-App Purchase via RevenueCat
+ * - Android: Google Play Billing via RevenueCat
  */
 
 const PathfindrPayments = {
   initialized: false,
   products: [],
+  Purchases: null, // RevenueCat SDK reference
 
   /**
    * Initialize payments based on platform
@@ -24,7 +25,7 @@ const PathfindrPayments = {
       if (platform === 'web') {
         await this.initStripe();
       } else if (platform === 'ios' || platform === 'android') {
-        await this.initIAP();
+        await this.initRevenueCat();
       }
 
       this.initialized = true;
@@ -37,23 +38,45 @@ const PathfindrPayments = {
    * Initialize Stripe for web payments
    */
   async initStripe() {
-    // Stripe.js is loaded dynamically when needed
+    // Stripe.js is loaded via script tag in index.html
     console.log('[Payments] Stripe ready for web payments');
   },
 
   /**
-   * Initialize In-App Purchases for native platforms
+   * Initialize RevenueCat for native IAP
    */
-  async initIAP() {
+  async initRevenueCat() {
     try {
-      // Note: You'll need to install a Capacitor IAP plugin
-      // Options: @capgo/capacitor-purchases (RevenueCat) or similar
-      console.log('[Payments] IAP ready for native payments');
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      this.Purchases = Purchases;
 
-      // Load available products
+      const platform = PathfindrConfig.platform;
+      const apiKey = platform === 'ios'
+        ? PathfindrConfig.revenuecat.apiKey.ios
+        : PathfindrConfig.revenuecat.apiKey.android;
+
+      // Check if API key is configured
+      if (apiKey.startsWith('YOUR_')) {
+        console.warn('[Payments] RevenueCat API key not configured');
+        return;
+      }
+
+      // Configure RevenueCat
+      await Purchases.configure({
+        apiKey: apiKey,
+      });
+
+      // Set user ID if logged in (for cross-platform purchase sync)
+      if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.currentUser?.id) {
+        await Purchases.logIn({ appUserID: PathfindrAuth.currentUser.id });
+      }
+
+      // Load products
       await this.loadProducts();
+
+      console.log('[Payments] RevenueCat initialized successfully');
     } catch (error) {
-      console.error('[Payments] IAP initialization failed:', error);
+      console.error('[Payments] RevenueCat initialization failed:', error);
     }
   },
 
@@ -66,35 +89,45 @@ const PathfindrPayments = {
     if (platform === 'web') {
       // Web products are defined in config
       this.products = [{
-        id: 'remove_ads',
-        title: 'Remove Ads',
+        id: 'pathfindr_premium',
+        title: 'Pathfindr Premium',
+        description: 'Remove ads + unlock Explorer & Visualizer modes',
         price: '$2.99',
         priceId: PathfindrConfig.stripe.priceId,
       }];
-    } else {
-      // Native products would be loaded from the store
-      // This is a placeholder - actual implementation depends on IAP plugin
-      this.products = [{
-        id: 'remove_ads',
-        title: 'Remove Ads',
-        price: '$2.99',
-      }];
-    }
+    } else if (this.Purchases) {
+      // Load products from RevenueCat
+      try {
+        const offerings = await this.Purchases.getOfferings();
 
-    console.log('[Payments] Products loaded:', this.products);
+        if (offerings.current && offerings.current.availablePackages.length > 0) {
+          this.products = offerings.current.availablePackages.map(pkg => ({
+            id: pkg.product.identifier,
+            title: pkg.product.title,
+            description: pkg.product.description,
+            price: pkg.product.priceString,
+            package: pkg, // Store package for purchase
+          }));
+        }
+
+        console.log('[Payments] Products loaded:', this.products);
+      } catch (error) {
+        console.error('[Payments] Failed to load products:', error);
+      }
+    }
   },
 
   /**
-   * Purchase the "Remove Ads" product
+   * Purchase premium (removes ads + unlocks modes)
    * @returns {Promise<{success: boolean, error?: string}>}
    */
-  async purchaseRemoveAds() {
+  async purchasePremium() {
     const platform = PathfindrConfig.platform;
 
     if (platform === 'web') {
       return await this.purchaseStripe();
     } else {
-      return await this.purchaseIAP();
+      return await this.purchaseRevenueCat();
     }
   },
 
@@ -110,8 +143,7 @@ const PathfindrPayments = {
 
       const stripe = window.Stripe(PathfindrConfig.stripe.publishableKey);
 
-      // Create checkout session via your backend
-      // For now, we'll use Stripe's client-only checkout (limited but works for testing)
+      // Redirect to Stripe Checkout
       const { error } = await stripe.redirectToCheckout({
         lineItems: [{
           price: PathfindrConfig.stripe.priceId,
@@ -153,56 +185,109 @@ const PathfindrPayments = {
   },
 
   /**
-   * Native: Purchase via In-App Purchase
+   * Native: Purchase via RevenueCat
    */
-  async purchaseIAP() {
+  async purchaseRevenueCat() {
+    if (!this.Purchases) {
+      console.error('[Payments] RevenueCat not initialized');
+      return { success: false, error: 'Payment system not available' };
+    }
+
     try {
-      // This is a placeholder - actual implementation depends on which IAP plugin you use
-      // Popular options:
-      // 1. @capgo/capacitor-purchases (RevenueCat wrapper)
-      // 2. @awesome-cordova-plugins/in-app-purchase-2
-      // 3. capacitor-plugin-in-app-purchases
+      // Find the premium package
+      const offerings = await this.Purchases.getOfferings();
 
-      console.log('[Payments] Starting IAP purchase...');
+      if (!offerings.current || offerings.current.availablePackages.length === 0) {
+        return { success: false, error: 'No products available' };
+      }
 
-      // Placeholder for actual IAP implementation
-      // const { Purchases } = await import('@capgo/capacitor-purchases');
-      // const purchaseResult = await Purchases.purchaseProduct('remove_ads');
+      // Get the first available package (should be premium)
+      const pkg = offerings.current.availablePackages[0];
 
-      // For now, return placeholder
-      console.warn('[Payments] IAP not fully implemented - install an IAP plugin');
-      return { success: false, error: 'IAP not configured' };
+      console.log('[Payments] Purchasing package:', pkg.product.identifier);
 
+      // Make the purchase
+      const { customerInfo } = await this.Purchases.purchasePackage({ aPackage: pkg });
+
+      // Check if premium entitlement is now active
+      const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
+      if (customerInfo.entitlements.active[premiumEntitlement]) {
+        await this.handlePurchaseSuccess();
+        return { success: true };
+      }
+
+      return { success: false, error: 'Purchase completed but entitlement not found' };
     } catch (error) {
-      console.error('[Payments] IAP purchase failed:', error);
+      // User cancelled
+      if (error.code === 'PURCHASE_CANCELLED') {
+        console.log('[Payments] Purchase cancelled by user');
+        return { success: false, error: 'cancelled' };
+      }
+
+      console.error('[Payments] RevenueCat purchase failed:', error);
       return { success: false, error: error.message };
     }
   },
 
   /**
+   * Check if user has premium entitlement
+   * @returns {Promise<boolean>}
+   */
+  async checkPremiumStatus() {
+    const platform = PathfindrConfig.platform;
+
+    if (platform === 'web') {
+      // Check Supabase for web purchases
+      return window.pathfindrUser?.has_purchased === true;
+    }
+
+    if (!this.Purchases) {
+      return false;
+    }
+
+    try {
+      const { customerInfo } = await this.Purchases.getCustomerInfo();
+      const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
+      return !!customerInfo.entitlements.active[premiumEntitlement];
+    } catch (error) {
+      console.error('[Payments] Failed to check premium status:', error);
+      return false;
+    }
+  },
+
+  /**
    * Restore previous purchases (for iOS/Android)
+   * @returns {Promise<{success: boolean, isPremium: boolean}>}
    */
   async restorePurchases() {
     const platform = PathfindrConfig.platform;
 
     if (platform === 'web') {
       // Web purchases are tied to account, not device
-      // Check Supabase for purchase status
-      return PathfindrAuth.hasPurchased();
+      const hasPurchased = window.pathfindrUser?.has_purchased === true;
+      return { success: true, isPremium: hasPurchased };
+    }
+
+    if (!this.Purchases) {
+      return { success: false, isPremium: false };
     }
 
     try {
-      // Placeholder for restore implementation
       console.log('[Payments] Restoring purchases...');
 
-      // const { Purchases } = await import('@capgo/capacitor-purchases');
-      // const restoredPurchases = await Purchases.restorePurchases();
-      // return restoredPurchases.some(p => p.productId === 'remove_ads');
+      const { customerInfo } = await this.Purchases.restorePurchases();
+      const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
+      const isPremium = !!customerInfo.entitlements.active[premiumEntitlement];
 
-      return false;
+      if (isPremium) {
+        await this.handlePurchaseSuccess();
+      }
+
+      console.log('[Payments] Restore complete, isPremium:', isPremium);
+      return { success: true, isPremium };
     } catch (error) {
       console.error('[Payments] Restore failed:', error);
-      return false;
+      return { success: false, isPremium: false };
     }
   },
 
@@ -211,13 +296,22 @@ const PathfindrPayments = {
    * Updates user record and removes ads
    */
   async handlePurchaseSuccess() {
-    // Update Supabase user record
-    await PathfindrAuth.setPurchased(true);
+    // Update Supabase user record (for cross-platform sync)
+    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.setPurchased) {
+      await PathfindrAuth.setPurchased(true);
+    }
+
+    // Update local state
+    if (window.pathfindrUser) {
+      window.pathfindrUser.has_purchased = true;
+    }
 
     // Remove ads immediately
-    await PathfindrAds.removeAllAds();
+    if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
+      await PathfindrAds.removeAllAds();
+    }
 
-    console.log('[Payments] Purchase successful - ads removed');
+    console.log('[Payments] Purchase successful - premium unlocked');
   },
 
   /**
@@ -243,13 +337,36 @@ const PathfindrPayments = {
 
     return null;
   },
+
+  /**
+   * Show purchase UI
+   * Call this when user taps a premium feature or "Remove Ads" button
+   */
+  async showPurchasePrompt() {
+    // Check if already premium
+    const isPremium = await this.checkPremiumStatus();
+    if (isPremium) {
+      console.log('[Payments] User already has premium');
+      return { success: true, alreadyPremium: true };
+    }
+
+    // Trigger purchase flow
+    return await this.purchasePremium();
+  },
 };
 
 // Check for Stripe redirect on load
 document.addEventListener('DOMContentLoaded', () => {
   const result = PathfindrPayments.checkStripeRedirect();
   if (result === 'success') {
-    alert('Thank you for your purchase! Ads have been removed.');
+    // Show success message (non-blocking)
+    setTimeout(() => {
+      if (typeof showToast === 'function') {
+        showToast('Thank you! Premium features unlocked.');
+      } else {
+        alert('Thank you for your purchase! Premium features are now unlocked.');
+      }
+    }, 500);
   }
 });
 

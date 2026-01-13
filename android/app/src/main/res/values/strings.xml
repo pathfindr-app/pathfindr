@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pathfindr</string>
+    <string name="title_activity_main">Pathfindr</string>
+    <string name="package_name">world.pathfindr.app</string>
+    <string name="custom_url_scheme">world.pathfindr.app</string>
+</resources>

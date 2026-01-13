@@ -269,7 +269,7 @@ const CONFIG = {
         flickerIntensity: 0.15,     // line flicker amount
         arcFrequency: 0.02,         // chance of arc spark per frame
         wobbleAmount: 1.5,          // pixel wobble from noise
-        idleIntensity: 0.75,        // brightness of idle/persistent paths (BUMPED from 0.6)
+        idleIntensity: 0.5,         // brightness of idle/persistent paths (lowered for softer look)
         activeIntensity: 1.0,       // brightness of active round
     },
 
@@ -867,11 +867,20 @@ const CityDB = {
             const data = await response.json();
 
             if (data.city) {
+                // Build full location name: City, Region/State, Country
+                let locationName = data.city.name;
+                if (data.city.region) {
+                    locationName += `, ${data.city.region}`;
+                }
+                if (data.city.country) {
+                    locationName += `, ${data.city.country}`;
+                }
+
                 // Convert to the format expected by the game
                 return {
                     lat: parseFloat(data.city.lat),
                     lng: parseFloat(data.city.lng),
-                    name: `${data.city.name}, ${data.city.country}`,
+                    name: locationName,
                     zoom: this.getZoomForPopulation(data.city.population),
                     population: data.city.population,
                     fromDB: true,
@@ -937,17 +946,22 @@ const WebGLRenderer = {
         edgePositions: null,   // Float32Array of edge vertices
         edgeNormals: null,     // Float32Array of edge normals
         edgeHeats: null,       // Float32Array of heat values per edge
-        edgeIndices: null,     // Element array buffer for indexed drawing
+        edgeIndices: null,     // Element array buffer for indexed drawing (ALL edges)
+        exploredIndices: null, // Element array buffer for explored edges ONLY
     },
 
     // Index count for drawing
     indexCount: 0,
+    exploredIndexCount: 0,     // Number of indices for explored edges only
 
     // State
     edgeCount: 0,
     edgeKeyToIndex: new Map(),  // Map edgeKey -> index in buffer
+    exploredEdgeSet: new Set(), // Track which edges are already in explored buffer
+    exploredIndicesData: null,  // Uint16Array for explored indices (CPU-side)
     heatData: null,             // Float32Array for heat values
     needsHeatUpdate: false,
+    needsExploredUpdate: false, // Flag for explored buffer upload
     globalOpacity: 1.0,         // For settling transition fadeout
 
     // Uniforms
@@ -1048,75 +1062,97 @@ const WebGLRenderer = {
         `,
 
         // Fragment shader for heat-mapped exploration - uses ROUND COLOR with FRONTIER GLOW
+        // v_heat now contains explorationTime (negative = not explored, positive = time when explored)
         heatFragment: `
             precision mediump float;
 
             uniform float u_time;
             uniform vec2 u_resolution;
             uniform vec3 u_roundColor;  // Current round's color (passed from JS)
+            uniform float u_decaySpeed;  // Linear decay speed per second
+            uniform float u_heatFloor;  // Minimum heat value
+            uniform float u_flicker;    // Pre-computed flicker (CPU-side sin)
+            uniform float u_frontierPulse;  // Pre-computed frontier pulse
 
-            varying float v_heat;
+            varying float v_heat;  // Actually explorationTime (or -1 if never explored)
             varying vec2 v_position;
 
             void main() {
-                if (v_heat < 0.02) discard;
+                // v_heat < 0 means never explored
+                if (v_heat < 0.0) discard;
 
-                // Base flicker for all edges
-                float flicker = 0.9 + sin(u_time * 8.0) * 0.05;
+                // Linear decay - MUCH faster than pow()
+                // heat goes from 1.0 to floor over ~2 seconds
+                float timeSinceExplored = u_time - v_heat;
+                float heat = max(u_heatFloor, 1.0 - timeSinceExplored * u_decaySpeed);
 
-                // FRONTIER GLOW: High-heat edges (frontier) get special treatment
-                float frontierThreshold = 0.6;
-                float isFrontier = smoothstep(frontierThreshold, 0.85, v_heat);
+                if (heat < 0.02) discard;
 
-                // Frontier edges pulse more dramatically
-                float frontierPulse = 1.0 + isFrontier * (sin(u_time * 12.0) * 0.3 + 0.2);
+                // === ASMR SATISFACTION: Smooth wavefront with lingering glow ===
 
-                // Frontier edges are MUCH brighter - creates the "spreading fire" effect
-                float frontierBoost = 1.0 + isFrontier * 1.5;
+                // Frontier detection - very recent edges (< 0.5s old)
+                float frontierStrength = smoothstep(0.5, 0.95, heat);
 
-                // Base brightness from heat (dimmer for older exploration)
-                float baseBrightness = 0.25 + v_heat * 0.5;
+                // Subtle global breathing for "alive" feel (slow, calming)
+                float breathe = 0.95 + u_flicker * 0.05;
 
-                // Combine: frontier edges glow bright, older edges fade to subtle
-                float brightness = baseBrightness * frontierBoost * frontierPulse;
+                // Base brightness - explored edges maintain gentle visibility
+                // Higher base for persistence, frontier gets dramatic boost
+                float baseBrightness = 0.3 + heat * 0.4;
+
+                // Frontier gets MUCH brighter - this is the satisfying wavefront
+                float frontierBoost = 1.0 + frontierStrength * 2.5;
+
+                // Gentle pulse only on frontier (not chaotic)
+                float frontierPulse = 1.0 + frontierStrength * u_frontierPulse * 0.15;
+
+                float brightness = baseBrightness * frontierBoost * frontierPulse * breathe;
 
                 vec3 color = u_roundColor * brightness;
 
-                // Add white-hot core to frontier edges
-                float whiteCore = isFrontier * 0.4;
-                color = mix(color, vec3(1.0), whiteCore);
+                // Subtle white bloom on frontier only (not harsh)
+                float bloom = frontierStrength * 0.25;
+                color = mix(color, vec3(1.0), bloom);
 
-                // Alpha also boosted for frontier
-                float alpha = v_heat * flicker * (0.6 + isFrontier * 0.5);
+                // Alpha: explored edges stay visible, frontier is brightest
+                float alpha = (0.4 + heat * 0.4) * (0.7 + frontierStrength * 0.4);
 
                 gl_FragColor = vec4(color * alpha, alpha);
             }
         `,
 
         // Fragment shader for glow effect - uses ROUND COLOR
+        // v_heat now contains explorationTime (negative = not explored)
         glowFragment: `
             precision mediump float;
 
             uniform float u_time;
             uniform vec2 u_resolution;
             uniform vec3 u_roundColor;  // Current round's color
+            uniform float u_decaySpeed;
+            uniform float u_heatFloor;
+            uniform float u_glowPulse;  // Pre-computed glow pulse
 
-            varying float v_heat;
+            varying float v_heat;  // Actually explorationTime
             varying vec2 v_position;
 
             void main() {
-                if (v_heat < 0.02) discard;
+                if (v_heat < 0.0) discard;
 
-                // Enhanced pulse with multiple waves
-                float flowCoord = (v_position.x + v_position.y) * 0.006;
-                float pulse = sin(flowCoord - u_time * 0.35) * 0.2 +
-                              sin(flowCoord * 1.5 - u_time * 0.5) * 0.08 + 0.85;
+                // Linear decay - MUCH faster than pow()
+                float timeSinceExplored = u_time - v_heat;
+                float heat = max(u_heatFloor, 1.0 - timeSinceExplored * u_decaySpeed);
+
+                if (heat < 0.02) discard;
+
+                // Use pre-computed pulse (CPU-side sin calculations)
+                float pulse = u_glowPulse;
 
                 // Use round color - just vary brightness by heat
-                vec3 color = u_roundColor * (0.4 + v_heat * 0.6);
+                vec3 color = u_roundColor * (0.4 + heat * 0.6);
 
                 // Glow intensity
-                float glow = v_heat * 0.35 * pulse;
+                float glow = heat * 0.35 * pulse;
 
                 gl_FragColor = vec4(color * glow, glow);
             }
@@ -1264,6 +1300,7 @@ const WebGLRenderer = {
         this.buffers.edgeNormals = gl.createBuffer();
         this.buffers.edgeHeats = gl.createBuffer();
         this.buffers.edgeIndices = gl.createBuffer();
+        this.buffers.exploredIndices = gl.createBuffer();
 
         this.initialized = true;
         console.log('WebGL renderer initialized successfully');
@@ -1319,6 +1356,13 @@ const WebGLRenderer = {
             center: gl.getUniformLocation(program, 'u_center'),
             pathProgress: gl.getUniformLocation(program, 'u_pathProgress'),
             roundColor: gl.getUniformLocation(program, 'u_roundColor'),
+            decaySpeed: gl.getUniformLocation(program, 'u_decaySpeed'),
+            heatFloor: gl.getUniformLocation(program, 'u_heatFloor'),
+            vizStartTime: gl.getUniformLocation(program, 'u_vizStartTime'),
+            // Pre-computed effect values (CPU-side sin calculations)
+            flicker: gl.getUniformLocation(program, 'u_flicker'),
+            frontierPulse: gl.getUniformLocation(program, 'u_frontierPulse'),
+            glowPulse: gl.getUniformLocation(program, 'u_glowPulse'),
         };
 
         return program;
@@ -1410,11 +1454,11 @@ const WebGLRenderer = {
             normals[baseIdx + 6] = nx;
             normals[baseIdx + 7] = ny;
 
-            // Initialize heat to 0
-            this.heatData[i * 4 + 0] = 0;
-            this.heatData[i * 4 + 1] = 0;
-            this.heatData[i * 4 + 2] = 0;
-            this.heatData[i * 4 + 3] = 0;
+            // Initialize to -1 (never explored) - shader uses negative = unexplored
+            this.heatData[i * 4 + 0] = -1;
+            this.heatData[i * 4 + 1] = -1;
+            this.heatData[i * 4 + 2] = -1;
+            this.heatData[i * 4 + 3] = -1;
         }
 
         // Build index buffer for batched drawing
@@ -1448,6 +1492,12 @@ const WebGLRenderer = {
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+        // Initialize explored indices array (empty initially, populated during A*)
+        this.exploredIndicesData = new Uint16Array(edges.length * 6);  // Max same size
+        this.exploredIndexCount = 0;
+        this.exploredEdgeSet.clear();
+        this.needsExploredUpdate = false;
 
         console.log(`WebGL: Built buffers for ${edges.length} edges (${this.indexCount} indices)`);
     },
@@ -1508,43 +1558,80 @@ const WebGLRenderer = {
         gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
     },
 
-    // Set heat value for an edge
-    setEdgeHeat(edgeKey, heat) {
+    // Mark edge as explored at current time (GPU calculates decay from this)
+    // Only updates if not already explored - prevents resetting exploration time
+    setEdgeExplored(edgeKey, explorationTime) {
         const index = this.edgeKeyToIndex.get(edgeKey);
         if (index === undefined || !this.heatData) return;
 
-        // Set heat for all 4 vertices of this edge
         const baseIdx = index * 4;
-        this.heatData[baseIdx + 0] = heat;
-        this.heatData[baseIdx + 1] = heat;
-        this.heatData[baseIdx + 2] = heat;
-        this.heatData[baseIdx + 3] = heat;
+        // Only set if not already explored (value is -1)
+        if (this.heatData[baseIdx] < 0) {
+            this.heatData[baseIdx + 0] = explorationTime;
+            this.heatData[baseIdx + 1] = explorationTime;
+            this.heatData[baseIdx + 2] = explorationTime;
+            this.heatData[baseIdx + 3] = explorationTime;
+            this.needsHeatUpdate = true;
 
-        this.needsHeatUpdate = true;
-    },
-
-    // Decay all heat values (GPU-friendly batch update)
-    decayHeat(decayRate, floor) {
-        if (!this.heatData) return;
-
-        for (let i = 0; i < this.heatData.length; i++) {
-            if (this.heatData[i] > 0) {
-                this.heatData[i] = Math.max(this.heatData[i] * decayRate, floor);
+            // Also add to explored indices buffer (for efficient rendering)
+            if (!this.exploredEdgeSet.has(edgeKey)) {
+                this.exploredEdgeSet.add(edgeKey);
+                // Add 6 indices for this edge's 2 triangles
+                const baseVertex = index * 4;
+                const idxOffset = this.exploredIndexCount;
+                this.exploredIndicesData[idxOffset + 0] = baseVertex + 0;
+                this.exploredIndicesData[idxOffset + 1] = baseVertex + 1;
+                this.exploredIndicesData[idxOffset + 2] = baseVertex + 2;
+                this.exploredIndicesData[idxOffset + 3] = baseVertex + 1;
+                this.exploredIndicesData[idxOffset + 4] = baseVertex + 3;
+                this.exploredIndicesData[idxOffset + 5] = baseVertex + 2;
+                this.exploredIndexCount += 6;
+                this.needsExploredUpdate = true;
             }
         }
-        this.needsHeatUpdate = true;
     },
 
-    // Clear all heat values
+    // Legacy compatibility - converts heat 1.0 to "just explored"
+    setEdgeHeat(edgeKey, heat) {
+        if (heat >= 0.9) {
+            // Heat of 1.0 means "just explored" - set current time
+            this.setEdgeExplored(edgeKey, performance.now() * 0.001);
+        }
+        // Lower heat values are ignored - decay is now GPU-side
+    },
+
+    // Decay is now handled in shader - this is a no-op for performance
+    decayHeat(decayRate, floor) {
+        // GPU-side decay - nothing to do here!
+    },
+
+    // Clear all exploration times and explored indices (reset for new visualization)
     clearHeat() {
         if (!this.heatData) return;
-        this.heatData.fill(0);
+        this.heatData.fill(-1);  // -1 = never explored
         this.needsHeatUpdate = true;
+
+        // Also clear explored indices
+        this.exploredIndexCount = 0;
+        this.exploredEdgeSet.clear();
+        this.needsExploredUpdate = true;
     },
 
     // Set global opacity for settling transition
     setGlobalOpacity(opacity) {
         this.globalOpacity = opacity;
+    },
+
+    // Get current color index based on game mode
+    getCurrentColorIndex() {
+        if (GameState.gameMode === 'visualizer') {
+            return VisualizerHistory.pathIndex;  // Current viz being rendered
+        } else if (GameState.gameMode === 'explorer') {
+            return ExplorerHistory.pathIndex;
+        } else {
+            // Competitive mode - use round number (1-indexed, convert to 0-indexed)
+            return (GameState.currentRound || 1) - 1;
+        }
     },
 
     // Upload heat data to GPU
@@ -1555,6 +1642,18 @@ const WebGLRenderer = {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeHeats);
         gl.bufferData(gl.ARRAY_BUFFER, this.heatData, gl.DYNAMIC_DRAW);
         this.needsHeatUpdate = false;
+    },
+
+    // Upload explored indices to GPU (only explored edges)
+    uploadExploredData() {
+        if (!this.needsExploredUpdate || !this.exploredIndicesData || !this.gl) return;
+
+        const gl = this.gl;
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.exploredIndices);
+        // Only upload the portion that's actually used
+        const usedData = this.exploredIndicesData.subarray(0, this.exploredIndexCount);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, usedData, gl.DYNAMIC_DRAW);
+        this.needsExploredUpdate = false;
     },
 
     // Main render function
@@ -1571,23 +1670,27 @@ const WebGLRenderer = {
 
         if (this.edgeCount === 0) return;
 
-        // Upload any pending heat updates
+        // Upload any pending updates
         this.uploadHeatData();
+        this.uploadExploredData();
 
         const timeSeconds = time * 0.001;
 
         // Draw ambient roads first (base layer)
         this.renderAmbientRoads(timeSeconds, width, height);
 
-        // Draw heat-mapped edges on top (additive blending)
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);  // Additive
-        this.renderHeatEdges(timeSeconds, width, height);
+        // Only draw heat/glow if we have explored edges
+        if (this.exploredIndexCount > 0) {
+            // Draw heat-mapped edges on top (additive blending) - ONLY explored edges
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE);  // Additive
+            this.renderHeatEdges(timeSeconds, width, height);
 
-        // Draw glow layer
-        this.renderGlow(timeSeconds, width, height);
+            // Draw glow layer - ONLY explored edges
+            this.renderGlow(timeSeconds, width, height);
 
-        // Reset blend mode
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            // Reset blend mode
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        }
     },
 
     // Render ONLY ambient roads (for continuous background rendering)
@@ -1689,10 +1792,24 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
 
-        // Pass current round's color to shader
-        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        // Linear decay: heat = 1.0 - time * decaySpeed
+        // SLOW decay for ASMR satisfaction - edges linger and "paint" the explored area
+        // decaySpeed of 0.12 means heat goes from 1.0 to floor over ~6-7 seconds
+        const decaySpeed = 0.12;
+        gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
+        gl.uniform1f(program.uniforms.heatFloor, 0.25);  // Higher floor - explored edges stay visible
+
+        // Pass current visualization color to shader (mode-aware)
+        const colorIndex = this.getCurrentColorIndex();
+        const theme = CONFIG.color.getThemeByIndex(colorIndex);
         const c = theme.base;
         gl.uniform3f(program.uniforms.roundColor, c.r / 255, c.g / 255, c.b / 255);
+
+        // Pre-computed effect values (CPU-side sin() - one call per frame instead of millions)
+        const flicker = 0.9 + Math.sin(time * 8.0) * 0.05;
+        const frontierPulse = Math.sin(time * 12.0);  // Range -1 to 1
+        gl.uniform1f(program.uniforms.flicker, flicker);
+        gl.uniform1f(program.uniforms.frontierPulse, frontierPulse);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
         gl.enableVertexAttribArray(program.attributes.position);
@@ -1706,9 +1823,9 @@ const WebGLRenderer = {
         gl.enableVertexAttribArray(program.attributes.heat);
         gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
 
-        // Single batched draw call
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
-        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+        // Draw ONLY explored edges (massive performance win!)
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.exploredIndices);
+        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, gl.UNSIGNED_SHORT, 0);
     },
 
     // Render glow effect (wider, more transparent)
@@ -1722,10 +1839,20 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
 
-        // Pass current round's color to shader
-        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        // Linear decay parameters (same as heat edges) - SLOW for satisfaction
+        const decaySpeed = 0.12;
+        gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
+        gl.uniform1f(program.uniforms.heatFloor, 0.25);
+
+        // Pass current visualization color to shader (mode-aware)
+        const colorIndex = this.getCurrentColorIndex();
+        const theme = CONFIG.color.getThemeByIndex(colorIndex);
         const c = theme.base;
         gl.uniform3f(program.uniforms.roundColor, c.r / 255, c.g / 255, c.b / 255);
+
+        // Pre-computed glow pulse (CPU-side sin() - one call per frame instead of millions)
+        const glowPulse = Math.sin(time * 0.35) * 0.2 + Math.sin(time * 0.5) * 0.08 + 0.85;
+        gl.uniform1f(program.uniforms.glowPulse, glowPulse);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
         gl.enableVertexAttribArray(program.attributes.position);
@@ -1739,9 +1866,9 @@ const WebGLRenderer = {
         gl.enableVertexAttribArray(program.attributes.heat);
         gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
 
-        // Single batched draw call
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
-        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+        // Draw ONLY explored edges (massive performance win!)
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.exploredIndices);
+        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, gl.UNSIGNED_SHORT, 0);
     },
 
     // Cleanup
@@ -1755,6 +1882,7 @@ const WebGLRenderer = {
         if (this.buffers.edgeNormals) gl.deleteBuffer(this.buffers.edgeNormals);
         if (this.buffers.edgeHeats) gl.deleteBuffer(this.buffers.edgeHeats);
         if (this.buffers.edgeIndices) gl.deleteBuffer(this.buffers.edgeIndices);
+        if (this.buffers.exploredIndices) gl.deleteBuffer(this.buffers.exploredIndices);
 
         // Delete programs
         for (const name in this.programs) {
@@ -2438,6 +2566,168 @@ const SoundEngine = {
         }, 3000);
 
         this.ambientNodes = null;
+    },
+
+    // Pause all audio (when app goes to background)
+    pauseAll() {
+        if (!this.initialized || !this.ctx) return;
+
+        // Suspend the audio context (stops all audio processing)
+        if (this.ctx.state === 'running') {
+            this.ctx.suspend().catch(e => console.warn('Audio suspend failed:', e));
+        }
+    },
+
+    // Resume audio (when app returns to foreground)
+    resumeAll() {
+        if (!this.initialized || !this.ctx) return;
+
+        // Resume the audio context
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(e => console.warn('Audio resume failed:', e));
+        }
+    },
+
+    // Stop all sounds completely (for clean shutdown)
+    stopAll() {
+        this.stopScanning();
+        this.stopSoundtrack();
+        this.stopAmbient();
+        this.stopTrace();
+
+        // Suspend context to ensure silence
+        if (this.ctx && this.ctx.state === 'running') {
+            this.ctx.suspend().catch(() => {});
+        }
+    }
+};
+
+// =============================================================================
+// APP VISIBILITY & STATE HANDLERS - Pause audio when app is hidden/backgrounded
+// =============================================================================
+
+// Handle browser visibility changes (tab hidden, minimized, etc.)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        SoundEngine.pauseAll();
+    } else {
+        SoundEngine.resumeAll();
+    }
+});
+
+// Handle Capacitor app state changes (native app backgrounded/foregrounded)
+if (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform()) {
+    // Import App plugin dynamically for native platforms
+    import('@capacitor/app').then(({ App }) => {
+        App.addListener('appStateChange', ({ isActive }) => {
+            if (isActive) {
+                SoundEngine.resumeAll();
+            } else {
+                SoundEngine.pauseAll();
+            }
+        });
+
+        // Also handle app being terminated
+        App.addListener('backButton', () => {
+            // On Android back button, pause audio before potentially exiting
+            SoundEngine.pauseAll();
+        });
+    }).catch(e => {
+        console.warn('Capacitor App plugin not available:', e);
+    });
+}
+
+// =============================================================================
+// HAPTICS ENGINE - Mobile Tactile Feedback
+// =============================================================================
+
+const GameHaptics = {
+    initialized: false,
+    Haptics: null,
+
+    /**
+     * Initialize haptics on native platforms
+     * Safe to call on web - will silently do nothing
+     */
+    async init() {
+        if (this.initialized) return;
+
+        // Only initialize on native platforms
+        if (typeof window === 'undefined' || !window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            console.log('[Haptics] Web platform - haptics disabled');
+            this.initialized = true;
+            return;
+        }
+
+        try {
+            const { Haptics } = await import('@capacitor/haptics');
+            this.Haptics = Haptics;
+            this.initialized = true;
+            console.log('[Haptics] Initialized successfully');
+        } catch (error) {
+            console.warn('[Haptics] Failed to initialize:', error);
+            this.initialized = true; // Mark as initialized to prevent retries
+        }
+    },
+
+    /**
+     * Light tap - used when snapping to a node while drawing path
+     */
+    async nodeSnap() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.impact({ style: 'light' });
+        } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Medium impact - used when path reaches destination
+     */
+    async pathComplete() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.impact({ style: 'medium' });
+        } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Success notification - used when round ends
+     */
+    async roundEnd() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.notification({ type: 'success' });
+        } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Heavy impact - used for game over / high score
+     */
+    async gameOver() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.impact({ style: 'heavy' });
+        } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Warning notification - used for errors or rejected actions
+     */
+    async warning() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.notification({ type: 'warning' });
+        } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Selection change - subtle feedback for UI interactions
+     */
+    async selectionChanged() {
+        if (!this.Haptics) return;
+        try {
+            await this.Haptics.selectionChanged();
+        } catch (e) { /* ignore */ }
     }
 };
 
@@ -2871,7 +3161,7 @@ const AmbientViz = {
             }
 
             // Render explored edges with electricity (dimmed during active viz)
-            const isActive = round.state === 'surging' && !isVizActive;
+            const isActive = round.state === 'rising' && !isVizActive;
             const effectiveIntensity = round.intensity * vizDimFactor;
             ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
@@ -2886,11 +3176,11 @@ const AmbientViz = {
                 if (optimalPoints.length > 1) {
                     // Use contrasting optimal color (fall back to exploration color if not set)
                     const pathColor = round.hotColor || round.color;
-                    // Initialize pulses for this path if not exists
-                    if (!round.optimalPulses) {
-                        round.optimalPulses = ElectricitySystem.createPulses(optimalPoints, pathColor, 6);
+                    // Initialize sweep for this path if not exists
+                    if (!round.optimalSweep) {
+                        round.optimalSweep = ElectricitySystem.createSweep();
                     }
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, pathColor, effectiveIntensity, round.optimalPulses);
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, pathColor, effectiveIntensity, round.optimalSweep);
                 }
             }
 
@@ -2964,7 +3254,7 @@ const AmbientViz = {
             }
 
             const screenEdges = path.screenEdgesCache || [];
-            const isActive = path.state === 'surging' && !isVizActive;
+            const isActive = path.state === 'rising' && !isVizActive;
 
             // LIVING NETWORK: Apply breathing + ripple boost for idle paths
             let effectiveIntensity = path.intensity * vizDimFactor;
@@ -2987,14 +3277,14 @@ const AmbientViz = {
             const optimalPoints = path.optimalPointsCache;
             const optimalColor = path.hotColor || path.color;
             if (optimalPoints && optimalPoints.length > 1) {
-                if (!path.optimalPulses) {
-                    path.optimalPulses = ElectricitySystem.createPulses(optimalPoints, optimalColor, 6);
+                if (!path.optimalSweep) {
+                    path.optimalSweep = ElectricitySystem.createSweep();
                 }
                 // LIVING NETWORK: Optimal path is always animated as power source
                 if (path.state === 'idle') {
-                    this.renderPowerSourcePath(ctx, optimalPoints, optimalColor, effectiveIntensity, path.powerPulses, breathe);
+                    this.renderPowerSourcePath(ctx, optimalPoints, optimalColor, effectiveIntensity, path.optimalSweep, breathe);
                 } else {
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, optimalColor, effectiveIntensity, path.optimalPulses);
+                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, optimalColor, effectiveIntensity, path.optimalSweep);
                 }
             }
 
@@ -3071,7 +3361,7 @@ const AmbientViz = {
     },
 
     // Render optimal path with flowing electricity
-    renderOptimalPathWithElectricity(ctx, points, color, intensity, pulses) {
+    renderOptimalPathWithElectricity(ctx, points, color, intensity, sweep) {
         if (points.length < 2) return;
 
         const flicker = ElectricitySystem.getFlicker();
@@ -3081,58 +3371,40 @@ const AmbientViz = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
-        // Atmospheric bloom (widest, faintest)
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.08 * effectiveIntensity})`;
-        ctx.lineWidth = 28;
+        // Build path once, stroke multiple times (more efficient)
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
             ctx.lineTo(points[i].x, points[i].y);
         }
+
+        // Atmospheric bloom (widest, faintest) - SOFTENED
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.05 * effectiveIntensity})`;
+        ctx.lineWidth = 20;
         ctx.stroke();
 
-        // Outer glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
-        ctx.lineWidth = 18;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Outer glow - SOFTENED
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.12 * effectiveIntensity})`;
+        ctx.lineWidth = 12;
         ctx.stroke();
 
-        // Mid glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
-        ctx.lineWidth = 10;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Mid glow - SOFTENED
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.3 * effectiveIntensity})`;
+        ctx.lineWidth = 6;
         ctx.stroke();
 
-        // Core
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${1.0 * effectiveIntensity})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Core - SOFTENED
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
-        // White hot center
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.85 * effectiveIntensity})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Soft center highlight (not white-hot, more subtle)
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 * effectiveIntensity})`;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Traveling pulses
-        ElectricitySystem.renderPulses(ctx, points, color, intensity, pulses);
+        // ASMR: Single elegant sweep instead of chaotic pulses
+        ElectricitySystem.renderSweep(ctx, points, color, intensity, sweep);
 
         ctx.globalCompositeOperation = 'source-over';
     },
@@ -3182,7 +3454,7 @@ const AmbientViz = {
     },
 
     // LIVING NETWORK: Render optimal path as continuous power source
-    renderPowerSourcePath(ctx, points, color, intensity, powerPulses, breathe) {
+    renderPowerSourcePath(ctx, points, color, intensity, sweep, breathe) {
         if (points.length < 2) return;
 
         const cfg = CONFIG.livingNetwork;
@@ -3194,60 +3466,40 @@ const AmbientViz = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
-        // Wide atmospheric bloom - the "power" aura
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.1 * effectiveIntensity})`;
-        ctx.lineWidth = 24;
+        // Build path once for efficiency
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {
             ctx.lineTo(points[i].x, points[i].y);
         }
+
+        // Wide atmospheric bloom - the "power" aura (SOFTENED)
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.06 * effectiveIntensity})`;
+        ctx.lineWidth = 20;
         ctx.stroke();
 
-        // Outer glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.25 * effectiveIntensity})`;
-        ctx.lineWidth = 14;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Outer glow (SOFTENED)
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
+        ctx.lineWidth = 12;
         ctx.stroke();
 
-        // Mid glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * effectiveIntensity})`;
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Mid glow (SOFTENED)
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.35 * effectiveIntensity})`;
+        ctx.lineWidth = 6;
         ctx.stroke();
 
-        // Core line
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${1.0 * effectiveIntensity})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Core line (SOFTENED)
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.65 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
-        // White-hot center
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        // Soft center (MUCH softer than before)
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 * effectiveIntensity})`;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Render power pulses traveling along the path
-        if (powerPulses && powerPulses.length > 0) {
-            this.renderPowerPulses(ctx, points, color, effectiveIntensity, powerPulses);
-        }
+        // ASMR: Render elegant sweep instead of chaotic pulses
+        ElectricitySystem.renderSweep(ctx, points, color, effectiveIntensity, sweep);
 
         ctx.globalCompositeOperation = 'source-over';
     },
@@ -3397,8 +3649,8 @@ const RoundHistory = {
             hotColor: theme.hot,              // Hot shade (optimal path - brightest)
             midColor: theme.mid,              // Mid shade (user path)
             coolColor: theme.cool,            // Cool shade (ambient history falloff)
-            state: 'surging',                 // 'surging' | 'settling' | 'idle'
-            intensity: 1.0,
+            state: 'rising',                  // 'rising' | 'settling' | 'idle'
+            intensity: 0.15,                  // Start dim, fade UP to avoid brightness pop
             surgeStartTime: performance.now(),
         });
     },
@@ -3406,13 +3658,21 @@ const RoundHistory = {
     // Update all round states
     update(deltaTime) {
         const now = performance.now();
+        const startIntensity = 0.15;  // Match addRound starting intensity
 
         for (const round of this.rounds) {
-            if (round.state === 'surging') {
+            if (round.state === 'rising') {
+                // Fade UP from startIntensity to 1.0 over 1000ms
                 const elapsed = now - round.surgeStartTime;
-                if (elapsed > 800) {  // Surge for 800ms
+                const riseProgress = Math.min(1, elapsed / 1000);
+                // Ease-out curve for smooth rise
+                const easeOut = 1 - Math.pow(1 - riseProgress, 2);
+                round.intensity = startIntensity + (1.0 - startIntensity) * easeOut;
+
+                if (riseProgress >= 1) {
                     round.state = 'settling';
                     round.settleStartTime = now;
+                    round.intensity = 1.0;
                 }
             } else if (round.state === 'settling') {
                 const elapsed = now - round.settleStartTime;
@@ -3460,18 +3720,6 @@ const ExplorerHistory = {
         // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
         const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
 
-        // Create power pulses for optimal path
-        const powerPulses = [];
-        const pulseCount = CONFIG.livingNetwork.powerPulseCount;
-        for (let i = 0; i < pulseCount; i++) {
-            powerPulses.push({
-                progress: i / pulseCount,
-                speed: CONFIG.livingNetwork.powerPulseSpeed * (0.7 + Math.random() * 0.6),
-                brightness: 0.6 + Math.random() * 0.4,
-                size: 1.0 + Math.random() * 0.5,
-            });
-        }
-
         this.paths.push({
             exploredEdges: new Set(sampledEdges),
             optimalPath: [...optimalPath],
@@ -3480,11 +3728,10 @@ const ExplorerHistory = {
             hotColor: theme.hot,          // Hot shade (optimal path - brightest)
             midColor: theme.mid,          // Mid shade (user path)
             coolColor: theme.cool,        // Cool shade (ambient history falloff)
-            state: 'surging',
-            intensity: 1.0,
+            state: 'rising',              // 'rising' | 'settling' | 'idle'
+            intensity: 0.15,              // Start dim, fade UP to avoid brightness pop
             surgeStartTime: performance.now(),
-            optimalPulses: null,
-            powerPulses: powerPulses,
+            optimalSweep: null,           // ASMR: Elegant sweep (lazy init on first render)
             rippleIntensity: 0,
             // OPTIMIZATION: Cache screen coordinates
             screenEdgesCache: null,
@@ -3498,6 +3745,7 @@ const ExplorerHistory = {
     update(deltaTime) {
         const now = performance.now();
         const dt = deltaTime * 0.001;
+        const startIntensity = 0.15;  // Match addPath starting intensity
 
         // Update global breathing
         this.breatheTime += dt * CONFIG.livingNetwork.breatheSpeed * Math.PI * 2;
@@ -3529,11 +3777,18 @@ const ExplorerHistory = {
         }
 
         for (const path of this.paths) {
-            if (path.state === 'surging') {
+            if (path.state === 'rising') {
+                // Fade UP from startIntensity to 1.0 over 1000ms
                 const elapsed = now - path.surgeStartTime;
-                if (elapsed > 800) {
+                const riseProgress = Math.min(1, elapsed / 1000);
+                // Ease-out curve for smooth rise
+                const easeOut = 1 - Math.pow(1 - riseProgress, 2);
+                path.intensity = startIntensity + (1.0 - startIntensity) * easeOut;
+
+                if (riseProgress >= 1) {
                     path.state = 'settling';
                     path.settleStartTime = now;
+                    path.intensity = 1.0;
                 }
             } else if (path.state === 'settling') {
                 const elapsed = now - path.settleStartTime;
@@ -3546,17 +3801,9 @@ const ExplorerHistory = {
                 }
             }
 
-            // Update power pulses
-            if (path.powerPulses) {
-                for (const pulse of path.powerPulses) {
-                    pulse.progress += pulse.speed;
-                    if (pulse.progress > 1) pulse.progress -= 1;
-                }
-
-                // Spawn sparks
-                if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance && this.sparks.length < 20) {
-                    this.spawnSpark(path);
-                }
+            // Spawn occasional sparks (ASMR: less frequent for calmer feel)
+            if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance * 0.3 && this.sparks.length < 10) {
+                this.spawnSpark(path);
             }
 
             // Calculate ripple boost
@@ -3643,29 +3890,16 @@ const VisualizerHistory = {
         // This dramatically reduces rendering load while maintaining visual effect
         const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
 
-        // Create power pulses for optimal path
-        const powerPulses = [];
-        const pulseCount = CONFIG.livingNetwork.powerPulseCount;
-        for (let i = 0; i < pulseCount; i++) {
-            powerPulses.push({
-                progress: i / pulseCount,  // 0-1 along path
-                speed: CONFIG.livingNetwork.powerPulseSpeed * (0.7 + Math.random() * 0.6),
-                brightness: 0.6 + Math.random() * 0.4,
-                size: 1.0 + Math.random() * 0.5,
-            });
-        }
-
         this.paths.push({
             exploredEdges: new Set(sampledEdges),
             optimalPath: [...optimalPath],
             color: theme.base,            // Base color (for heatmap/exploration)
             hotColor: theme.hot,          // Hot shade (optimal path - brightest)
             coolColor: theme.cool,        // Cool shade (ambient history falloff)
-            state: 'surging',
-            intensity: 1.0,
+            state: 'rising',              // 'rising' | 'settling' | 'idle'
+            intensity: 0.15,              // Start dim, fade UP to avoid brightness pop
             surgeStartTime: performance.now(),
-            optimalPulses: null,
-            powerPulses: powerPulses,     // Living network power pulses
+            optimalSweep: null,           // ASMR: Elegant sweep (lazy init on first render)
             rippleIntensity: 0,           // Current ripple boost for this path
             // OPTIMIZATION: Cache screen coordinates (invalidated on map move)
             screenEdgesCache: null,
@@ -3677,6 +3911,7 @@ const VisualizerHistory = {
     update(deltaTime) {
         const now = performance.now();
         const dt = deltaTime * 0.001;  // Convert to seconds
+        const startIntensity = 0.15;  // Match addPath starting intensity
 
         // Update global breathing
         this.breatheTime += dt * CONFIG.livingNetwork.breatheSpeed * Math.PI * 2;
@@ -3711,11 +3946,18 @@ const VisualizerHistory = {
 
         // Update path states and power pulses
         for (const path of this.paths) {
-            if (path.state === 'surging') {
+            if (path.state === 'rising') {
+                // Fade UP from startIntensity to 1.0 over 1000ms
                 const elapsed = now - path.surgeStartTime;
-                if (elapsed > 800) {
+                const riseProgress = Math.min(1, elapsed / 1000);
+                // Ease-out curve for smooth rise
+                const easeOut = 1 - Math.pow(1 - riseProgress, 2);
+                path.intensity = startIntensity + (1.0 - startIntensity) * easeOut;
+
+                if (riseProgress >= 1) {
                     path.state = 'settling';
                     path.settleStartTime = now;
+                    path.intensity = 1.0;
                 }
             } else if (path.state === 'settling') {
                 const elapsed = now - path.settleStartTime;
@@ -3728,17 +3970,9 @@ const VisualizerHistory = {
                 }
             }
 
-            // Update power pulses along optimal path
-            if (path.powerPulses) {
-                for (const pulse of path.powerPulses) {
-                    pulse.progress += pulse.speed;
-                    if (pulse.progress > 1) pulse.progress -= 1;
-                }
-
-                // Randomly spawn sparks from optimal path
-                if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance && this.sparks.length < 20) {
-                    this.spawnSpark(path);
-                }
+            // Spawn occasional sparks (ASMR: less frequent for calmer feel)
+            if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance * 0.3 && this.sparks.length < 10) {
+                this.spawnSpark(path);
             }
 
             // Calculate ripple boost for this path
@@ -3845,6 +4079,132 @@ const ElectricitySystem = {
             });
         }
         return pulses;
+    },
+
+    // ASMR SATISFACTION: Single elegant sweep instead of chaotic pulses
+    // One slow, graceful gradient that glides along the path
+    createSweep() {
+        return {
+            progress: 0,           // 0-1 along path (head position)
+            speed: 0.0008,         // Very slow - full sweep takes ~1250 frames (~20s at 60fps)
+            tailLength: 0.35,      // 35% of path glows behind the head
+            brightness: 1.0,
+            startTime: performance.now()
+        };
+    },
+
+    // Render elegant single sweep along path (ASMR-satisfying)
+    renderSweep(ctx, pathPoints, color, intensity, sweep) {
+        if (pathPoints.length < 2 || !sweep) return;
+
+        // Update sweep position with easing
+        const elapsed = (performance.now() - sweep.startTime) / 1000;
+        // Ease in-out cubic for smooth start/stop feel
+        const duration = 5.0; // 5 seconds for full sweep
+        const cycleTime = elapsed % (duration * 2); // ping-pong
+        let rawProgress;
+        if (cycleTime < duration) {
+            rawProgress = cycleTime / duration;
+        } else {
+            rawProgress = 1 - (cycleTime - duration) / duration;
+        }
+        // Cubic ease in-out
+        const eased = rawProgress < 0.5
+            ? 4 * rawProgress * rawProgress * rawProgress
+            : 1 - Math.pow(-2 * rawProgress + 2, 3) / 2;
+
+        sweep.progress = eased;
+
+        const headProgress = sweep.progress;
+        const tailProgress = Math.max(0, headProgress - sweep.tailLength);
+
+        if (headProgress <= 0) return;
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Calculate path total length and segment lengths
+        const totalSegments = pathPoints.length - 1;
+
+        // Get points for the sweep segment
+        const sweepPoints = [];
+        for (let i = 0; i < pathPoints.length; i++) {
+            const segmentProgress = i / totalSegments;
+            if (segmentProgress >= tailProgress && segmentProgress <= headProgress) {
+                sweepPoints.push({
+                    point: pathPoints[i],
+                    localProgress: (segmentProgress - tailProgress) / (headProgress - tailProgress)
+                });
+            }
+        }
+
+        // Interpolate head and tail positions for smooth gradient
+        const getPointAtProgress = (progress) => {
+            const segmentFloat = progress * totalSegments;
+            const segmentIndex = Math.min(Math.floor(segmentFloat), totalSegments - 1);
+            const segmentProgress = segmentFloat - segmentIndex;
+            const p1 = pathPoints[segmentIndex];
+            const p2 = pathPoints[Math.min(segmentIndex + 1, pathPoints.length - 1)];
+            return {
+                x: p1.x + (p2.x - p1.x) * segmentProgress,
+                y: p1.y + (p2.y - p1.y) * segmentProgress
+            };
+        };
+
+        const tailPoint = getPointAtProgress(tailProgress);
+        const headPoint = getPointAtProgress(headProgress);
+
+        // Create gradient from tail to head
+        const gradient = ctx.createLinearGradient(tailPoint.x, tailPoint.y, headPoint.x, headPoint.y);
+
+        // Gradient: transparent tail -> colored body -> bright white head
+        gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+        gradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.3 * intensity})`);
+        gradient.addColorStop(0.7, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * intensity})`);
+        gradient.addColorStop(0.9, `rgba(255, 255, 255, ${0.6 * intensity})`);
+        gradient.addColorStop(1.0, `rgba(255, 255, 255, ${0.9 * intensity})`);
+
+        // Draw the sweep segment with multiple layers for glow
+        const drawSweepSegment = (width, alpha) => {
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = width;
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.moveTo(tailPoint.x, tailPoint.y);
+
+            // Draw through intermediate points
+            for (const sp of sweepPoints) {
+                ctx.lineTo(sp.point.x, sp.point.y);
+            }
+            ctx.lineTo(headPoint.x, headPoint.y);
+            ctx.stroke();
+        };
+
+        // Layered glow effect
+        drawSweepSegment(16, 0.15);  // Wide atmospheric glow
+        drawSweepSegment(8, 0.35);   // Mid glow
+        drawSweepSegment(4, 0.7);    // Core
+        drawSweepSegment(2, 1.0);    // Bright center
+
+        // Bright orb at the head for that satisfying leading edge
+        const orbSize = 8 + Math.sin(elapsed * 2) * 2; // Subtle breathing
+        const orbGradient = ctx.createRadialGradient(
+            headPoint.x, headPoint.y, 0,
+            headPoint.x, headPoint.y, orbSize
+        );
+        orbGradient.addColorStop(0, `rgba(255, 255, 255, ${0.9 * intensity})`);
+        orbGradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * intensity})`);
+        orbGradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+        ctx.fillStyle = orbGradient;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(headPoint.x, headPoint.y, orbSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
     },
 
     // Create arc spark between two points
@@ -4320,18 +4680,31 @@ function initSoundListeners() {
 }
 
 function initMap() {
+    // Detect mobile for touch-specific settings
+    const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
+
     GameState.map = L.map('map', {
         center: [CONFIG.defaultLocation.lat, CONFIG.defaultLocation.lng],
         zoom: CONFIG.defaultLocation.zoom,
-        zoomControl: true,
+        zoomControl: !isMobile, // Hide zoom controls on mobile
         scrollWheelZoom: true,
-        doubleClickZoom: true,
-        dragging: true
+        doubleClickZoom: !isMobile, // Disable double-tap zoom on mobile
+        // Mobile: disable single-finger drag, use two-finger gestures only
+        dragging: !isMobile,
+        // Two-finger pinch zoom (also enables two-finger pan)
+        touchZoom: true,
+        // Disable tap-to-click (we handle our own taps)
+        tap: !isMobile,
+        // Smooth zooming - disable snap to allow any zoom level
+        zoomSnap: 0,
+        zoomDelta: 0.5,
+        wheelPxPerZoomLevel: 120,
     });
 
     // Store tile layer reference for toggle functionality
+    // Minimal attribution without Ukraine flag
     GameState.tileLayer = L.tileLayer(CONFIG.tileUrl, {
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '© <a href="https://openstreetmap.org">OSM</a>'
     }).addTo(GameState.map);
 
     // Start with custom road view mode if enabled
@@ -4406,9 +4779,24 @@ function initEventListeners() {
     GameState.drawCanvas.addEventListener('mouseleave', stopDrawing);
 
     // Touch
-    GameState.drawCanvas.addEventListener('touchstart', handleTouchStart);
-    GameState.drawCanvas.addEventListener('touchmove', handleTouchMove);
+    GameState.drawCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    GameState.drawCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     GameState.drawCanvas.addEventListener('touchend', stopDrawing);
+
+    // Prevent pinch-zoom on the game canvas (iOS gesture events)
+    GameState.drawCanvas.addEventListener('gesturestart', (e) => e.preventDefault());
+    GameState.drawCanvas.addEventListener('gesturechange', (e) => e.preventDefault());
+    GameState.drawCanvas.addEventListener('gestureend', (e) => e.preventDefault());
+
+    // Prevent double-tap zoom on the game canvas
+    let lastTouchEnd = 0;
+    GameState.drawCanvas.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
 
     // Buttons
     document.getElementById('start-game-btn').addEventListener('click', startGame);
@@ -4490,6 +4878,127 @@ function initEventListeners() {
     GameState.drawCanvas.addEventListener('contextmenu', (e) => {
         e.preventDefault();
     });
+
+    // === MOBILE UI HANDLING ===
+    initMobileUI();
+}
+
+// =============================================================================
+// MOBILE UI
+// =============================================================================
+
+/**
+ * Initialize mobile-specific UI elements and touch handling
+ */
+function initMobileUI() {
+    // Wire up mobile control buttons
+    const mobileUndo = document.getElementById('mobile-undo-btn');
+    const mobileClear = document.getElementById('mobile-clear-btn');
+    const mobileMute = document.getElementById('mobile-mute-btn');
+
+    if (mobileUndo) mobileUndo.addEventListener('click', undoLastSegment);
+    if (mobileClear) mobileClear.addEventListener('click', clearUserPath);
+    if (mobileMute) mobileMute.addEventListener('click', () => {
+        toggleMute();
+        // Sync mute state with button appearance
+        mobileMute.classList.toggle('muted', GameState.isMuted);
+    });
+
+    // Sync mute state when main mute button is clicked
+    const mainMute = document.getElementById('mute-btn');
+    if (mainMute) {
+        const originalClick = mainMute.onclick;
+        mainMute.addEventListener('click', () => {
+            if (mobileMute) mobileMute.classList.toggle('muted', GameState.isMuted);
+        });
+    }
+
+    // Improved touch handling for mobile
+    setupMobileTouchHandling();
+}
+
+/**
+ * Sync mobile bottom bar stats with game state
+ * Call this whenever stats change
+ */
+function updateMobileStats() {
+    const mobileRound = document.getElementById('mobile-round');
+    const mobileDistance = document.getElementById('mobile-distance');
+    const mobileScore = document.getElementById('mobile-score');
+    const mobileCityNumber = document.getElementById('mobile-city-number');
+    const mobileRoundLegend = document.getElementById('mobile-round-legend');
+
+    if (mobileRound) mobileRound.textContent = GameState.currentRound;
+    if (mobileScore) mobileScore.textContent = GameState.totalScore;
+    if (mobileCityNumber) mobileCityNumber.textContent = GameState.currentRound;
+
+    // Update round progress dots
+    if (mobileRoundLegend) {
+        const dots = mobileRoundLegend.querySelectorAll('.mobile-round-dot');
+        dots.forEach((dot, index) => {
+            dot.classList.remove('completed', 'current');
+            if (index < GameState.currentRound - 1) {
+                dot.classList.add('completed');
+            } else if (index === GameState.currentRound - 1) {
+                dot.classList.add('current');
+            }
+        });
+    }
+}
+
+/**
+ * Update mobile distance display
+ * @param {number} distance - Distance in km
+ */
+function updateMobileDistance(distance) {
+    const mobileDistance = document.getElementById('mobile-distance');
+    if (mobileDistance) {
+        mobileDistance.textContent = distance.toFixed(2);
+    }
+}
+
+/**
+ * Setup improved touch handling for mobile
+ * Uses Leaflet's native click handler for path drawing,
+ * allowing two-finger gestures (pan/zoom) to work natively.
+ */
+function setupMobileTouchHandling() {
+    const canvas = GameState.drawCanvas;
+    if (!canvas) return;
+
+    // Make canvas non-interactive - let touches pass through to Leaflet
+    canvas.style.pointerEvents = 'none';
+
+    // Remove any old touch listeners from canvas
+    canvas.removeEventListener('touchstart', handleTouchStart);
+    canvas.removeEventListener('touchmove', handleTouchMove);
+    canvas.removeEventListener('touchend', stopDrawing);
+
+    // Use Leaflet's click event for path drawing
+    // This fires for taps but allows two-finger gestures to work
+    if (!GameState.mobileClickHandlerAdded) {
+        GameState.map.on('click', (e) => {
+            // Only handle during competitive game mode
+            if (!GameState.gameStarted || !GameState.canDraw) return;
+            if (GameState.vizState.active) return;
+            if (GameState.gameMode !== 'competitive') return;
+
+            // Convert Leaflet click to our format
+            const containerPoint = GameState.map.latLngToContainerPoint(e.latlng);
+            const rect = canvas.getBoundingClientRect();
+
+            handlePathClick({
+                clientX: rect.left + containerPoint.x,
+                clientY: rect.top + containerPoint.y
+            });
+
+            // Light haptic feedback on mobile
+            if (window.Capacitor?.Plugins?.Haptics) {
+                window.Capacitor.Plugins.Haptics.impact({ style: 'light' });
+            }
+        });
+        GameState.mobileClickHandlerAdded = true;
+    }
 }
 
 // =============================================================================
@@ -4684,6 +5193,7 @@ function processRoadData(data) {
 
 function startGame() {
     SoundEngine.init();
+    GameHaptics.init();
     // Old ambient drone removed - using wav files now
     hideInstructions();
     GameState.gameStarted = true;
@@ -4696,6 +5206,14 @@ function startGame() {
 
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
+
+    // Analytics: Track game start and first round
+    if (typeof PathfindrAnalytics !== 'undefined') {
+        const cityName = GameState.currentCity?.name || 'Unknown';
+        PathfindrAnalytics.trackGameStart(GameState.locationMode, cityName);
+        PathfindrAnalytics.trackRoundStart(1, cityName);
+        PathfindrAnalytics.trackTimeBasedEvent();
+    }
 }
 
 function nextRound() {
@@ -4728,6 +5246,11 @@ function nextRound() {
         // Stay in same city, just pick new endpoints with increased distance
         selectRandomEndpoints();
         enableDrawing();
+
+        // Analytics: Track round start for rounds 2-5
+        if (typeof PathfindrAnalytics !== 'undefined') {
+            PathfindrAnalytics.trackRoundStart(GameState.currentRound, GameState.currentCity?.name || 'Unknown');
+        }
     } else {
         // End of 5 rounds - check for continuous play
         if (GameState.continuousPlay.enabled) {
@@ -5036,12 +5559,21 @@ function stopDrawing() {
 }
 
 function handleTouchStart(e) {
-    handleTouchTap(e);
+    // Only handle single-finger taps for drawing
+    // Multi-touch should be allowed for map navigation
+    if (e.touches.length === 1) {
+        e.preventDefault(); // Prevent scroll/zoom for single touch
+        handleTouchTap(e);
+    }
+    // Multi-touch (2+ fingers) is not prevented - allows map pinch-zoom
 }
 
 function handleTouchMove(e) {
-    // No-op: dragging is disabled on touch
-    e.preventDefault();
+    // Prevent scrolling when touching the canvas
+    // But allow multi-touch for map navigation
+    if (e.touches.length === 1) {
+        e.preventDefault();
+    }
 }
 
 function getLatLngFromEvent(e) {
@@ -5716,6 +6248,20 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.stroke();
 }
 
+// Helper: Get current visualization color theme based on game mode
+function getCurrentVizTheme() {
+    let colorIndex;
+    if (GameState.gameMode === 'visualizer') {
+        colorIndex = VisualizerHistory.pathIndex;
+    } else if (GameState.gameMode === 'explorer') {
+        colorIndex = ExplorerHistory.pathIndex;
+    } else {
+        // Competitive mode - use round number (1-indexed, convert to 0-indexed)
+        colorIndex = (GameState.currentRound || 1) - 1;
+    }
+    return CONFIG.color.getThemeByIndex(colorIndex);
+}
+
 function renderVisualization() {
     const ctx = GameState.vizCtx;
     const viz = GameState.vizState;
@@ -5765,6 +6311,8 @@ function renderVisualization() {
 
     // Decay heat values with floor - explored edges never fully fade
     // During settling, use ACCELERATED decay for "draining" effect
+    // NOTE: When using WebGL, decay is GPU-side (time-based in shader)
+    // This CPU loop is only needed for Canvas 2D fallback
     const baseDecay = CONFIG.viz.heatDecay;
     const settlingDecay = viz.phase === 'settling'
         ? Math.pow(baseDecay, 1 + settleProgress * 3)  // Up to 4x faster decay
@@ -5773,17 +6321,15 @@ function renderVisualization() {
         ? CONFIG.viz.heatFloor * (1 - settleProgress)  // Floor drops to 0 during settling
         : CONFIG.viz.heatFloor;
 
-    for (const [nodeId, heat] of viz.nodeHeat) {
-        const newHeat = heat * settlingDecay;
-        viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
-    }
-    for (const [edgeKey, heat] of viz.edgeHeat) {
-        const newHeat = heat * settlingDecay;
-        viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
-
-        // Sync to WebGL renderer
-        if (GameState.useWebGL) {
-            WebGLRenderer.setEdgeHeat(edgeKey, Math.max(newHeat, heatFloor));
+    // Only run CPU decay loop for Canvas 2D fallback
+    if (!GameState.useWebGL) {
+        for (const [nodeId, heat] of viz.nodeHeat) {
+            const newHeat = heat * settlingDecay;
+            viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
+        }
+        for (const [edgeKey, heat] of viz.edgeHeat) {
+            const newHeat = heat * settlingDecay;
+            viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
         }
     }
 
@@ -5847,8 +6393,8 @@ function renderVisualization() {
             }
         }
 
-        // Get current round's BASE color - ONE color for the entire round
-        const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+        // Get current visualization color - mode-aware
+        const theme = getCurrentVizTheme();
         const c = theme.base;  // SINGLE color for all heat levels - unity!
         const glowMult = CONFIG.viz.glowIntensity;
 
@@ -6007,7 +6553,7 @@ function renderVisualization() {
 // LEGACY: Heat color interpolation - now uses current round's exploration color instead
 // Kept for potential future use, returns theme-based exploration color
 function getHeatColor(heat) {
-    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    const theme = getCurrentVizTheme();
     const ec = theme.base;
     // Modulate brightness by heat
     const brightness = 0.3 + heat * 0.7;
@@ -6060,8 +6606,8 @@ function drawOptimalPath(ctx) {
 
     if (path.length < 2) return;
 
-    // Get current round's optimal color (hot shade for visibility)
-    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    // Get current visualization's optimal color (hot shade for visibility)
+    const theme = getCurrentVizTheme();
     const oc = theme.hot;
 
     const drawTo = Math.min(progress + 1, path.length - 1);
@@ -6302,6 +6848,9 @@ function addPointToUserPath(lat, lng) {
         }
     }
 
+    // Haptic feedback when node is snapped
+    GameHaptics.nodeSnap();
+
     recalculateUserDistance();
     updateAllDistanceDisplays();
 
@@ -6316,6 +6865,9 @@ function addPointToUserPath(lat, lng) {
             (endPos && nodePos && haversineDistance(nodePos.lat, nodePos.lng, endPos.lat, endPos.lng) < 0.03);
 
         if (isAtEnd) {
+            // Haptic feedback when path reaches destination
+            GameHaptics.pathComplete();
+
             // If close but not exactly at end, add endNode to complete the path
             if (lastAddedNode !== GameState.endNode) {
                 const finalPath = findShortestPathBetween(lastAddedNode, GameState.endNode);
@@ -6366,6 +6918,8 @@ function showDistanceRejectionFeedback() {
     if (typeof playSound === 'function') {
         playSound('error', 0.3);
     }
+    // Haptic warning for rejected tap
+    GameHaptics.warning();
 }
 
 /**
@@ -6404,8 +6958,8 @@ function renderTraceAnimation(ctx) {
     const trace = GameState.traceAnimation;
     if (!trace.active || trace.segments.length === 0) return;
 
-    // Get current round's exploration color for trace animation
-    const theme = CONFIG.color.getTheme(GameState.currentRound || 1);
+    // Get current visualization's exploration color for trace animation
+    const theme = getCurrentVizTheme();
     const tc = theme.base; // Trace uses exploration color
 
     const elapsed = performance.now() - trace.startTime;
@@ -6529,6 +7083,10 @@ function updateAllDistanceDisplays() {
         hudDist.innerHTML = `${distStr}<span class="hud-unit">km</span>`;
     }
 
+    // Mobile bottom bar distance
+    const mobileDist = document.getElementById('mobile-distance');
+    if (mobileDist) mobileDist.textContent = distStr;
+
     // Bottom bar display (results panel)
     const bottomDist = document.getElementById('user-distance');
     if (bottomDist) bottomDist.textContent = `${distStr} km`;
@@ -6641,10 +7199,31 @@ function calculateAndShowScore() {
         }).catch(err => {
             console.warn('[Game] Score submission failed:', err);
         });
+
+        // Update city leaderboard
+        if (typeof CityLeaderboard !== 'undefined') {
+            CityLeaderboard.submitScore(locationName, efficiency);
+        }
     }
 
-    // Play the path found sound
+    // Analytics: Track round completion
+    if (typeof PathfindrAnalytics !== 'undefined') {
+        PathfindrAnalytics.trackRoundComplete(
+            GameState.currentRound,
+            efficiency,
+            userDistance * 1000,  // Convert to meters
+            optimalDistance * 1000
+        );
+    }
+
+    // Check for new achievements after round
+    if (typeof PathfindrAchievements !== 'undefined' && PathfindrAuth?.isLoggedIn()) {
+        PathfindrAchievements.checkAchievements();
+    }
+
+    // Play the path found sound and haptic
     SoundEngine.pathFound();
+    GameHaptics.roundEnd();
 
     // Update displays - user distance already shown via updateAllDistanceDisplays()
     document.getElementById('optimal-distance').textContent = `${optimalDistance.toFixed(2)} km`;
@@ -6978,15 +7557,166 @@ function checkPremiumAccess(mode) {
     return false;
 }
 
-function showPremiumRequired(modeName) {
-    // Show alert
-    alert(`${modeName} Mode requires Premium access.\n\nSign in and purchase Premium ($2.99) to unlock Explorer and Visualizer modes.`);
+async function showPremiumRequired(modeName) {
+    // Create and show premium prompt modal
+    const existingModal = document.getElementById('premium-prompt-modal');
+    if (existingModal) existingModal.remove();
 
-    // Also show auth modal
-    const authModal = document.getElementById('auth-modal');
-    if (authModal) {
-        authModal.classList.remove('hidden');
+    const modal = document.createElement('div');
+    modal.id = 'premium-prompt-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="premium-prompt-content">
+            <div class="premium-prompt-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+            </div>
+            <h2>Unlock ${modeName} Mode</h2>
+            <p>Premium gives you access to Explorer and Visualizer modes, plus removes all ads.</p>
+            <div class="premium-price">$2.99 <span>one-time purchase</span></div>
+            <div class="premium-prompt-buttons">
+                <button id="premium-buy-btn" class="btn btn-primary">Get Premium</button>
+                <button id="premium-cancel-btn" class="btn btn-secondary">Maybe Later</button>
+            </div>
+            ${typeof PathfindrAuth !== 'undefined' && !PathfindrAuth.isLoggedIn() ?
+              '<p class="premium-login-hint">Already purchased? <a href="#" id="premium-login-link">Sign in</a> to restore.</p>' :
+              '<p class="premium-restore-hint"><a href="#" id="premium-restore-link">Restore purchases</a></p>'}
+        </div>
+    `;
+
+    // Add styles if not present
+    if (!document.getElementById('premium-prompt-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'premium-prompt-styles';
+        styles.textContent = `
+            #premium-prompt-modal {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.3s ease;
+            }
+            .premium-prompt-content {
+                background: linear-gradient(135deg, var(--deep) 0%, var(--surface) 100%);
+                border: 1px solid var(--neon-cyan);
+                border-radius: var(--radius-lg);
+                padding: 2rem;
+                max-width: 400px;
+                width: 90%;
+                text-align: center;
+                box-shadow: var(--glow-cyan);
+            }
+            .premium-prompt-icon svg {
+                width: 48px;
+                height: 48px;
+                stroke: var(--sunset-gold);
+                filter: drop-shadow(0 0 10px rgba(255, 216, 102, 0.5));
+            }
+            .premium-prompt-content h2 {
+                font-family: var(--font-display);
+                color: var(--text-bright);
+                margin: 1rem 0 0.5rem;
+            }
+            .premium-prompt-content p {
+                color: var(--text-dim);
+                font-size: 0.9rem;
+                margin-bottom: 1rem;
+            }
+            .premium-price {
+                font-size: 1.5rem;
+                font-weight: bold;
+                color: var(--neon-cyan);
+                margin-bottom: 1.5rem;
+            }
+            .premium-price span {
+                font-size: 0.8rem;
+                font-weight: normal;
+                color: var(--text-muted);
+            }
+            .premium-prompt-buttons {
+                display: flex;
+                gap: 1rem;
+                justify-content: center;
+                margin-bottom: 1rem;
+            }
+            .premium-prompt-buttons .btn {
+                flex: 1;
+                max-width: 150px;
+            }
+            .premium-login-hint,
+            .premium-restore-hint {
+                font-size: 0.8rem;
+                color: var(--text-muted);
+            }
+            .premium-login-hint a,
+            .premium-restore-hint a {
+                color: var(--neon-cyan);
+                text-decoration: underline;
+            }
+        `;
+        document.head.appendChild(styles);
     }
+
+    document.body.appendChild(modal);
+
+    // Event handlers
+    document.getElementById('premium-buy-btn').addEventListener('click', async () => {
+        modal.remove();
+        // Check if logged in
+        if (typeof PathfindrAuth !== 'undefined' && !PathfindrAuth.isLoggedIn()) {
+            // Show auth modal first
+            const authModal = document.getElementById('auth-modal');
+            if (authModal) authModal.classList.remove('hidden');
+            return;
+        }
+        // Trigger purchase
+        if (typeof PathfindrPayments !== 'undefined') {
+            const result = await PathfindrPayments.showPurchasePrompt();
+            if (result.success) {
+                // Refresh premium status and retry action
+                alert('Thank you! Premium features are now unlocked.');
+            }
+        }
+    });
+
+    document.getElementById('premium-cancel-btn').addEventListener('click', () => {
+        modal.remove();
+    });
+
+    const loginLink = document.getElementById('premium-login-link');
+    if (loginLink) {
+        loginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            modal.remove();
+            const authModal = document.getElementById('auth-modal');
+            if (authModal) authModal.classList.remove('hidden');
+        });
+    }
+
+    const restoreLink = document.getElementById('premium-restore-link');
+    if (restoreLink) {
+        restoreLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (typeof PathfindrPayments !== 'undefined') {
+                const result = await PathfindrPayments.restorePurchases();
+                if (result.isPremium) {
+                    modal.remove();
+                    alert('Purchases restored! Premium features are now unlocked.');
+                } else {
+                    alert('No previous purchases found.');
+                }
+            }
+        });
+    }
+
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
 }
 
 function selectGameMode(mode) {
@@ -6994,12 +7724,21 @@ function selectGameMode(mode) {
     if ((mode === 'explorer' || mode === 'visualizer')) {
         if (!checkPremiumAccess(mode)) {
             showPremiumRequired(mode === 'explorer' ? 'Explorer' : 'Visualizer');
+            // Analytics: Track premium modal view
+            if (typeof PathfindrAnalytics !== 'undefined') {
+                PathfindrAnalytics.trackPremiumViewed();
+            }
             return;
         }
     }
 
     GameState.gameMode = mode;
     hideModeSelector();
+
+    // Analytics: Track mode selection
+    if (typeof PathfindrAnalytics !== 'undefined') {
+        PathfindrAnalytics.trackModeSelected(mode);
+    }
 
     if (mode === 'visualizer') {
         // Visualizer picks random cities automatically
@@ -8356,6 +9095,11 @@ function selectLocationMode(mode) {
     GameState.locationMode = mode;
     hideLocationSelector();
 
+    // Analytics: Track location mode selection
+    if (typeof PathfindrAnalytics !== 'undefined') {
+        PathfindrAnalytics.trackLocationSelected(mode, null);  // City name tracked later
+    }
+
     // Show loading overlay (no map animation yet - we don't have the city)
     document.getElementById('loading-overlay').classList.remove('hidden');
     document.getElementById('loading-text').textContent = 'Finding your destination...';
@@ -8518,13 +9262,17 @@ async function reverseGeocode(lat, lng) {
         if (data.address) {
             const city = data.address.city || data.address.town || data.address.village || data.address.municipality;
             const state = data.address.state;
-            const country = data.address.country_code?.toUpperCase();
-            if (city && state && country === 'US') {
-                return `${city}, ${state}`;
-            } else if (city && country) {
-                return `${city}, ${country}`;
-            } else if (city) {
-                return city;
+            const countryCode = data.address.country_code?.toUpperCase();
+            const countryName = data.address.country;
+
+            // Build full location: City, State/Province, Country
+            const parts = [];
+            if (city) parts.push(city);
+            if (state) parts.push(state);
+            if (countryName) parts.push(countryName);
+
+            if (parts.length > 0) {
+                return parts.join(', ');
             }
         }
         return null;
@@ -8576,6 +9324,9 @@ function hideResults() {
 }
 
 async function showGameOver() {
+    // Heavy haptic for game over
+    GameHaptics.gameOver();
+
     // Show placeholder ad first (if ads module is available)
     if (typeof PathfindrAds !== 'undefined' && PathfindrAds.showPlaceholderAd) {
         await PathfindrAds.showPlaceholderAd();
@@ -8610,6 +9361,24 @@ async function showGameOver() {
     }
 
     document.getElementById('gameover-overlay').classList.remove('hidden');
+
+    // Analytics: Track game completion
+    if (typeof PathfindrAnalytics !== 'undefined') {
+        const avgEfficiency = GameState.roundScores?.length > 0
+            ? GameState.roundScores.reduce((sum, r) => sum + r.efficiency, 0) / GameState.roundScores.length
+            : 0;
+        PathfindrAnalytics.trackGameComplete(
+            GameState.totalScore,
+            avgEfficiency,
+            GameState.currentCity?.name || 'Unknown',
+            GameState.locationMode
+        );
+    }
+
+    // Check achievements after full game
+    if (typeof PathfindrAchievements !== 'undefined' && PathfindrAuth?.isLoggedIn()) {
+        PathfindrAchievements.checkAchievements();
+    }
 }
 
 async function animateFinalScore(targetScore, element) {
@@ -8633,10 +9402,51 @@ function hideGameOver() {
 
 function updateScoreDisplay() {
     document.getElementById('current-score').textContent = GameState.totalScore;
+    // Sync mobile stats
+    const mobileScore = document.getElementById('mobile-score');
+    if (mobileScore) mobileScore.textContent = GameState.totalScore;
 }
 
 function updateRoundDisplay() {
-    document.getElementById('current-round').textContent = GameState.currentRound;
+    const roundEl = document.getElementById('current-round');
+    roundEl.textContent = GameState.currentRound;
+
+    // Color the round number to match the round's theme color
+    const theme = CONFIG.color.getTheme(GameState.currentRound);
+    const roundColor = `rgb(${theme.base.r}, ${theme.base.g}, ${theme.base.b})`;
+    roundEl.style.color = roundColor;
+    // Add subtle text shadow for glow effect
+    roundEl.style.textShadow = `0 0 8px ${roundColor}, 0 0 15px ${roundColor}50`;
+
+    // Sync mobile stats
+    const mobileRound = document.getElementById('mobile-round');
+    const mobileCityNumber = document.getElementById('mobile-city-number');
+    if (mobileRound) {
+        mobileRound.textContent = GameState.currentRound;
+        mobileRound.style.color = roundColor;
+        mobileRound.style.textShadow = `0 0 8px ${roundColor}`;
+    }
+    if (mobileCityNumber) {
+        mobileCityNumber.textContent = GameState.currentRound;
+        mobileCityNumber.style.color = roundColor;
+    }
+    // Update mobile round dots
+    updateMobileRoundDots();
+}
+
+function updateMobileRoundDots() {
+    const mobileRoundLegend = document.getElementById('mobile-round-legend');
+    if (!mobileRoundLegend) return;
+
+    const dots = mobileRoundLegend.querySelectorAll('.mobile-round-dot');
+    dots.forEach((dot, index) => {
+        dot.classList.remove('completed', 'current');
+        if (index < GameState.currentRound - 1) {
+            dot.classList.add('completed');
+        } else if (index === GameState.currentRound - 1) {
+            dot.classList.add('current');
+        }
+    });
 }
 
 // Update the round legend showing completed rounds with colors and scores

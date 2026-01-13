@@ -38,8 +38,10 @@ const PathfindrConfig = {
       ios: '',  // Add later if needed
       android: '',  // Add later if needed
     },
-    // Test mode - set to false for production
-    testing: true,
+    // Test mode - IMPORTANT: Set to false before releasing to production!
+    // When true: Uses test ad units, won't earn real revenue
+    // When false: Uses production ad units, earns real revenue
+    testing: true,  // TODO: Set to false for production release
   },
 
   // ===========================================
@@ -52,12 +54,46 @@ const PathfindrConfig = {
   },
 
   // ===========================================
+  // REVENUECAT - In-App Purchases (iOS & Android)
+  // Get these from: https://app.revenuecat.com/
+  // ===========================================
+  revenuecat: {
+    // API Keys (one per platform)
+    apiKey: {
+      ios: 'YOUR_REVENUECAT_IOS_API_KEY',      // Get from RevenueCat dashboard
+      android: 'goog_YtSHMcSsmTibhXcGCPvHccYJIwB', // RevenueCat public API key for Android
+    },
+    // Product IDs (must match App Store Connect / Google Play Console)
+    products: {
+      premium: 'pathfindr_premium',  // One-time purchase: removes ads + unlocks modes
+    },
+    // Entitlement ID (configured in RevenueCat)
+    entitlements: {
+      premium: 'premium',
+    },
+  },
+
+  // ===========================================
   // APP SETTINGS
   // ===========================================
   app: {
     name: 'Pathfindr',
-    bundleId: 'com.pathfindr.app',
+    bundleId: 'world.pathfindr.app',
     version: '1.0.0',
+  },
+
+  // ===========================================
+  // GOOGLE ADSENSE - Web Ads
+  // Get these from: https://www.google.com/adsense/
+  // ===========================================
+  adsense: {
+    // Your AdSense publisher ID (ca-pub-XXXXXXXXXXXXXXXX)
+    publisherId: 'ca-pub-9697527729469740',
+    // Ad slot IDs - will be created after site verification
+    slots: {
+      banner: 'YOUR_BANNER_SLOT_ID',        // 320x50 or responsive
+      interstitial: 'YOUR_INTERSTITIAL_SLOT_ID', // Full page ad
+    },
   },
 
   // ===========================================

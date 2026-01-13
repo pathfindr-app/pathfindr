@@ -527,15 +527,48 @@ const PathfindrAuth = {
     }
 
     try {
+      // Detect platform for proper redirect URL
+      const isNativeMobile = typeof window !== 'undefined' &&
+                             window.Capacitor &&
+                             window.Capacitor.isNativePlatform();
+
+      // Also detect if running in Capacitor WebView (localhost indicates Capacitor)
+      const isCapacitorWebView = window.location.origin.includes('localhost') ||
+                                  window.location.origin.includes('capacitor://') ||
+                                  window.location.protocol === 'capacitor:';
+
+      // On mobile or Capacitor WebView, redirect to deployed website
+      // On actual web deployment, use current origin
+      const redirectUrl = (isNativeMobile || isCapacitorWebView)
+        ? 'https://pathfindr.world/auth-callback'
+        : window.location.origin;
+
+      console.log('[Auth] OAuth redirect URL:', redirectUrl, '(isNative:', isNativeMobile, ', isCapacitor:', isCapacitorWebView, ')');
+
+      const shouldOpenExternal = isNativeMobile || isCapacitorWebView;
+
       const { data, error } = await this.client.auth.signInWithOAuth({
         provider: provider,
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
+          // On mobile/Capacitor, open in external browser (required for OAuth)
+          skipBrowserRedirect: shouldOpenExternal,
         }
       });
 
       if (error) {
         return { success: false, error: error.message };
+      }
+
+      // On mobile/Capacitor, manually open the OAuth URL in external browser
+      if (shouldOpenExternal && data?.url) {
+        console.log('[Auth] Opening OAuth URL in external browser:', data.url);
+        // Use Capacitor Browser plugin or fallback to window.open
+        if (window.Capacitor?.Plugins?.Browser) {
+          await window.Capacitor.Plugins.Browser.open({ url: data.url });
+        } else {
+          window.open(data.url, '_blank');
+        }
       }
 
       return { success: true, data };

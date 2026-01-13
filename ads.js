@@ -173,8 +173,8 @@ const PathfindrAds = {
     }
 
     if (PathfindrConfig.platform === 'web') {
-      // Web interstitials would be a modal/overlay ad from AdSense
-      return false;
+      // Use web interstitial (placeholder ad for now)
+      return await this.showWebInterstitial();
     }
 
     if (!this.initialized || !this.AdMob || !this.interstitialReady) {
@@ -269,18 +269,114 @@ const PathfindrAds = {
   // WEB-SPECIFIC AD HANDLING (AdSense)
   // ===========================================
 
-  showWebBanner() {
+  adsenseLoaded: false,
+
+  /**
+   * Load AdSense script if not already loaded
+   */
+  async loadAdSense() {
+    if (this.adsenseLoaded) return;
+
+    const publisherId = PathfindrConfig.adsense?.publisherId;
+    if (!publisherId || publisherId.startsWith('YOUR_')) {
+      console.log('[Ads] AdSense not configured');
+      return;
+    }
+
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${publisherId}`;
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => {
+        this.adsenseLoaded = true;
+        console.log('[Ads] AdSense loaded');
+        resolve();
+      };
+      script.onerror = () => {
+        console.warn('[Ads] AdSense failed to load (blocked?)');
+        resolve();
+      };
+      document.head.appendChild(script);
+    });
+  },
+
+  /**
+   * Show web banner ad
+   */
+  async showWebBanner() {
     const banner = document.getElementById('adsense-banner');
-    if (banner) {
-      banner.style.display = 'block';
+    if (!banner) return;
+
+    // Load AdSense if needed
+    await this.loadAdSense();
+
+    // Show the container
+    banner.style.display = 'block';
+    document.body.classList.add('ad-visible');
+
+    // Initialize ad slot if AdSense loaded and configured
+    const slotId = PathfindrConfig.adsense?.slots?.banner;
+    if (this.adsenseLoaded && slotId && !slotId.startsWith('YOUR_')) {
+      // Check if ad already initialized
+      if (!banner.querySelector('.adsbygoogle')) {
+        banner.innerHTML = `
+          <ins class="adsbygoogle"
+               style="display:block"
+               data-ad-client="${PathfindrConfig.adsense.publisherId}"
+               data-ad-slot="${slotId}"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+        `;
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (e) {
+          console.warn('[Ads] AdSense push failed:', e);
+        }
+      }
+    } else {
+      // Show placeholder when AdSense not configured
+      banner.innerHTML = `
+        <div class="ad-placeholder" style="
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          border: 1px solid #00f0ff33;
+          padding: 10px 20px;
+          text-align: center;
+          font-size: 12px;
+          color: #666;
+        ">
+          <span style="color: #00f0ff;">Pathfindr Premium</span> - Remove ads & unlock all features
+        </div>
+      `;
     }
   },
 
+  /**
+   * Hide web banner ad
+   */
   hideWebBanner() {
     const banner = document.getElementById('adsense-banner');
     if (banner) {
       banner.style.display = 'none';
     }
+    document.body.classList.remove('ad-visible');
+  },
+
+  /**
+   * Show web interstitial (overlay ad)
+   * Note: AdSense doesn't have true interstitials like AdMob,
+   * so this uses a full-page ad unit in a modal
+   */
+  async showWebInterstitial() {
+    // Don't show if user is ad-free
+    if (PathfindrConfig.isAdFree()) {
+      return false;
+    }
+
+    // For now, use the placeholder ad
+    // True AdSense interstitials require specific implementation
+    await this.showPlaceholderAd();
+    return true;
   },
 
   // ===========================================

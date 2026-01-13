@@ -1830,16 +1830,27 @@ body::after {
     color: var(--neon-pink) !important;
 }
 
-/* Attribution */
+/* Attribution - Minimal, hide Ukraine flag/heart from Leaflet prefix */
 .leaflet-control-attribution {
     background: rgba(10, 14, 18, 0.8) !important;
     color: var(--text-muted) !important;
-    font-size: 0.65rem !important;
+    font-size: 0.6rem !important;
     padding: 2px 6px !important;
 }
 
 .leaflet-control-attribution a {
     color: var(--text-dim) !important;
+}
+
+/* Hide Leaflet prefix (includes Ukraine flag/heart) */
+.leaflet-control-attribution .leaflet-attribution-flag,
+.leaflet-control-attribution svg {
+    display: none !important;
+}
+
+/* Hide separator and any text before our attribution */
+.leaflet-control-attribution span[aria-hidden="true"] {
+    display: none !important;
 }
 
 /* =============================================================================
@@ -3859,6 +3870,7 @@ body.fullscreen-mode .fullscreen-btn {
     background: var(--abyss);
     border-top: 1px solid var(--elevated);
     padding: 0.5rem;
+    padding-bottom: calc(0.5rem + var(--safe-area-bottom, 0px));
     z-index: 1000;
     text-align: center;
 }
@@ -5042,4 +5054,691 @@ body.has-ad-banner #gameplay-hud {
 
 .journey-map-preview:hover .journey-map-label {
     color: var(--neon-cyan);
+}
+
+/* =============================================================================
+   MOBILE-SPECIFIC STYLES - Safe Areas, Touch Targets, Responsive Layout
+   ============================================================================= */
+
+/* Safe area insets for notched devices (iPhone X+, Android with punch-holes) */
+:root {
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Prevent pull-to-refresh and overscroll effects */
+html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent text selection during gameplay on mobile */
+.game-container,
+#map,
+.draw-canvas,
+.viz-canvas {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+}
+
+/* Ensure minimum touch target sizes (44x44px as per Apple HIG) */
+.btn,
+.speed-btn,
+.replay-btn,
+.location-option,
+.mode-card,
+.search-result-item,
+.auth-btn,
+.premium-btn {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Mobile-first HUD adjustments */
+@media (max-width: 768px) {
+    /* Account for safe areas in fixed elements */
+    .game-hud {
+        top: calc(1rem + var(--safe-area-top));
+        left: calc(1rem + var(--safe-area-left));
+        right: calc(1rem + var(--safe-area-right));
+    }
+
+    .game-hud-bottom {
+        bottom: calc(1rem + var(--safe-area-bottom));
+        left: calc(1rem + var(--safe-area-left));
+        right: calc(1rem + var(--safe-area-right));
+    }
+
+    /* Larger touch targets for mobile */
+    .btn {
+        padding: 14px 24px;
+        font-size: 1rem;
+    }
+
+    .speed-btn {
+        width: 48px;
+        height: 48px;
+        font-size: 0.9rem;
+    }
+
+    /* Stack HUD elements vertically on narrow screens */
+    .game-hud {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .hud-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Make stats more compact */
+    .hud-stat {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    /* Results panel adjustments */
+    .results-panel {
+        padding: calc(1.5rem + var(--safe-area-top)) 1.5rem calc(1.5rem + var(--safe-area-bottom));
+    }
+
+    /* Modals and overlays respect safe areas */
+    .modal,
+    .overlay,
+    .gameover-overlay,
+    .instructions-overlay {
+        padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom) var(--safe-area-left);
+    }
+
+    /* Location selector adjustments */
+    .location-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .location-option {
+        padding: 1.25rem;
+    }
+}
+
+/* Small phone screens */
+@media (max-width: 480px) {
+    .game-hud {
+        top: calc(0.5rem + var(--safe-area-top));
+        left: calc(0.5rem + var(--safe-area-left));
+        right: calc(0.5rem + var(--safe-area-right));
+    }
+
+    .hud-stat {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    .hud-stat-label {
+        font-size: 0.55rem;
+    }
+
+    /* Compact buttons */
+    .btn {
+        padding: 12px 18px;
+        font-size: 0.9rem;
+    }
+
+    .btn-primary {
+        width: 100%;
+    }
+
+    /* Search results need good touch targets */
+    .search-result-item {
+        padding: 14px 16px;
+        min-height: 48px;
+    }
+
+    /* Mode cards stack on small screens */
+    .mode-cards {
+        flex-direction: column;
+    }
+
+    .mode-card {
+        padding: 1.25rem;
+    }
+}
+
+/* Landscape orientation on phones */
+@media (max-height: 500px) and (orientation: landscape) {
+    /* Minimize HUD in landscape */
+    .game-hud {
+        flex-direction: row;
+        top: calc(0.5rem + var(--safe-area-top));
+        gap: 0.5rem;
+    }
+
+    .hud-stat {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* Hide non-essential elements in landscape */
+    .hud-round-legend {
+        display: none;
+    }
+
+    /* Compact results panel */
+    .results-panel {
+        padding: 1rem;
+    }
+
+    .results-panel h2 {
+        font-size: 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Overlay content scrollable */
+    .instructions-content,
+    .gameover-content {
+        max-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom) - 2rem);
+        overflow-y: auto;
+    }
+}
+
+/* Tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .game-hud {
+        top: calc(1.25rem + var(--safe-area-top));
+    }
+
+    .location-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Ad banner spacing for mobile */
+@media (max-width: 768px) {
+    /* When banner ad is visible, add bottom padding */
+    body.ad-visible {
+        padding-bottom: calc(60px + var(--safe-area-bottom));
+    }
+
+    /* Adjust bottom-positioned elements when ad is showing */
+    body.ad-visible .game-hud-bottom,
+    body.ad-visible .fullscreen-btn,
+    body.ad-visible .facts-ticker {
+        bottom: calc(70px + var(--safe-area-bottom));
+    }
+}
+
+/* High contrast mode for outdoor visibility */
+@media (prefers-contrast: high) {
+    :root {
+        --text-primary: #ffffff;
+        --text-dim: #cccccc;
+    }
+
+    .btn {
+        border-width: 2px;
+    }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Dark mode is default, but ensure system dark mode works */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+    }
+}
+
+/* =============================================================================
+   MOBILE HUD - Compact Top Bar (Everything at top, map fully visible)
+   ============================================================================= */
+
+/* Hide Leaflet zoom controls on mobile */
+@media (max-width: 768px) {
+    .leaflet-control-zoom {
+        display: none !important;
+    }
+}
+
+/* Hide the mobile bottom bar completely */
+#mobile-bottom-bar {
+    display: none !important;
+}
+
+/* Mobile: All-in-one top bar - Cyberpunk HUD aesthetic */
+@media (max-width: 600px) {
+    #gameplay-hud {
+        top: 0;
+        left: 0;
+        right: 0;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        border-radius: 0 0 16px 16px;
+        padding: calc(0.4rem + env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
+        background: linear-gradient(180deg,
+            rgba(10, 8, 18, 0.96) 0%,
+            rgba(15, 12, 25, 0.94) 100%);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: none;
+        border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+        box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.5),
+            0 1px 0 rgba(0, 240, 255, 0.08) inset,
+            0 0 40px rgba(0, 240, 255, 0.03);
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* Subtle scanline effect */
+    #gameplay-hud::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+        );
+        pointer-events: none;
+        border-radius: 0 0 16px 16px;
+    }
+
+    /* Corner accent decoration */
+    #gameplay-hud::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(90deg,
+            transparent,
+            rgba(0, 240, 255, 0.4),
+            transparent);
+        border-radius: 0 0 2px 2px;
+    }
+
+    /* Hide brand on mobile */
+    .hud-brand {
+        display: none !important;
+    }
+
+    /* Row 1: Location (left) + Profile (right) */
+    .hud-location {
+        order: 1;
+        flex: 1;
+        justify-content: flex-start;
+        padding: 0;
+        border: none;
+        gap: 0.4rem;
+    }
+
+    .hud-location .location-icon {
+        width: 14px;
+        height: 14px;
+        color: var(--neon-pink);
+        flex-shrink: 0;
+        filter: drop-shadow(0 0 4px rgba(255, 42, 109, 0.5));
+    }
+
+    .hud-location #current-location {
+        font-family: var(--font-display);
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.03em;
+        /* Allow more space for full location, wrap if needed */
+        max-width: calc(100vw - 80px);
+        flex: 1;
+        /* Allow wrapping for long location names */
+        white-space: normal;
+        line-height: 1.2;
+        color: var(--text-bright);
+        text-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+    }
+
+    .hud-user {
+        order: 2;
+        padding: 0;
+    }
+
+    .hud-user .hud-btn {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(255, 255, 255, 0.03) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .hud-user .username-label {
+        display: none;
+    }
+
+    /* Row 2: Stats + Controls (full width) */
+    .hud-stats {
+        order: 3;
+        flex: 1 1 100%;
+        display: flex !important;
+        justify-content: center;
+        align-items: center;
+        padding: 0.35rem 0 0.2rem;
+        gap: 0.5rem;
+        border-top: 1px solid rgba(0, 240, 255, 0.08);
+        margin-top: 0.25rem;
+        position: relative;
+    }
+
+    .hud-stat {
+        min-width: auto;
+        padding: 0 0.4rem;
+        position: relative;
+    }
+
+    /* First stat (Round) gets special styling */
+    .hud-stat:first-child {
+        padding-left: 0;
+    }
+
+    .hud-label {
+        font-size: 0.5rem;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .hud-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    /* Round number special glow styling handled by JS */
+    .hud-stat:first-child .hud-value {
+        font-weight: 700;
+    }
+
+    .hud-divider {
+        height: 20px;
+        width: 1px;
+        margin: 0 0.15rem;
+        background: linear-gradient(180deg,
+            transparent,
+            rgba(0, 240, 255, 0.2),
+            transparent);
+    }
+
+    /* Controls inline */
+    .hud-controls {
+        order: 4;
+        display: flex !important;
+        padding: 0 0.25rem;
+        gap: 0.25rem;
+        border-left: 1px solid rgba(0, 240, 255, 0.1);
+        margin-left: 0.25rem;
+    }
+
+    .hud-btn {
+        width: 26px;
+        height: 26px;
+    }
+
+    .hud-btn svg {
+        width: 13px;
+        height: 13px;
+    }
+
+    /* Hide non-essential elements */
+    .hud-legend,
+    .hud-mode-stats,
+    .hud-search {
+        display: none !important;
+    }
+
+    /* Mode badge (when in visualizer/explorer) */
+    .hud-mode {
+        order: 0;
+        flex: 1 1 100%;
+        justify-content: center;
+        padding: 0.1rem 0 0.15rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        margin-bottom: 0.1rem;
+    }
+
+    .hud-mode .mode-badge {
+        font-size: 0.5rem;
+        padding: 0.1rem 0.4rem;
+    }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+    #gameplay-hud {
+        padding: calc(0.3rem + env(safe-area-inset-top, 0px)) 0.5rem 0.35rem;
+    }
+
+    .hud-location #current-location {
+        font-size: 0.7rem;
+        /* Still allow wrapping on small phones */
+        max-width: calc(100vw - 70px);
+    }
+
+    .hud-value {
+        font-size: 0.7rem;
+    }
+
+    .hud-label {
+        font-size: 0.4rem;
+    }
+
+    .hud-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .hud-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+/* Touch feedback */
+@media (hover: none) and (pointer: coarse) {
+    .hud-btn:active {
+        background: rgba(65, 217, 217, 0.2) !important;
+        border-color: rgba(65, 217, 217, 0.4) !important;
+        transform: scale(0.95);
+    }
+}
+
+/* =============================================================================
+   ACHIEVEMENT TOAST - Unlocked achievement notification
+   ============================================================================= */
+
+.achievement-toast {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    z-index: 10000;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+
+    background: linear-gradient(135deg,
+        rgba(26, 22, 37, 0.95) 0%,
+        rgba(34, 29, 46, 0.95) 100%);
+    border: 1px solid rgba(65, 217, 217, 0.3);
+    border-radius: 12px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(65, 217, 217, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.achievement-toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.achievement-toast-icon {
+    font-size: 2rem;
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5));
+    animation: achievementBounce 0.6s ease-out;
+}
+
+@keyframes achievementBounce {
+    0% { transform: scale(0) rotate(-15deg); }
+    50% { transform: scale(1.3) rotate(5deg); }
+    70% { transform: scale(0.9) rotate(-2deg); }
+    100% { transform: scale(1) rotate(0); }
+}
+
+.achievement-toast-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.achievement-toast-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--neon-cyan);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.achievement-toast-name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    color: var(--text-bright);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* Rarity variations */
+.achievement-toast.rarity-common {
+    border-color: rgba(65, 217, 217, 0.4);
+}
+
+.achievement-toast.rarity-uncommon {
+    border-color: rgba(125, 234, 125, 0.5);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(125, 234, 125, 0.25);
+}
+
+.achievement-toast.rarity-uncommon .achievement-toast-label {
+    color: var(--neon-green);
+}
+
+.achievement-toast.rarity-rare {
+    border-color: rgba(198, 120, 221, 0.5);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 25px rgba(198, 120, 221, 0.3);
+}
+
+.achievement-toast.rarity-rare .achievement-toast-label {
+    color: var(--neon-purple);
+}
+
+.achievement-toast.rarity-epic {
+    border-color: rgba(255, 107, 157, 0.5);
+    background: linear-gradient(135deg,
+        rgba(40, 22, 37, 0.95) 0%,
+        rgba(50, 29, 46, 0.95) 100%);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 30px rgba(255, 107, 157, 0.35);
+}
+
+.achievement-toast.rarity-epic .achievement-toast-label {
+    color: var(--neon-pink);
+}
+
+.achievement-toast.rarity-legendary {
+    border-color: rgba(255, 215, 0, 0.6);
+    background: linear-gradient(135deg,
+        rgba(45, 35, 20, 0.95) 0%,
+        rgba(55, 45, 25, 0.95) 100%);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 35px rgba(255, 215, 0, 0.4),
+        0 0 60px rgba(255, 215, 0, 0.15);
+    animation: legendaryPulse 2s ease-in-out infinite;
+}
+
+.achievement-toast.rarity-legendary .achievement-toast-label {
+    color: #ffd866;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.achievement-toast.rarity-legendary .achievement-toast-name {
+    background: linear-gradient(90deg, #ffd866, #ffb347, #ffd866);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: legendaryShine 3s ease-in-out infinite;
+}
+
+@keyframes legendaryPulse {
+    0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 35px rgba(255, 215, 0, 0.4); }
+    50% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 50px rgba(255, 215, 0, 0.6); }
+}
+
+@keyframes legendaryShine {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+    .achievement-toast {
+        top: 60px;
+        padding: 10px 16px;
+        gap: 10px;
+        max-width: calc(100vw - 40px);
+    }
+
+    .achievement-toast-icon {
+        font-size: 1.6rem;
+    }
+
+    .achievement-toast-label {
+        font-size: 0.55rem;
+    }
+
+    .achievement-toast-name {
+        font-size: 0.95rem;
+    }
 }

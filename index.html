@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0d0a14">
     <title>pathfindr</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -15,6 +19,9 @@
 
     <!-- Stripe (for web payments) -->
     <script src="https://js.stripe.com/v3/"></script>
+
+    <!-- Google AdSense (for web ads) -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9697527729469740" crossorigin="anonymous"></script>
 </head>
 <body>
     <div id="app">
@@ -114,6 +121,64 @@
                     </svg>
                 </button>
                 <span id="username-display" class="username-label"></span>
+            </div>
+        </div>
+
+        <!-- Mobile Bottom Bar (visible only on mobile) -->
+        <div id="mobile-bottom-bar" style="display: none;">
+            <!-- City Badge -->
+            <div class="mobile-city-badge">
+                <span class="badge-label">City</span>
+                <span class="badge-number" id="mobile-city-number">1</span>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="mobile-stats-row">
+                <div class="mobile-stat">
+                    <span class="mobile-stat-label">Round</span>
+                    <span class="mobile-stat-value"><span id="mobile-round">1</span><span class="dim">/5</span></span>
+                </div>
+                <div class="mobile-stat-divider"></div>
+                <div class="mobile-stat">
+                    <span class="mobile-stat-label">Distance</span>
+                    <span class="mobile-stat-value"><span id="mobile-distance">0.00</span><span class="unit">km</span></span>
+                </div>
+                <div class="mobile-stat-divider"></div>
+                <div class="mobile-stat">
+                    <span class="mobile-stat-label">Score</span>
+                    <span class="mobile-stat-value score" id="mobile-score">0</span>
+                </div>
+            </div>
+
+            <!-- Round Progress Dots -->
+            <div class="mobile-round-legend" id="mobile-round-legend">
+                <div class="mobile-round-dot current" style="background: var(--neon-cyan);"></div>
+                <div class="mobile-round-dot" style="background: var(--neon-pink);"></div>
+                <div class="mobile-round-dot" style="background: var(--accent-purple);"></div>
+                <div class="mobile-round-dot" style="background: #4a9eff;"></div>
+                <div class="mobile-round-dot" style="background: #ffd700;"></div>
+            </div>
+
+            <!-- Controls Row -->
+            <div class="mobile-controls-row">
+                <button id="mobile-undo-btn" class="mobile-control-btn" title="Undo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                    </svg>
+                </button>
+                <button id="mobile-clear-btn" class="mobile-control-btn" title="Clear">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+                <button id="mobile-mute-btn" class="mobile-control-btn" title="Sound">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -717,6 +782,7 @@
     <script src="config.js"></script>
     <script src="ads.js"></script>
     <script src="auth.js"></script>
+    <script src="analytics.js"></script>
     <script src="payments.js"></script>
     <script src="game.js"></script>
 
@@ -725,6 +791,11 @@
         document.addEventListener('DOMContentLoaded', async () => {
             // Initialize auth (will restore session if exists)
             await PathfindrAuth.init();
+
+            // Initialize analytics (after auth so we have user info)
+            if (typeof PathfindrAnalytics !== 'undefined') {
+                PathfindrAnalytics.init();
+            }
 
             // Initialize ads (after user interaction for audio policy)
             document.body.addEventListener('click', async function initAdsOnInteraction() {
