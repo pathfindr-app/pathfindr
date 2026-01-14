@@ -3499,8 +3499,14 @@ body.fullscreen-mode .fullscreen-btn {
     font-size: 1.5rem;
     cursor: pointer;
     line-height: 1;
-    padding: 0.25rem;
+    padding: 0.5rem;
     transition: color var(--transition-fast);
+    z-index: 100;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-close:hover {

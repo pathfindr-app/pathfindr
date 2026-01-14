@@ -6023,8 +6023,8 @@ async function playUserPathLockInAnimation() {
 // Comparison animation: Both paths pulse together for easy comparison
 async function playComparisonAnimation() {
     // This runs after the optimal path is drawn
-    // Just a brief moment where both paths pulse together
-    const duration = 800;
+    // Brief moment where both paths pulse together before showing results
+    const duration = 300; // Quick transition - results panel will slide in soon
     const startTime = performance.now();
 
     return new Promise(resolve => {
@@ -6034,9 +6034,6 @@ async function playComparisonAnimation() {
                 resolve();
                 return;
             }
-
-            // The renderVisualization loop will handle the pulsing
-            // This just adds a brief delay for the comparison moment
             requestAnimationFrame(pulse);
         }
         pulse();
