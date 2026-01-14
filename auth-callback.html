@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pathfindr - Authenticating...</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d0a14;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(0, 240, 255, 0.1);
+            border-top-color: #00f0ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .message {
+            margin-top: 20px;
+            color: #00f0ff;
+            font-size: 14px;
+        }
+        .error {
+            color: #ff6b9d;
+            margin-top: 10px;
+            font-size: 12px;
+            max-width: 300px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <div class="message">Authenticating...</div>
+    <div class="error" id="error"></div>
+
+    <script>
+        // This page handles OAuth callback redirects
+        // Supabase appends tokens as URL hash fragments
+        // We redirect to the main app with these tokens preserved
+
+        (function() {
+            const hash = window.location.hash;
+            const search = window.location.search;
+
+            // Check for errors in URL
+            const urlParams = new URLSearchParams(search);
+            const error = urlParams.get('error');
+            const errorDescription = urlParams.get('error_description');
+
+            if (error) {
+                document.getElementById('error').textContent =
+                    errorDescription || error || 'Authentication failed';
+                document.querySelector('.message').textContent = 'Authentication failed';
+                document.querySelector('.loader').style.display = 'none';
+
+                // Redirect to home after showing error
+                setTimeout(() => {
+                    window.location.href = '/' + hash;
+                }, 3000);
+                return;
+            }
+
+            // Success - redirect to main app with hash preserved
+            // The hash contains access_token, refresh_token, etc.
+            document.querySelector('.message').textContent = 'Success! Redirecting...';
+
+            // Small delay so user sees success message
+            setTimeout(() => {
+                window.location.href = '/' + hash;
+            }, 500);
+        })();
+    </script>
+</body>
+</html>

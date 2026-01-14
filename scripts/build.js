@@ -12,6 +12,7 @@ const DIST = path.join(ROOT, 'dist');
 // Files to copy to dist
 const FILES = [
     'index.html',
+    'auth-callback.html',
     'game.js',
     'styles.css',
     'config.js',
