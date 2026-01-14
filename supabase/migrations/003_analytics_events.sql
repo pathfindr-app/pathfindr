@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS events (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- nullable for anonymous users
+  user_id UUID,  -- nullable for anonymous users
   session_id TEXT NOT NULL,
   event_name TEXT NOT NULL,
   event_data JSONB DEFAULT '{}',
@@ -22,26 +22,28 @@ CREATE INDEX IF NOT EXISTS idx_events_name_created ON events(event_name, created
 -- Enable Row Level Security
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
--- Users can only read their own events (for debugging)
+-- Drop existing policies if they exist, then recreate
+DROP POLICY IF EXISTS "Users can read own events" ON events;
+DROP POLICY IF EXISTS "Anyone can insert events" ON events;
+DROP POLICY IF EXISTS "Service role can read all events" ON events;
+
 CREATE POLICY "Users can read own events" ON events
   FOR SELECT USING (auth.uid() = user_id);
 
--- Anyone can insert events (including anonymous)
 CREATE POLICY "Anyone can insert events" ON events
   FOR INSERT WITH CHECK (true);
 
--- Service role can read all events for analytics
 CREATE POLICY "Service role can read all events" ON events
   FOR SELECT USING (true);
 
 -- =============================================
--- Sessions Table
+-- Analytics Sessions Table (renamed to avoid conflict)
 -- Track user sessions for engagement metrics
 -- =============================================
 
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS analytics_sessions (
   id TEXT PRIMARY KEY,  -- Client-generated UUID
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_id UUID,
   platform TEXT,
   app_version TEXT,
   device_info JSONB DEFAULT '{}',
@@ -53,18 +55,22 @@ CREATE TABLE IF NOT EXISTS sessions (
   total_duration_ms INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_sessions_user ON analytics_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_sessions_started ON analytics_sessions(started_at DESC);
 
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analytics_sessions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read own sessions" ON sessions
+DROP POLICY IF EXISTS "Users can read own analytics sessions" ON analytics_sessions;
+DROP POLICY IF EXISTS "Anyone can insert analytics sessions" ON analytics_sessions;
+DROP POLICY IF EXISTS "Anyone can update analytics sessions" ON analytics_sessions;
+
+CREATE POLICY "Users can read own analytics sessions" ON analytics_sessions
   FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Anyone can insert sessions" ON sessions
+CREATE POLICY "Anyone can insert analytics sessions" ON analytics_sessions
   FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Anyone can update own session" ON sessions
+CREATE POLICY "Anyone can update analytics sessions" ON analytics_sessions
   FOR UPDATE USING (true);
 
 -- =============================================
@@ -74,7 +80,7 @@ CREATE POLICY "Anyone can update own session" ON sessions
 
 CREATE TABLE IF NOT EXISTS funnels (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_id UUID,
   session_id TEXT,
   step TEXT NOT NULL,  -- 'landing', 'first_game', 'completed_game', 'viewed_premium', 'purchased'
   reached_at TIMESTAMPTZ DEFAULT NOW()
@@ -85,6 +91,9 @@ CREATE INDEX IF NOT EXISTS idx_funnels_step ON funnels(step);
 CREATE INDEX IF NOT EXISTS idx_funnels_session ON funnels(session_id);
 
 ALTER TABLE funnels ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert funnel steps" ON funnels;
+DROP POLICY IF EXISTS "Service role can read funnels" ON funnels;
 
 CREATE POLICY "Anyone can insert funnel steps" ON funnels
   FOR INSERT WITH CHECK (true);
@@ -109,11 +118,11 @@ DECLARE
   total_landing BIGINT;
 BEGIN
   -- Get total landing count first
-  SELECT COUNT(DISTINCT COALESCE(user_id::text, session_id))
+  SELECT COUNT(DISTINCT COALESCE(f.user_id::text, f.session_id))
   INTO total_landing
-  FROM funnels
-  WHERE step = 'landing'
-    AND reached_at BETWEEN p_start_date AND p_end_date;
+  FROM funnels f
+  WHERE f.step = 'landing'
+    AND f.reached_at BETWEEN p_start_date AND p_end_date;
 
   RETURN QUERY
   SELECT

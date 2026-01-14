@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   center_lng DECIMAL(10,7) NOT NULL,
   zoom_level INTEGER DEFAULT 16,
 
-  -- Fixed start/end points (node IDs from road network)
+  -- Fixed start/end points
   start_lat DECIMAL(10,7) NOT NULL,
   start_lng DECIMAL(10,7) NOT NULL,
   end_lat DECIMAL(10,7) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   active_until TIMESTAMPTZ NOT NULL,
 
   -- Metadata
-  difficulty TEXT DEFAULT 'medium',  -- 'easy', 'medium', 'hard'
+  difficulty TEXT DEFAULT 'medium',
   featured BOOLEAN DEFAULT FALSE,
 
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_challenges_active ON challenges(active_from, acti
 
 ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read challenges" ON challenges;
 CREATE POLICY "Anyone can read challenges" ON challenges
   FOR SELECT USING (true);
 
@@ -43,8 +44,8 @@ CREATE POLICY "Anyone can read challenges" ON challenges
 
 CREATE TABLE IF NOT EXISTS challenge_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  challenge_id UUID REFERENCES challenges(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  challenge_id UUID,
+  user_id UUID,
   username TEXT NOT NULL,
 
   efficiency DECIMAL(5,2) NOT NULL,
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS challenge_entries (
 
   submitted_at TIMESTAMPTZ DEFAULT NOW(),
 
-  UNIQUE(challenge_id, user_id)  -- One entry per user per challenge
+  UNIQUE(challenge_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_challenge_entries_challenge ON challenge_entries(challenge_id);
@@ -62,11 +63,18 @@ CREATE INDEX IF NOT EXISTS idx_challenge_entries_efficiency ON challenge_entries
 
 ALTER TABLE challenge_entries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read challenge entries" ON challenge_entries;
+DROP POLICY IF EXISTS "Users can manage own challenge entries" ON challenge_entries;
+DROP POLICY IF EXISTS "Anyone can insert challenge entries" ON challenge_entries;
+
 CREATE POLICY "Anyone can read challenge entries" ON challenge_entries
   FOR SELECT USING (true);
 
-CREATE POLICY "Users can manage own entries" ON challenge_entries
-  FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Anyone can insert challenge entries" ON challenge_entries
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can manage own challenge entries" ON challenge_entries
+  FOR UPDATE USING (auth.uid() = user_id);
 
 -- =============================================
 -- Get current active challenge
@@ -174,9 +182,9 @@ DECLARE
   result_rank INTEGER;
 BEGIN
   -- Get existing entry
-  SELECT efficiency INTO old_efficiency
-  FROM challenge_entries
-  WHERE challenge_id = p_challenge_id AND user_id = p_user_id;
+  SELECT ce.efficiency INTO old_efficiency
+  FROM challenge_entries ce
+  WHERE ce.challenge_id = p_challenge_id AND ce.user_id = p_user_id;
 
   -- Only update if better (or new)
   IF old_efficiency IS NULL OR p_efficiency > old_efficiency THEN
@@ -191,70 +199,13 @@ BEGIN
 
   -- Get new rank
   SELECT COUNT(*) + 1 INTO result_rank
-  FROM challenge_entries
-  WHERE challenge_id = p_challenge_id
-    AND efficiency > GREATEST(p_efficiency, COALESCE(old_efficiency, 0));
+  FROM challenge_entries ce
+  WHERE ce.challenge_id = p_challenge_id
+    AND ce.efficiency > GREATEST(p_efficiency, COALESCE(old_efficiency, 0));
 
   is_improvement := old_efficiency IS NULL OR p_efficiency > old_efficiency;
   previous_efficiency := old_efficiency;
   new_rank := result_rank;
   RETURN NEXT;
-END;
-$$ LANGUAGE plpgsql;
-
--- =============================================
--- Auto-generate daily challenges (call via cron)
--- =============================================
-
-CREATE OR REPLACE FUNCTION generate_daily_challenge()
-RETURNS UUID AS $$
-DECLARE
-  random_city RECORD;
-  new_challenge_id UUID;
-  offset_lat DECIMAL(10,7);
-  offset_lng DECIMAL(10,7);
-BEGIN
-  -- Get a random city with decent population
-  SELECT * INTO random_city
-  FROM cities
-  WHERE population > 50000
-  ORDER BY RANDOM()
-  LIMIT 1;
-
-  IF random_city IS NULL THEN
-    RETURN NULL;
-  END IF;
-
-  -- Generate random start/end offsets (roughly 0.5-1.5km apart)
-  offset_lat := (RANDOM() - 0.5) * 0.02;  -- ~1km latitude
-  offset_lng := (RANDOM() - 0.5) * 0.02;  -- ~1km longitude
-
-  -- Create the challenge
-  INSERT INTO challenges (
-    challenge_type, city_name, center_lat, center_lng, zoom_level,
-    start_lat, start_lng, end_lat, end_lng,
-    active_from, active_until, difficulty
-  )
-  VALUES (
-    'daily',
-    random_city.name || ', ' || random_city.country,
-    random_city.lat,
-    random_city.lng,
-    16,
-    random_city.lat + offset_lat,
-    random_city.lng + offset_lng,
-    random_city.lat - offset_lat,
-    random_city.lng - offset_lng,
-    DATE_TRUNC('day', NOW()),
-    DATE_TRUNC('day', NOW()) + INTERVAL '1 day',
-    CASE
-      WHEN RANDOM() < 0.2 THEN 'easy'
-      WHEN RANDOM() < 0.8 THEN 'medium'
-      ELSE 'hard'
-    END
-  )
-  RETURNING id INTO new_challenge_id;
-
-  RETURN new_challenge_id;
 END;
 $$ LANGUAGE plpgsql;

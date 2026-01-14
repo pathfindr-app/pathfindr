@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS achievements (
 
 -- User achievement progress/unlocks
 CREATE TABLE IF NOT EXISTS user_achievements (
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  achievement_id TEXT REFERENCES achievements(id) ON DELETE CASCADE,
+  user_id UUID,
+  achievement_id TEXT,
   progress INTEGER DEFAULT 0,  -- current progress toward requirement
   unlocked_at TIMESTAMPTZ,  -- null if not yet unlocked
   notified BOOLEAN DEFAULT FALSE,  -- has user been notified?
@@ -27,29 +27,31 @@ CREATE TABLE IF NOT EXISTS user_achievements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_achievements_unlocked ON user_achievements(unlocked_at) WHERE unlocked_at IS NOT NULL;
 
 ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_achievements ENABLE ROW LEVEL SECURITY;
 
--- Anyone can read achievement definitions
+-- Drop and recreate policies
+DROP POLICY IF EXISTS "Anyone can read achievements" ON achievements;
+DROP POLICY IF EXISTS "Users can read own achievements" ON user_achievements;
+DROP POLICY IF EXISTS "Users can update own achievements" ON user_achievements;
+DROP POLICY IF EXISTS "Service role can manage achievements" ON user_achievements;
+DROP POLICY IF EXISTS "Anyone can insert user achievements" ON user_achievements;
+
 CREATE POLICY "Anyone can read achievements" ON achievements
   FOR SELECT USING (true);
 
--- Users can read their own progress
 CREATE POLICY "Users can read own achievements" ON user_achievements
   FOR SELECT USING (auth.uid() = user_id);
 
--- Users can update their own progress
 CREATE POLICY "Users can update own achievements" ON user_achievements
   FOR UPDATE USING (auth.uid() = user_id);
 
--- Service role can insert/update all
-CREATE POLICY "Service role can manage achievements" ON user_achievements
-  FOR ALL USING (true);
+CREATE POLICY "Anyone can insert user achievements" ON user_achievements
+  FOR INSERT WITH CHECK (true);
 
 -- =============================================
--- Seed initial achievements
+-- Seed initial achievements (use upsert to avoid duplicates)
 -- =============================================
 
 INSERT INTO achievements (id, name, description, icon, category, requirement_type, requirement_value, points, rarity) VALUES
@@ -97,7 +99,15 @@ INSERT INTO achievements (id, name, description, icon, category, requirement_typ
   ('early_bird', 'Early Bird', 'Play a game between 5am and 7am local time', '🐦', 'general', 'special_morning', 1, 25, 'uncommon'),
   ('hometown', 'Home Turf', 'Play 10 games in your local area', '🏠', 'exploration', 'local_games', 10, 30, 'uncommon'),
   ('speed_demon', 'Speed Demon', 'Complete a round in under 30 seconds', '⚡', 'skill', 'special_speed', 1, 35, 'rare')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  icon = EXCLUDED.icon,
+  category = EXCLUDED.category,
+  requirement_type = EXCLUDED.requirement_type,
+  requirement_value = EXCLUDED.requirement_value,
+  points = EXCLUDED.points,
+  rarity = EXCLUDED.rarity;
 
 -- =============================================
 -- Function to check and unlock achievements
@@ -115,13 +125,13 @@ DECLARE
   current_progress INTEGER;
   was_unlocked BOOLEAN;
 BEGIN
-  -- Get user stats
+  -- Get user stats from games table
   SELECT
-    COUNT(*) as total_rounds,
-    COUNT(*) / 5 as total_games,
-    COUNT(DISTINCT location_name) as cities,
-    MAX(efficiency_percentage) as best_efficiency,
-    AVG(efficiency_percentage) as avg_efficiency
+    COUNT(*)::INTEGER as total_rounds,
+    (COUNT(*) / 5)::INTEGER as total_games,
+    COUNT(DISTINCT location_name)::INTEGER as cities,
+    COALESCE(MAX(efficiency_percentage), 0)::INTEGER as best_efficiency,
+    COALESCE(AVG(efficiency_percentage), 0)::INTEGER as avg_efficiency
   INTO user_stats
   FROM games
   WHERE games.user_id = p_user_id;
@@ -133,18 +143,18 @@ BEGIN
 
     -- Calculate progress based on requirement type
     CASE ach.requirement_type
-      WHEN 'rounds_completed' THEN current_progress := user_stats.total_rounds;
-      WHEN 'games_completed' THEN current_progress := user_stats.total_games;
-      WHEN 'cities_visited' THEN current_progress := user_stats.cities;
-      WHEN 'best_efficiency' THEN current_progress := user_stats.best_efficiency;
+      WHEN 'rounds_completed' THEN current_progress := COALESCE(user_stats.total_rounds, 0);
+      WHEN 'games_completed' THEN current_progress := COALESCE(user_stats.total_games, 0);
+      WHEN 'cities_visited' THEN current_progress := COALESCE(user_stats.cities, 0);
+      WHEN 'best_efficiency' THEN current_progress := COALESCE(user_stats.best_efficiency, 0);
       ELSE current_progress := 0;
     END CASE;
 
     -- Check if already unlocked
-    SELECT (unlocked_at IS NOT NULL) INTO was_unlocked
-    FROM user_achievements
-    WHERE user_achievements.user_id = p_user_id
-      AND user_achievements.achievement_id = ach.id;
+    SELECT (ua.unlocked_at IS NOT NULL) INTO was_unlocked
+    FROM user_achievements ua
+    WHERE ua.user_id = p_user_id
+      AND ua.achievement_id = ach.id;
 
     -- Upsert progress
     INSERT INTO user_achievements (user_id, achievement_id, progress, unlocked_at)

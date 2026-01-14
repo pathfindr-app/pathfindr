@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS city_leaderboards (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   city_name TEXT NOT NULL,
   normalized_city TEXT NOT NULL,  -- lowercase, no special chars for matching
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID,
   username TEXT NOT NULL,
   best_efficiency DECIMAL(5,2) NOT NULL,
   attempts INTEGER DEFAULT 1,
@@ -20,13 +20,18 @@ CREATE INDEX IF NOT EXISTS idx_city_lb_efficiency ON city_leaderboards(normalize
 
 ALTER TABLE city_leaderboards ENABLE ROW LEVEL SECURITY;
 
--- Anyone can read leaderboards
+DROP POLICY IF EXISTS "Anyone can read city leaderboards" ON city_leaderboards;
+DROP POLICY IF EXISTS "Users can manage own entries" ON city_leaderboards;
+DROP POLICY IF EXISTS "Anyone can insert city leaderboards" ON city_leaderboards;
+
 CREATE POLICY "Anyone can read city leaderboards" ON city_leaderboards
   FOR SELECT USING (true);
 
--- Users can insert/update their own entries
+CREATE POLICY "Anyone can insert city leaderboards" ON city_leaderboards
+  FOR INSERT WITH CHECK (true);
+
 CREATE POLICY "Users can manage own entries" ON city_leaderboards
-  FOR ALL USING (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid() = user_id);
 
 -- =============================================
 -- Function to update city leaderboard
@@ -52,9 +57,9 @@ BEGIN
   normalized := LOWER(REGEXP_REPLACE(p_city_name, '[^a-zA-Z0-9]', '', 'g'));
 
   -- Get existing best
-  SELECT best_efficiency INTO existing_best
-  FROM city_leaderboards
-  WHERE normalized_city = normalized AND user_id = p_user_id;
+  SELECT cl.best_efficiency INTO existing_best
+  FROM city_leaderboards cl
+  WHERE cl.normalized_city = normalized AND cl.user_id = p_user_id;
 
   -- Insert or update
   INSERT INTO city_leaderboards (city_name, normalized_city, user_id, username, best_efficiency, attempts)
@@ -68,9 +73,9 @@ BEGIN
 
   -- Get new rank
   SELECT COUNT(*) + 1 INTO new_rank
-  FROM city_leaderboards
-  WHERE normalized_city = normalized
-    AND best_efficiency > GREATEST(COALESCE(existing_best, 0), p_efficiency);
+  FROM city_leaderboards cl
+  WHERE cl.normalized_city = normalized
+    AND cl.best_efficiency > GREATEST(COALESCE(existing_best, 0), p_efficiency);
 
   is_new_record := p_efficiency > COALESCE(existing_best, 0);
   previous_best := existing_best;
@@ -112,21 +117,3 @@ BEGIN
   LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql;
-
--- =============================================
--- Hot cities view (most played recently)
--- =============================================
-
-CREATE OR REPLACE VIEW hot_cities AS
-SELECT
-  city_name,
-  normalized_city,
-  COUNT(DISTINCT user_id) as unique_players,
-  COUNT(*) as total_attempts,
-  MAX(best_efficiency) as top_score,
-  MAX(updated_at) as last_played
-FROM city_leaderboards
-WHERE updated_at > NOW() - INTERVAL '7 days'
-GROUP BY city_name, normalized_city
-ORDER BY unique_players DESC, total_attempts DESC
-LIMIT 20;

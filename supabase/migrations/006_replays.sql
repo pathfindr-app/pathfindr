@@ -3,8 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS replays (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  game_id UUID,  -- Reference to games table if it exists
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  game_id UUID,
+  user_id UUID,
   username TEXT NOT NULL,
 
   -- Location data
@@ -31,19 +31,19 @@ CREATE TABLE IF NOT EXISTS replays (
 CREATE INDEX IF NOT EXISTS idx_replays_user ON replays(user_id);
 CREATE INDEX IF NOT EXISTS idx_replays_location ON replays(location_name);
 CREATE INDEX IF NOT EXISTS idx_replays_efficiency ON replays(efficiency DESC);
-CREATE INDEX IF NOT EXISTS idx_replays_featured ON replays(is_featured) WHERE is_featured = TRUE;
 
 ALTER TABLE replays ENABLE ROW LEVEL SECURITY;
 
--- Anyone can read replays
+DROP POLICY IF EXISTS "Anyone can read replays" ON replays;
+DROP POLICY IF EXISTS "Users can insert own replays" ON replays;
+DROP POLICY IF EXISTS "Users can delete own replays" ON replays;
+
 CREATE POLICY "Anyone can read replays" ON replays
   FOR SELECT USING (true);
 
--- Users can insert their own replays
 CREATE POLICY "Users can insert own replays" ON replays
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Users can delete their own replays
 CREATE POLICY "Users can delete own replays" ON replays
   FOR DELETE USING (auth.uid() = user_id);
 
@@ -69,10 +69,10 @@ DECLARE
   is_pb BOOLEAN;
 BEGIN
   -- Check if this is a personal best for this location
-  SELECT p_efficiency > COALESCE(MAX(efficiency), 0) INTO is_pb
-  FROM replays
-  WHERE user_id = p_user_id
-    AND location_name = p_location_name;
+  SELECT p_efficiency > COALESCE(MAX(r.efficiency), 0) INTO is_pb
+  FROM replays r
+  WHERE r.user_id = p_user_id
+    AND r.location_name = p_location_name;
 
   -- If it's a new PB, mark old PBs as not PB
   IF is_pb THEN
@@ -94,20 +94,6 @@ BEGIN
   )
   RETURNING id INTO new_id;
 
-  -- Cleanup: keep only top 5 replays per user per location (plus any PBs)
-  DELETE FROM replays
-  WHERE id IN (
-    SELECT id FROM (
-      SELECT id,
-        ROW_NUMBER() OVER (PARTITION BY user_id, location_name ORDER BY efficiency DESC) as rn
-      FROM replays
-      WHERE user_id = p_user_id
-        AND location_name = p_location_name
-        AND is_personal_best = FALSE
-    ) ranked
-    WHERE rn > 5
-  );
-
   RETURN new_id;
 END;
 $$ LANGUAGE plpgsql;
@@ -118,7 +104,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION get_ghost(
   p_location_name TEXT,
-  p_ghost_type TEXT DEFAULT 'best'  -- 'best', 'featured', 'random'
+  p_ghost_type TEXT DEFAULT 'best'
 )
 RETURNS TABLE (
   replay_id UUID,
@@ -142,7 +128,7 @@ BEGIN
     WHERE r.location_name = p_location_name AND r.is_featured = TRUE
     ORDER BY RANDOM()
     LIMIT 1;
-  ELSE  -- random
+  ELSE
     RETURN QUERY
     SELECT r.id, r.username, r.path_data, r.efficiency, r.duration_ms
     FROM replays r

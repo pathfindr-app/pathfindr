@@ -62,11 +62,83 @@ const PathfindrAuth = {
         await this.loadProfile(session.user.id);
       }
 
+      // Set up deep link handler for mobile OAuth callback
+      this.setupDeepLinkHandler();
+
       this.initialized = true;
       console.log('[Auth] Initialized');
     } catch (error) {
       console.error('[Auth] Failed to initialize:', error);
     }
+  },
+
+  /**
+   * Set up deep link handler for mobile OAuth callback
+   * Listens for pathfindr:// URLs and extracts auth tokens
+   */
+  setupDeepLinkHandler() {
+    // Only set up on native mobile
+    if (!window.Capacitor?.isNativePlatform()) {
+      return;
+    }
+
+    const App = window.Capacitor?.Plugins?.App;
+    if (!App) {
+      console.log('[Auth] App plugin not available for deep links');
+      return;
+    }
+
+    App.addListener('appUrlOpen', async (event) => {
+      console.log('[Auth] Deep link received:', event.url);
+
+      // Parse the URL - format: pathfindr://auth#access_token=...&refresh_token=...
+      const url = event.url;
+      if (!url.startsWith('pathfindr://auth')) {
+        console.log('[Auth] Not an auth deep link, ignoring');
+        return;
+      }
+
+      // Extract the hash fragment
+      const hashIndex = url.indexOf('#');
+      if (hashIndex === -1) {
+        console.log('[Auth] No hash fragment in deep link');
+        return;
+      }
+
+      const hashFragment = url.substring(hashIndex + 1);
+      const params = new URLSearchParams(hashFragment);
+
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (!accessToken) {
+        console.log('[Auth] No access token in deep link');
+        return;
+      }
+
+      console.log('[Auth] Setting session from deep link...');
+
+      try {
+        // Set the session using the tokens from the deep link
+        const { data, error } = await this.client.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          console.error('[Auth] Failed to set session from deep link:', error);
+          return;
+        }
+
+        console.log('[Auth] Session set successfully from deep link');
+
+        // The onAuthStateChange listener will handle loading the profile
+      } catch (error) {
+        console.error('[Auth] Error processing deep link:', error);
+      }
+    });
+
+    console.log('[Auth] Deep link handler set up');
   },
 
   /**

@@ -73,14 +73,36 @@
                 return;
             }
 
-            // Success - redirect to main app with hash preserved
-            // The hash contains access_token, refresh_token, etc.
+            // Detect if this is likely from a mobile app
+            // Mobile browsers opened from apps usually have specific user agents
+            const isMobileRedirect = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+            // Success - redirect appropriately
             document.querySelector('.message').textContent = 'Success! Redirecting...';
 
-            // Small delay so user sees success message
-            setTimeout(() => {
-                window.location.href = '/' + hash;
-            }, 500);
+            if (isMobileRedirect && hash) {
+                // Mobile: Try to open the app via custom URL scheme
+                // The hash contains access_token, refresh_token, etc.
+                const appUrl = 'pathfindr://auth' + hash;
+                console.log('Redirecting to app:', appUrl);
+
+                // Try to open the app
+                window.location.href = appUrl;
+
+                // Fallback: if app doesn't open, show instructions after a delay
+                setTimeout(() => {
+                    document.querySelector('.message').textContent = 'Return to Pathfindr app';
+                    document.querySelector('.loader').style.display = 'none';
+                    document.getElementById('error').innerHTML =
+                        'If the app didn\'t open automatically, please return to it manually.<br><br>' +
+                        '<a href="/" style="color: #00f0ff;">Or continue on web</a>';
+                }, 2000);
+            } else {
+                // Web: redirect to main page with hash preserved
+                setTimeout(() => {
+                    window.location.href = '/' + hash;
+                }, 500);
+            }
         })();
     </script>
 </body>

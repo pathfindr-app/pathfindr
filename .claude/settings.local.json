@@ -19,7 +19,29 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)",
       "Bash(git pull:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(npx serve . -p 3000)",
+      "WebSearch",
+      "Bash(supabase:*)",
+      "Bash(npx supabase:*)",
+      "Bash(set SUPABASE_ACCESS_TOKEN=sbp_78c4f81d88d48f4bbbca1d8c7fa95d30f23321c9)",
+      "Bash($env:SUPABASE_ACCESS_TOKEN=\"sbp_78c4f81d88d48f4bbbca1d8c7fa95d30f23321c9\")",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_78c4f81d88d48f4bbbca1d8c7fa95d30f23321c9 npx supabase:*)",
+      "Bash(curl:*)",
+      "Bash(tar:*)",
+      "Bash(powershell -Command \"Expand-Archive -Path worldcities.zip -DestinationPath worldcities -Force\")",
+      "Bash(powershell -Command \"Expand-Archive -Path cities500.zip -DestinationPath geonames -Force\")",
+      "Bash(node:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(npx serve . -l 3000)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(npx cap sync)",
+      "Bash(dir /b)",
+      "Bash(npx cap add:*)",
+      "Bash(npx cap:*)",
+      "Bash(copy /Y \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\game.js\" \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\dist\\\\game.js\")",
+      "Bash(copy /Y \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\styles.css\" \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\dist\\\\styles.css\")",
+      "Bash(npm run build:*)"
     ]
   }
 }

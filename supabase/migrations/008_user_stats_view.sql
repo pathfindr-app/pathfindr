@@ -1,51 +1,5 @@
--- User Stats Views and Functions
+-- User Stats Functions
 -- Comprehensive statistics for player profiles
-
--- =============================================
--- User stats view (aggregated from games)
--- =============================================
-
-CREATE OR REPLACE VIEW user_stats AS
-SELECT
-  g.user_id,
-  u.username,
-
-  -- Game counts
-  COUNT(*) as total_rounds,
-  COUNT(*) / 5 as total_games,
-  COUNT(DISTINCT g.location_name) as unique_cities,
-  COUNT(DISTINCT
-    CASE
-      WHEN g.location_name LIKE '%,%'
-      THEN TRIM(SPLIT_PART(g.location_name, ',', -1))
-      ELSE NULL
-    END
-  ) as unique_regions,
-
-  -- Efficiency stats
-  ROUND(AVG(g.efficiency_percentage)::NUMERIC, 1) as avg_efficiency,
-  MAX(g.efficiency_percentage) as best_efficiency,
-  MIN(g.efficiency_percentage) as worst_efficiency,
-  ROUND(STDDEV(g.efficiency_percentage)::NUMERIC, 2) as efficiency_stddev,
-
-  -- Perfect rounds (95%+)
-  COUNT(*) FILTER (WHERE g.efficiency_percentage >= 95) as perfect_rounds,
-  COUNT(*) FILTER (WHERE g.efficiency_percentage >= 90) as excellent_rounds,
-
-  -- Activity
-  MIN(g.created_at) as first_game_at,
-  MAX(g.created_at) as last_game_at,
-  COUNT(DISTINCT DATE(g.created_at)) as days_played,
-
-  -- Streaks (simplified - actual streak calc needs window functions)
-  CASE
-    WHEN MAX(g.created_at) > NOW() - INTERVAL '1 day' THEN TRUE
-    ELSE FALSE
-  END as played_today
-
-FROM games g
-JOIN users u ON u.id = g.user_id
-GROUP BY g.user_id, u.username;
 
 -- =============================================
 -- Function for detailed user stats
@@ -75,32 +29,32 @@ BEGIN
   SELECT
     COUNT(*)::INTEGER as rounds,
     (COUNT(*) / 5)::INTEGER as games,
-    COUNT(DISTINCT location_name)::INTEGER as cities,
-    ROUND(AVG(efficiency_percentage), 2) as avg_eff,
-    MAX(efficiency_percentage) as best_eff,
-    COUNT(*) FILTER (WHERE efficiency_percentage >= 95)::INTEGER as perfect
+    COUNT(DISTINCT g.location_name)::INTEGER as cities,
+    ROUND(AVG(g.efficiency_percentage), 2) as avg_eff,
+    MAX(g.efficiency_percentage) as best_eff,
+    COUNT(*) FILTER (WHERE g.efficiency_percentage >= 95)::INTEGER as perfect
   INTO stats
-  FROM games
-  WHERE user_id = p_user_id;
+  FROM games g
+  WHERE g.user_id = p_user_id;
 
   -- Global rank
   SELECT COUNT(*) + 1 INTO global_rank
-  FROM leaderboards
-  WHERE best_efficiency > COALESCE(stats.best_eff, 0);
+  FROM leaderboards l
+  WHERE l.best_efficiency > COALESCE(stats.best_eff, 0);
 
   SELECT COUNT(*) INTO total_players FROM leaderboards;
 
   -- Build return
-  total_rounds := stats.rounds;
-  total_games := stats.games;
-  unique_cities := stats.cities;
-  unique_regions := 0;  -- Calculated separately if needed
-  avg_efficiency := stats.avg_eff;
-  best_efficiency := stats.best_eff;
-  perfect_rounds := stats.perfect;
-  current_streak := 0;  -- Needs separate calculation
-  longest_streak := 0;  -- Needs separate calculation
-  total_distance_km := 0;  -- Needs path calculation
+  total_rounds := COALESCE(stats.rounds, 0);
+  total_games := COALESCE(stats.games, 0);
+  unique_cities := COALESCE(stats.cities, 0);
+  unique_regions := 0;
+  avg_efficiency := COALESCE(stats.avg_eff, 0);
+  best_efficiency := COALESCE(stats.best_eff, 0);
+  perfect_rounds := COALESCE(stats.perfect, 0);
+  current_streak := 0;
+  longest_streak := 0;
+  total_distance_km := 0;
   rank_global := global_rank;
   rank_percentile := CASE
     WHEN total_players > 0
@@ -129,12 +83,13 @@ DECLARE
   temp_streak INTEGER := 0;
   prev_date DATE;
   d DATE;
+  is_active BOOLEAN := FALSE;
 BEGIN
   -- Get distinct play dates ordered
-  SELECT ARRAY_AGG(DISTINCT DATE(created_at) ORDER BY DATE(created_at) DESC)
+  SELECT ARRAY_AGG(DISTINCT DATE(g.created_at) ORDER BY DATE(g.created_at) DESC)
   INTO play_dates
-  FROM games
-  WHERE user_id = p_user_id;
+  FROM games g
+  WHERE g.user_id = p_user_id;
 
   IF play_dates IS NULL OR ARRAY_LENGTH(play_dates, 1) = 0 THEN
     current_streak := 0;
@@ -145,7 +100,7 @@ BEGIN
   END IF;
 
   -- Check if played today or yesterday (streak still active)
-  streak_active := play_dates[1] >= CURRENT_DATE - INTERVAL '1 day';
+  is_active := play_dates[1] >= CURRENT_DATE - INTERVAL '1 day';
 
   -- Calculate streaks
   prev_date := NULL;
@@ -158,7 +113,7 @@ BEGIN
       temp_streak := temp_streak + 1;
     ELSE
       -- Streak broken
-      IF curr_streak = 0 AND streak_active THEN
+      IF curr_streak = 0 AND is_active THEN
         curr_streak := temp_streak;
       END IF;
       max_streak := GREATEST(max_streak, temp_streak);
@@ -168,62 +123,14 @@ BEGIN
   END LOOP;
 
   -- Final streak
-  IF curr_streak = 0 AND streak_active THEN
+  IF curr_streak = 0 AND is_active THEN
     curr_streak := temp_streak;
   END IF;
   max_streak := GREATEST(max_streak, temp_streak);
 
   current_streak := curr_streak;
   longest_streak := max_streak;
+  streak_active := is_active;
   RETURN NEXT;
 END;
 $$ LANGUAGE plpgsql;
-
--- =============================================
--- Leaderboard with stats
--- =============================================
-
-CREATE OR REPLACE VIEW leaderboard_detailed AS
-SELECT
-  l.user_id,
-  l.username,
-  l.best_efficiency,
-  l.avg_efficiency,
-  l.total_games,
-  l.updated_at,
-  ROW_NUMBER() OVER (ORDER BY l.best_efficiency DESC) as rank,
-  us.unique_cities,
-  us.perfect_rounds,
-  us.days_played
-FROM leaderboards l
-LEFT JOIN user_stats us ON us.user_id = l.user_id
-ORDER BY l.best_efficiency DESC;
-
--- =============================================
--- Add games table columns for better tracking
--- (Run these if columns don't exist)
--- =============================================
-
--- Add duration tracking to games
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'games' AND column_name = 'started_at'
-  ) THEN
-    ALTER TABLE games ADD COLUMN started_at TIMESTAMPTZ;
-    ALTER TABLE games ADD COLUMN completed_at TIMESTAMPTZ;
-    ALTER TABLE games ADD COLUMN duration_ms INTEGER;
-  END IF;
-END $$;
-
--- Add location type tracking
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'games' AND column_name = 'location_type'
-  ) THEN
-    ALTER TABLE games ADD COLUMN location_type TEXT;  -- 'local', 'us_city', 'global'
-  END IF;
-END $$;

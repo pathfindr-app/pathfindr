@@ -80,7 +80,7 @@ const PathfindrAnalytics = {
 
     try {
       await PathfindrAuth.client
-        .from('sessions')
+        .from('analytics_sessions')
         .insert({
           id: this.sessionId,
           user_id: PathfindrAuth.currentUser?.id || null,
@@ -104,7 +104,7 @@ const PathfindrAnalytics = {
 
     try {
       await PathfindrAuth.client
-        .from('sessions')
+        .from('analytics_sessions')
         .update({
           ended_at: new Date().toISOString(),
           total_duration_ms: duration,
@@ -123,7 +123,7 @@ const PathfindrAnalytics = {
 
     try {
       await PathfindrAuth.client
-        .from('sessions')
+        .from('analytics_sessions')
         .update({
           last_active_at: new Date().toISOString(),
         })
@@ -341,14 +341,14 @@ const PathfindrAnalytics = {
       // Fallback to direct update
       try {
         const { data } = await PathfindrAuth.client
-          .from('sessions')
+          .from('analytics_sessions')
           .select('rounds_completed')
           .eq('id', this.sessionId)
           .single();
 
         if (data) {
           await PathfindrAuth.client
-            .from('sessions')
+            .from('analytics_sessions')
             .update({
               rounds_completed: (data.rounds_completed || 0) + 1,
               last_active_at: new Date().toISOString(),
