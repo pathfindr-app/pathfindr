@@ -143,8 +143,12 @@ const PathfindrPayments = {
 
       const stripe = window.Stripe(PathfindrConfig.stripe.publishableKey);
 
-      // Redirect to Stripe Checkout
-      const { error } = await stripe.redirectToCheckout({
+      // Get user email for webhook to identify purchase
+      const customerEmail = PathfindrAuth?.currentProfile?.email ||
+                           PathfindrAuth?.currentUser?.email;
+
+      // Build checkout options
+      const checkoutOptions = {
         lineItems: [{
           price: PathfindrConfig.stripe.priceId,
           quantity: 1,
@@ -152,7 +156,15 @@ const PathfindrPayments = {
         mode: 'payment',
         successUrl: window.location.origin + '?purchase=success',
         cancelUrl: window.location.origin + '?purchase=cancelled',
-      });
+      };
+
+      // Include customer email so webhook can link purchase to user
+      if (customerEmail) {
+        checkoutOptions.customerEmail = customerEmail;
+      }
+
+      // Redirect to Stripe Checkout
+      const { error } = await stripe.redirectToCheckout(checkoutOptions);
 
       if (error) {
         console.error('[Payments] Stripe error:', error);

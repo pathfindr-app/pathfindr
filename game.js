@@ -8442,11 +8442,14 @@ function handleExplorerMapClick(e) {
     GameState.explorerState.pendingNode = nearestNode;
     GameState.explorerState.pendingLatLng = { lat: nodePos.lat, lng: nodePos.lng };
 
-    // Get screen position for context menu
-    const containerPoint = GameState.map.latLngToContainerPoint(e.latlng);
+    // Get viewport position for context menu
+    // Use the original event's screen position for accurate placement
+    const originalEvent = e.originalEvent;
+    const screenX = originalEvent?.clientX ?? originalEvent?.touches?.[0]?.clientX ?? 0;
+    const screenY = originalEvent?.clientY ?? originalEvent?.touches?.[0]?.clientY ?? 0;
 
-    // Show context menu at click position
-    showExplorerContextMenu(containerPoint.x, containerPoint.y, nodePos.lat, nodePos.lng);
+    // Show context menu at tap position
+    showExplorerContextMenu(screenX, screenY, nodePos.lat, nodePos.lng);
 }
 
 function showExplorerContextMenu(x, y, lat, lng) {
@@ -8464,24 +8467,26 @@ function showExplorerContextMenu(x, y, lat, lng) {
         actionsSection.style.display = hasBoth ? 'flex' : 'none';
     }
 
-    // Position menu - adjust to stay within viewport
-    const menuWidth = 160;
-    const menuHeight = hasBoth ? 200 : 100;
+    // Position menu at tap location
+    // CSS transform handles centering and positioning above the point
     const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const menuWidth = 160;
 
-    let posX = x - menuWidth / 2;
-    let posY = y - menuHeight - 10;
+    // Clamp horizontal position so menu stays on screen
+    let posX = Math.max(menuWidth / 2 + 10, Math.min(x, viewportWidth - menuWidth / 2 - 10));
 
-    // Keep within horizontal bounds
-    if (posX < 10) posX = 10;
-    if (posX + menuWidth > viewportWidth - 10) posX = viewportWidth - menuWidth - 10;
-
-    // If would go above viewport, show below click instead
-    if (posY < 10) posY = y + 20;
+    // If tap is too close to top, show below instead
+    const showBelow = y < 120;
 
     menu.style.left = `${posX}px`;
-    menu.style.top = `${posY}px`;
+    menu.style.top = `${y}px`;
+
+    // Toggle transform direction based on vertical position
+    if (showBelow) {
+        menu.style.transform = 'translate(-50%, 10px)';
+    } else {
+        menu.style.transform = 'translate(-50%, -100%) translateY(-10px)';
+    }
 
     // Track when menu was shown (for click-outside debounce)
     menu.dataset.showTime = Date.now().toString();
