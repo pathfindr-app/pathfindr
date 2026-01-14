@@ -1941,7 +1941,7 @@ const SoundEngine = {
         try {
             // Load sound effects
             const [scanningResponse, foundResponse] = await Promise.all([
-                fetch('Scanning1.wav'),
+                fetch('Scanning.wav'),
                 fetch('Found1.wav')
             ]);
 
@@ -6160,10 +6160,7 @@ async function runEpicVisualization(explored, path) {
             }
         }
 
-        // Ping sound every 5th node (throttled)
-        if (i % 5 === 0) {
-            SoundEngine.ping(i * 2);
-        }
+        // Rising ping sound removed - using WAV file only
 
         if (i % CONFIG.viz.batchSize === 0) {
             await sleep(explorationDelay);
