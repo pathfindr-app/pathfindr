@@ -345,7 +345,7 @@ const PathfindrAds = {
           font-size: 12px;
           color: #666;
         ">
-          <span style="color: #00f0ff;">Pathfindr Premium</span> - Remove ads & unlock all features
+          <span style="color: #00f0ff;">Go Pro</span> - Remove ads & unlock all features
         </div>
       `;
     }
@@ -406,17 +406,17 @@ const PathfindrAds = {
           <div class="placeholder-ad-content">
             <div class="placeholder-ad-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8"/>
-                <path d="M12 17v4"/>
-                <circle cx="12" cy="10" r="3"/>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>
             </div>
             <div class="placeholder-ad-text">
-              <span class="ad-title">Pathfindr Premium</span>
-              <span class="ad-subtitle">Remove ads & support development</span>
+              <span class="ad-title">Go Pro - $2.99</span>
+              <span class="ad-subtitle">Remove ads forever & unlock all modes</span>
             </div>
           </div>
+          <button id="go-pro-ad-btn" class="go-pro-ad-btn">
+            Remove Ads
+          </button>
           <div class="placeholder-ad-timer">
             <span id="ad-countdown">5</span>s
           </div>
@@ -514,6 +514,23 @@ const PathfindrAds = {
           .placeholder-ad-close:not(:disabled):hover {
             background: #00f0ff22;
           }
+          .go-pro-ad-btn {
+            background: linear-gradient(135deg, #00f0ff 0%, #00b8d4 100%);
+            border: none;
+            color: #000;
+            padding: 14px 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+            width: 100%;
+          }
+          .go-pro-ad-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+          }
         `;
         document.head.appendChild(styles);
       }
@@ -544,6 +561,20 @@ const PathfindrAds = {
         overlay.remove();
         resolve();
       });
+
+      // Go Pro button handler
+      const goProBtn = document.getElementById('go-pro-ad-btn');
+      if (goProBtn) {
+        goProBtn.addEventListener('click', async () => {
+          clearInterval(timer);
+          overlay.remove();
+          // Trigger purchase flow
+          if (typeof PathfindrPayments !== 'undefined') {
+            await PathfindrPayments.showPurchasePrompt();
+          }
+          resolve();
+        });
+      }
 
       console.log('[Ads] Showing placeholder ad');
     });

@@ -100,10 +100,10 @@ const PathfindrConfig = {
   // AD PLACEMENT SETTINGS
   // ===========================================
   ads: {
-    showBannerOnMenu: true,
-    showBannerBetweenRounds: true,
-    interstitialAfterRounds: [2, 4],  // Show interstitial after these rounds
-    bannerPosition: 'bottom',          // 'top' or 'bottom'
+    showBannerOnMenu: false,           // No banner on main menu
+    showBannerBetweenRounds: true,     // Show banner during round recaps
+    interstitialAfterRounds: [3],      // First ad after round 3
+    bannerPosition: 'top',             // Top of screen during round recaps
   },
 
   // ===========================================

@@ -7570,14 +7570,14 @@ async function showPremiumRequired(modeName) {
                 </svg>
             </div>
             <h2>Unlock ${modeName} Mode</h2>
-            <p>Premium gives you access to Explorer and Visualizer modes, plus removes all ads.</p>
+            <p>Go Pro to unlock Explorer and Visualizer modes, plus remove all ads forever.</p>
             <div class="premium-price">$2.99 <span>one-time purchase</span></div>
             <div class="premium-prompt-buttons">
-                <button id="premium-buy-btn" class="btn btn-primary">Get Premium</button>
+                <button id="premium-buy-btn" class="btn btn-primary">Go Pro</button>
                 <button id="premium-cancel-btn" class="btn btn-secondary">Maybe Later</button>
             </div>
             ${typeof PathfindrAuth !== 'undefined' && !PathfindrAuth.isLoggedIn() ?
-              '<p class="premium-login-hint">Already purchased? <a href="#" id="premium-login-link">Sign in</a> to restore.</p>' :
+              '<p class="premium-login-hint">Already Pro? <a href="#" id="premium-login-link">Sign in</a> to restore.</p>' :
               '<p class="premium-restore-hint"><a href="#" id="premium-restore-link">Restore purchases</a></p>'}
         </div>
     `;
@@ -7675,7 +7675,7 @@ async function showPremiumRequired(modeName) {
             const result = await PathfindrPayments.showPurchasePrompt();
             if (result.success) {
                 // Refresh premium status and retry action
-                alert('Thank you! Premium features are now unlocked.');
+                alert('Thank you! You are now Pro. Enjoy!');
             }
         }
     });
@@ -7702,7 +7702,7 @@ async function showPremiumRequired(modeName) {
                 const result = await PathfindrPayments.restorePurchases();
                 if (result.isPremium) {
                     modal.remove();
-                    alert('Purchases restored! Premium features are now unlocked.');
+                    alert('Purchases restored! You are now Pro.');
                 } else {
                     alert('No previous purchases found.');
                 }

@@ -387,9 +387,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Show success message
     setTimeout(() => {
       if (typeof showToast === 'function') {
-        showToast('Thank you! Premium features unlocked.');
+        showToast('Thank you! You are now Pro.');
       } else {
-        alert('Thank you for your purchase! Premium features are now unlocked.');
+        alert('Thank you for your purchase! You are now Pro.');
       }
     }, 500);
   }

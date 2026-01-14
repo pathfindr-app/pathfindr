@@ -1000,7 +1000,7 @@ const PathfindrAuth = {
       statusBadge.classList.toggle('premium', isPremium);
     }
     if (statusText) {
-      statusText.textContent = isPremium ? 'Premium' : 'Free';
+      statusText.textContent = isPremium ? 'Pro' : 'Free';
     }
     if (removeAdsBtn) {
       removeAdsBtn.style.display = isPremium ? 'none' : 'flex';
