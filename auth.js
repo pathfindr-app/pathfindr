@@ -540,6 +540,48 @@ const PathfindrAuth = {
   },
 
   /**
+   * Refresh user profile from database
+   * Useful after purchase to get webhook-updated status
+   */
+  async refreshProfile() {
+    if (!this.client || !this.currentUser) {
+      console.log('[Auth] Cannot refresh profile - not logged in');
+      return;
+    }
+
+    try {
+      console.log('[Auth] Refreshing profile from database...');
+      const { data, error } = await this.client
+        .from('users')
+        .select('*')
+        .eq('id', this.currentUser.id)
+        .single();
+
+      if (error) {
+        console.error('[Auth] Failed to refresh profile:', error);
+        return;
+      }
+
+      if (data) {
+        this.currentProfile = data;
+        window.pathfindrUser = data;
+        console.log('[Auth] Profile refreshed, has_purchased:', data.has_purchased);
+
+        // Update UI if purchase status changed
+        if (data.has_purchased) {
+          this.updateProfileModal();
+          // Remove ads if now premium
+          if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
+            PathfindrAds.removeAllAds();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Auth] Error refreshing profile:', error);
+    }
+  },
+
+  /**
    * Enable premium features locally (for development/testing)
    * Run in console: PathfindrAuth.enablePremiumOverride()
    */

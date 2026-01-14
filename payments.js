@@ -331,9 +331,9 @@ const PathfindrPayments = {
 
   /**
    * Check URL params for Stripe redirect result
-   * Call this on page load
+   * Call this on page load, AFTER auth is initialized
    */
-  checkStripeRedirect() {
+  async checkStripeRedirect() {
     const params = new URLSearchParams(window.location.search);
     const purchaseResult = params.get('purchase');
 
@@ -341,8 +341,18 @@ const PathfindrPayments = {
       // Clear the URL param
       window.history.replaceState({}, '', window.location.pathname);
 
+      console.log('[Payments] Processing successful purchase redirect...');
+
+      // Wait a moment for auth to initialize, then update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Handle successful purchase
-      this.handlePurchaseSuccess();
+      await this.handlePurchaseSuccess();
+
+      // Force refresh user profile from database to get webhook-updated status
+      if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.refreshProfile) {
+        await PathfindrAuth.refreshProfile();
+      }
 
       return 'success';
     } else if (purchaseResult === 'cancelled') {
@@ -371,10 +381,10 @@ const PathfindrPayments = {
 };
 
 // Check for Stripe redirect on load
-document.addEventListener('DOMContentLoaded', () => {
-  const result = PathfindrPayments.checkStripeRedirect();
+document.addEventListener('DOMContentLoaded', async () => {
+  const result = await PathfindrPayments.checkStripeRedirect();
   if (result === 'success') {
-    // Show success message (non-blocking)
+    // Show success message
     setTimeout(() => {
       if (typeof showToast === 'function') {
         showToast('Thank you! Premium features unlocked.');
