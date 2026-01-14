@@ -9,7 +9,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS purchase_date TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS transactions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES users(id),  -- NULL if user hasn't signed up yet
-  email TEXT NOT NULL,
+  email TEXT,
   stripe_customer_id TEXT,
   stripe_session_id TEXT,
   amount INTEGER,  -- Amount in cents
@@ -20,6 +20,17 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add any missing columns to existing table (idempotent)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS amount INTEGER;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS product_id TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- Index for looking up transactions by email (for linking to users later)
 CREATE INDEX IF NOT EXISTS idx_transactions_email ON transactions(email);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
@@ -27,6 +38,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_stripe_session ON transactions(strip
 
 -- Enable Row Level Security
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own transactions" ON transactions;
+DROP POLICY IF EXISTS "Service role can manage transactions" ON transactions;
 
 -- Users can view their own transactions
 CREATE POLICY "Users can view own transactions" ON transactions
@@ -40,6 +55,7 @@ CREATE POLICY "Service role can manage transactions" ON transactions
   FOR ALL USING (true);
 
 -- Trigger to auto-update updated_at
+DROP TRIGGER IF EXISTS update_transactions_updated_at ON transactions;
 CREATE TRIGGER update_transactions_updated_at
   BEFORE UPDATE ON transactions
   FOR EACH ROW
