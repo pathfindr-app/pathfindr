@@ -34,26 +34,40 @@
             <div class="hud-section hud-mode hidden" id="hud-mode-section">
                 <span class="mode-badge" id="hud-mode-badge">VISUALIZER</span>
             </div>
-            <div class="hud-section hud-location">
-                <svg class="location-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                    <circle cx="12" cy="9" r="2.5"/>
-                </svg>
-                <span id="current-location">Seattle, WA</span>
-            </div>
-            <!-- Competitive Mode Stats -->
-            <div class="hud-section hud-stats" id="hud-competitive-stats">
-                <div class="hud-stat">
-                    <span class="hud-label">Round</span>
-                    <span class="hud-value"><span id="current-round">1</span><span class="hud-dim">/5</span></span>
+            <div class="hud-section hud-location" id="hud-location">
+                <div class="location-display" id="location-display">
+                    <svg class="location-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                        <circle cx="12" cy="9" r="2.5"/>
+                    </svg>
+                    <span id="current-location">Seattle, WA</span>
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
                 </div>
-                <div class="hud-divider"></div>
-                <div class="hud-stat">
+                <div class="location-search-inline hidden" id="location-search-inline">
+                    <input type="text" id="inline-location-search" class="inline-search-input" placeholder="Search city..." autocomplete="off">
+                    <button id="close-search-btn" class="close-search-btn" title="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Unified Stats - content updated by JS based on mode -->
+            <div class="hud-section hud-stats" id="hud-unified-stats">
+                <div class="hud-stat" id="stat-primary">
+                    <span class="hud-label" id="stat-primary-label">Round</span>
+                    <span class="hud-value"><span id="stat-primary-value">1</span><span class="hud-dim">/<span id="stat-primary-total">5</span></span></span>
+                </div>
+                <div class="hud-divider stat-extra"></div>
+                <div class="hud-stat stat-extra" id="stat-distance">
                     <span class="hud-label">Distance</span>
                     <span class="hud-value" id="drawn-distance">0.00<span class="hud-unit">km</span></span>
                 </div>
-                <div class="hud-divider"></div>
-                <div class="hud-stat">
+                <div class="hud-divider stat-extra"></div>
+                <div class="hud-stat stat-extra" id="stat-score">
                     <span class="hud-label">Score</span>
                     <span class="hud-value hud-score" id="current-score">0</span>
                 </div>
@@ -65,26 +79,14 @@
                     <!-- Populated by JS: colored dots with scores -->
                 </div>
             </div>
-            <!-- Visualizer/Explorer Mode Stats -->
-            <div class="hud-section hud-mode-stats hidden" id="hud-mode-stats">
-                <div class="hud-stat">
-                    <span class="hud-label" id="mode-stat-label">Pathfind</span>
-                    <span class="hud-value"><span id="mode-stat-current">1</span><span class="hud-dim">/<span id="mode-stat-total">5</span></span></span>
-                </div>
-            </div>
-            <!-- Location Search (Visualizer/Explorer Mode) -->
-            <div class="hud-section hud-search hidden" id="hud-search">
-                <div class="search-container">
-                    <input type="text" id="location-search" class="search-input" placeholder="Search city..." autocomplete="off">
-                    <button id="search-btn" class="search-btn" title="Search">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="M21 21l-4.35-4.35"/>
-                        </svg>
-                    </button>
-                </div>
-                <div id="search-results" class="search-results hidden"></div>
-            </div>
+            <!-- Mobile: Overflow menu button -->
+            <button id="hud-menu-btn" class="hud-menu-btn" title="Menu">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="2"/>
+                    <circle cx="12" cy="12" r="2"/>
+                    <circle cx="12" cy="19" r="2"/>
+                </svg>
+            </button>
             <div class="hud-section hud-controls">
                 <!-- Competitive Mode Controls -->
                 <button id="undo-btn" class="hud-btn competitive-control" title="Undo (Ctrl+Z)">
@@ -121,6 +123,40 @@
                     </svg>
                 </button>
                 <span id="username-display" class="username-label"></span>
+            </div>
+        </div>
+
+        <!-- Mobile Overflow Menu -->
+        <div id="mobile-menu" class="mobile-menu hidden">
+            <div class="mobile-menu-backdrop"></div>
+            <div class="mobile-menu-panel">
+                <div class="mobile-menu-item" id="menu-undo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                    </svg>
+                    <span>Undo</span>
+                </div>
+                <div class="mobile-menu-item" id="menu-clear">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/>
+                    </svg>
+                    <span>Clear Route</span>
+                </div>
+                <div class="mobile-menu-item" id="menu-sound">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                    <span>Sound</span>
+                </div>
+                <div class="mobile-menu-divider"></div>
+                <div class="mobile-menu-item mobile-menu-exit" id="menu-exit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                    <span>Exit Mode</span>
+                </div>
             </div>
         </div>
 

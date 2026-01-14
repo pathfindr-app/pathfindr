@@ -4623,7 +4623,6 @@ const GameState = {
     // Location settings
     locationMode: 'us',  // 'local', 'us', or 'global'
     currentCity: null,   // Current city object
-    hasPlayedGlobal: false,  // Track if user has played global mode (for New Cairo default)
 };
 
 // =============================================================================
@@ -4640,6 +4639,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initLocationSelector();
     initVisualizerUI();
     initExplorerUI();
+    initInlineLocationSearch();  // Click-to-search on location display
+    initCustomCursor();  // Custom cursor for web version
     // Show mode selector first
     showModeSelector();
 });
@@ -4911,6 +4912,67 @@ function initMobileUI() {
         mainMute.addEventListener('click', () => {
             if (mobileMute) mobileMute.classList.toggle('muted', GameState.isMuted);
         });
+    }
+
+    // Mobile overflow menu
+    const menuBtn = document.getElementById('hud-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const menuBackdrop = mobileMenu?.querySelector('.mobile-menu-backdrop');
+
+    if (menuBtn && mobileMenu) {
+        // Toggle menu
+        menuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+
+        // Close on backdrop click
+        if (menuBackdrop) {
+            menuBackdrop.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
+        }
+
+        // Wire up menu items
+        const menuUndo = document.getElementById('menu-undo');
+        const menuClear = document.getElementById('menu-clear');
+        const menuSound = document.getElementById('menu-sound');
+        const menuExit = document.getElementById('menu-exit');
+
+        if (menuUndo) {
+            menuUndo.addEventListener('click', () => {
+                undoLastSegment();
+                mobileMenu.classList.add('hidden');
+            });
+        }
+
+        if (menuClear) {
+            menuClear.addEventListener('click', () => {
+                clearUserPath();
+                mobileMenu.classList.add('hidden');
+            });
+        }
+
+        if (menuSound) {
+            menuSound.addEventListener('click', () => {
+                toggleMute();
+                // Update sound icon text
+                const iconSpan = menuSound.querySelector('.mobile-menu-icon');
+                if (iconSpan) {
+                    iconSpan.textContent = GameState.isMuted ? '🔇' : '🔊';
+                }
+                const labelSpan = menuSound.querySelector('.mobile-menu-label');
+                if (labelSpan) {
+                    labelSpan.textContent = GameState.isMuted ? 'Sound Off' : 'Sound On';
+                }
+            });
+        }
+
+        if (menuExit) {
+            menuExit.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+                exitToMenu();
+            });
+        }
     }
 
     // Improved touch handling for mobile
@@ -5216,8 +5278,19 @@ function startGame() {
     }
 }
 
-function nextRound() {
+async function nextRound() {
+    // Check if interstitial ad should be shown after this round
+    const justCompletedRound = GameState.currentRound;
+    const shouldShowAd = typeof PathfindrAds !== 'undefined' &&
+                         PathfindrAds.shouldShowInterstitialAfterRound(justCompletedRound);
+
     hideResults();
+
+    // Show interstitial ad if configured for this round
+    if (shouldShowAd) {
+        await PathfindrAds.showInterstitial();
+    }
+
     clearVisualization();
     clearUserPath();
 
@@ -5930,10 +6003,7 @@ async function submitRoute() {
     // Start visualization
     await runEpicVisualization(explored, path);
 
-    // === COMPARISON MOMENT: Both paths pulse side-by-side ===
-    await playComparisonAnimation();
-
-    // Enter RESULTS phase
+    // Enter RESULTS phase immediately - no additional delay
     GameController.enterPhase(GamePhase.RESULTS);
 
     calculateAndShowScore();
@@ -6024,7 +6094,7 @@ async function playUserPathLockInAnimation() {
 async function playComparisonAnimation() {
     // This runs after the optimal path is drawn
     // Brief moment where both paths pulse together before showing results
-    const duration = 300; // Quick transition - results panel will slide in soon
+    const duration = 150; // Very quick - results panel slides in immediately after
     const startTime = performance.now();
 
     return new Promise(resolve => {
@@ -6137,13 +6207,13 @@ async function runEpicVisualization(explored, path) {
     }
 
     // Brief pause at full brightness
-    await sleep(500 / speed);
+    await sleep(250 / speed);
 
-    // === SETTLING PHASE: Smooth transition to ambient ===
-    // Heat map "drains" gradually while ambient fades in
+    // === SETTLING PHASE: Quick blend to ambient ===
+    // Heat map blends into ambient (never fully fades)
     viz.phase = 'settling';
     viz.settleStartTime = performance.now();
-    viz.settleDuration = 1200; // 1.2 seconds of smooth transition
+    viz.settleDuration = 400; // 0.4 seconds - snappy transition
 
     // Wait for settling to complete (renderVisualization handles the animation)
     await sleep(viz.settleDuration / speed);
@@ -6296,26 +6366,28 @@ function renderVisualization() {
 
     if (viz.phase === 'settling') {
         const elapsed = performance.now() - viz.settleStartTime;
-        settleProgress = Math.min(1, elapsed / (viz.settleDuration || 1200));
+        settleProgress = Math.min(1, elapsed / (viz.settleDuration || 800));
 
         // Ease-out curve for smooth deceleration
         const easeOut = 1 - Math.pow(1 - settleProgress, 2);
 
-        // Heat map fades out, ambient fades in
-        heatOpacity = 1 - easeOut;
+        // Heat map blends into ambient - never fully fades out
+        // Keep minimum 25% heat visibility so it blends smoothly
+        heatOpacity = 1 - (easeOut * 0.75);
         ambientOpacity = easeOut;
     }
 
     // Decay heat values with floor - explored edges never fully fade
-    // During settling, use ACCELERATED decay for "draining" effect
+    // During settling, decay faster but KEEP a floor for ambient blending
     // NOTE: When using WebGL, decay is GPU-side (time-based in shader)
     // This CPU loop is only needed for Canvas 2D fallback
     const baseDecay = CONFIG.viz.heatDecay;
     const settlingDecay = viz.phase === 'settling'
-        ? Math.pow(baseDecay, 1 + settleProgress * 3)  // Up to 4x faster decay
+        ? Math.pow(baseDecay, 1 + settleProgress * 2)  // Up to 3x faster decay
         : baseDecay;
+    // Keep floor at minimum 20% during settling so heat blends into ambient
     const heatFloor = viz.phase === 'settling'
-        ? CONFIG.viz.heatFloor * (1 - settleProgress)  // Floor drops to 0 during settling
+        ? Math.max(0.2, CONFIG.viz.heatFloor * (1 - settleProgress * 0.7))
         : CONFIG.viz.heatFloor;
 
     // Only run CPU decay loop for Canvas 2D fallback
@@ -7785,124 +7857,17 @@ function initVisualizerUI() {
 }
 
 // =============================================================================
-// LOCATION SEARCH - Search for cities in Visualizer/Explorer mode
+// LOCATION SEARCH - Now handled by inline search (click location display)
+// Legacy functions kept as no-ops for compatibility
 // =============================================================================
 
-let searchDebounceTimer = null;
-
 function initLocationSearch() {
-    const searchInput = document.getElementById('location-search');
-    const searchBtn = document.getElementById('search-btn');
-    const searchResults = document.getElementById('search-results');
-
-    if (!searchInput || !searchBtn) return;
-
-    // Search on input with debounce
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(searchDebounceTimer);
-        const query = e.target.value.trim();
-
-        if (query.length < 2) {
-            hideSearchResults();
-            return;
-        }
-
-        searchDebounceTimer = setTimeout(() => {
-            searchCities(query);
-        }, 300);
-    });
-
-    // Search on button click
-    searchBtn.addEventListener('click', () => {
-        const query = searchInput.value.trim();
-        if (query.length >= 2) {
-            searchCities(query);
-        }
-    });
-
-    // Search on Enter key
-    searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            const query = searchInput.value.trim();
-            if (query.length >= 2) {
-                searchCities(query);
-            }
-        } else if (e.key === 'Escape') {
-            hideSearchResults();
-            searchInput.blur();
-        }
-    });
-
-    // Hide results when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.hud-search')) {
-            hideSearchResults();
-        }
-    });
+    // Legacy - search now handled by initInlineLocationSearch()
 }
 
-async function searchCities(query) {
-    const resultsEl = document.getElementById('search-results');
-    if (!resultsEl) return;
-
-    try {
-        // Search Supabase cities table
-        const response = await fetch(
-            `${PathfindrConfig.supabase.url}/rest/v1/cities?name=ilike.*${encodeURIComponent(query)}*&limit=8&order=population.desc.nullslast`,
-            {
-                headers: {
-                    'apikey': PathfindrConfig.supabase.anonKey,
-                    'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
-                }
-            }
-        );
-
-        if (!response.ok) throw new Error('Search failed');
-
-        const cities = await response.json();
-
-        if (cities.length === 0) {
-            resultsEl.innerHTML = '<div class="search-result-item">No cities found</div>';
-            resultsEl.classList.remove('hidden');
-            return;
-        }
-
-        resultsEl.innerHTML = cities.map(city => `
-            <div class="search-result-item" data-lat="${city.lat}" data-lng="${city.lng}" data-name="${city.name}" data-country="${city.country || ''}">
-                ${city.name}<span class="search-result-country">${city.country || ''}</span>
-            </div>
-        `).join('');
-
-        // Add click handlers
-        resultsEl.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const lat = parseFloat(item.dataset.lat);
-                const lng = parseFloat(item.dataset.lng);
-                const name = item.dataset.name;
-                const country = item.dataset.country;
-
-                navigateToCity({ name, lat, lng, country });
-                hideSearchResults();
-                document.getElementById('location-search').value = '';
-            });
-        });
-
-        resultsEl.classList.remove('hidden');
-
-    } catch (error) {
-        console.error('City search error:', error);
-        resultsEl.innerHTML = '<div class="search-result-item">Search error</div>';
-        resultsEl.classList.remove('hidden');
-    }
-}
-
-function hideSearchResults() {
-    const resultsEl = document.getElementById('search-results');
-    if (resultsEl) {
-        resultsEl.classList.add('hidden');
-        resultsEl.innerHTML = '';
-    }
-}
+// Legacy no-op functions (search now integrated into location display)
+function showLocationSearch() {}
+function hideLocationSearch() {}
 
 async function navigateToCity(city) {
     console.log('Navigating to:', city.name);
@@ -7943,15 +7908,326 @@ async function navigateToCity(city) {
     }
 }
 
-function showLocationSearch() {
-    const searchEl = document.getElementById('hud-search');
-    if (searchEl) searchEl.classList.remove('hidden');
+// =============================================================================
+// INLINE LOCATION SEARCH - Click location to search in any mode
+// =============================================================================
+
+function initInlineLocationSearch() {
+    const locationDisplay = document.getElementById('location-display');
+    const searchInline = document.getElementById('location-search-inline');
+    const searchInput = document.getElementById('inline-location-search');
+    const closeBtn = document.getElementById('close-search-btn');
+    const hudLocation = document.getElementById('hud-location');
+
+    if (!locationDisplay || !searchInline || !searchInput) return;
+
+    // Check if mobile (matches CSS media query)
+    const isMobile = () => window.innerWidth <= 600;
+
+    // Create results dropdown container
+    let resultsEl = document.getElementById('inline-search-results');
+    if (!resultsEl) {
+        resultsEl = document.createElement('div');
+        resultsEl.id = 'inline-search-results';
+        resultsEl.className = 'inline-search-results hidden';
+        // On mobile, append to body for fixed positioning; on desktop, append to hudLocation
+        if (isMobile()) {
+            document.body.appendChild(resultsEl);
+        } else {
+            hudLocation.style.position = 'relative';
+            hudLocation.appendChild(resultsEl);
+        }
+    }
+
+    // Click location to show search
+    locationDisplay.addEventListener('click', () => {
+        locationDisplay.classList.add('hidden');
+        searchInline.classList.remove('hidden');
+        // Small delay to ensure display:flex is applied before focusing
+        setTimeout(() => searchInput.focus(), 50);
+    });
+
+    // Close search
+    const closeSearch = () => {
+        searchInline.classList.add('hidden');
+        locationDisplay.classList.remove('hidden');
+        searchInput.value = '';
+        resultsEl.classList.add('hidden');
+        resultsEl.innerHTML = '';
+    };
+
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSearch();
+    });
+
+    // Search on input with debounce
+    let debounceTimer = null;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            resultsEl.classList.add('hidden');
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(
+                    `${PathfindrConfig.supabase.url}/rest/v1/cities?name=ilike.*${encodeURIComponent(query)}*&limit=6&order=population.desc.nullslast`,
+                    {
+                        headers: {
+                            'apikey': PathfindrConfig.supabase.anonKey,
+                            'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
+                        }
+                    }
+                );
+
+                if (!response.ok) throw new Error('Search failed');
+                const cities = await response.json();
+
+                if (cities.length === 0) {
+                    resultsEl.innerHTML = '<div class="inline-search-result" style="color: var(--text-muted);">No cities found</div>';
+                } else {
+                    resultsEl.innerHTML = cities.map(city => `
+                        <div class="inline-search-result" data-lat="${city.lat}" data-lng="${city.lng}" data-name="${city.name}" data-country="${city.country || ''}">
+                            ${city.name}${city.country ? ', ' + city.country : ''}
+                        </div>
+                    `).join('');
+
+                    // Add click handlers
+                    resultsEl.querySelectorAll('.inline-search-result').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const lat = parseFloat(item.dataset.lat);
+                            const lng = parseFloat(item.dataset.lng);
+                            const name = item.dataset.name;
+                            const country = item.dataset.country;
+
+                            navigateToCity({ name, lat, lng, country });
+                            closeSearch();
+                        });
+                    });
+                }
+
+                resultsEl.classList.remove('hidden');
+            } catch (error) {
+                console.error('Inline search error:', error);
+                resultsEl.innerHTML = '<div class="inline-search-result" style="color: var(--text-muted);">Search error</div>';
+                resultsEl.classList.remove('hidden');
+            }
+        }, 300);
+    });
+
+    // Escape to close
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSearch();
+        } else if (e.key === 'Enter') {
+            // Select first result if available
+            const firstResult = resultsEl.querySelector('.inline-search-result[data-lat]');
+            if (firstResult) {
+                firstResult.click();
+            }
+        }
+    });
+
+    // Close when clicking outside (but not on the search itself)
+    document.addEventListener('click', (e) => {
+        const clickedOnSearch = e.target.closest('#location-search-inline') ||
+                                e.target.closest('#inline-search-results') ||
+                                e.target.closest('#location-display');
+        if (!clickedOnSearch && !searchInline.classList.contains('hidden')) {
+            closeSearch();
+        }
+    });
 }
 
-function hideLocationSearch() {
-    const searchEl = document.getElementById('hud-search');
-    if (searchEl) searchEl.classList.add('hidden');
-    hideSearchResults();
+// =============================================================================
+// CUSTOM CURSOR - Web version aesthetic cursor (animated, marker-style)
+// =============================================================================
+
+function initCustomCursor() {
+    // Only apply on web, not native apps
+    if (PathfindrConfig.platform !== 'web') return;
+
+    // Create custom cursor element - animated, like the start/end markers
+    const cursor = document.createElement('div');
+    cursor.id = 'custom-cursor';
+    cursor.innerHTML = `
+        <div class="cursor-outer"></div>
+        <div class="cursor-ring"></div>
+        <div class="cursor-rotating">
+            <div class="cursor-dot"></div>
+            <div class="cursor-dot"></div>
+            <div class="cursor-dot"></div>
+        </div>
+        <div class="cursor-center"></div>
+    `;
+    document.body.appendChild(cursor);
+
+    // Create styles for the animated cursor
+    const style = document.createElement('style');
+    style.id = 'custom-cursor-style';
+    style.textContent = `
+        /* Hide default cursor on game areas */
+        #map,
+        #pathCanvas,
+        #roadCanvas,
+        .leaflet-container {
+            cursor: none !important;
+        }
+
+        /* Custom animated cursor */
+        #custom-cursor {
+            position: fixed;
+            pointer-events: none;
+            z-index: 99999;
+            width: 28px;
+            height: 28px;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        #custom-cursor.visible {
+            opacity: 1;
+        }
+
+        /* Outer glow ring */
+        .cursor-outer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 12px rgba(255, 107, 157, 0.3);
+        }
+
+        /* Main white ring */
+        .cursor-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+        }
+
+        /* Rotating pink element */
+        .cursor-rotating {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 22px;
+            height: 22px;
+            transform: translate(-50%, -50%);
+            animation: cursor-rotate 3s linear infinite;
+        }
+
+        @keyframes cursor-rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .cursor-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #ff6b9d;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #ff6b9d, 0 0 10px rgba(255, 107, 157, 0.6);
+        }
+
+        .cursor-dot:nth-child(1) {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .cursor-dot:nth-child(2) {
+            bottom: 3px;
+            left: 3px;
+        }
+
+        .cursor-dot:nth-child(3) {
+            bottom: 3px;
+            right: 3px;
+        }
+
+        /* Center dot */
+        .cursor-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px white;
+        }
+
+        /* Pointer cursor for interactive elements */
+        .btn,
+        .speed-btn,
+        .replay-btn,
+        .location-option,
+        .mode-option,
+        .location-display,
+        .inline-search-result,
+        .search-result-item,
+        a,
+        button,
+        [role="button"] {
+            cursor: pointer !important;
+        }
+
+        /* Text cursor for inputs */
+        input,
+        textarea {
+            cursor: text !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Track mouse position
+    let cursorVisible = false;
+    const gameAreas = ['map', 'pathCanvas', 'roadCanvas'];
+
+    document.addEventListener('mousemove', (e) => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+
+        // Check if hovering over game area
+        const target = e.target;
+        const isOverGameArea = gameAreas.some(id => {
+            const el = document.getElementById(id);
+            return el && (el === target || el.contains(target));
+        }) || target.closest('.leaflet-container');
+
+        if (isOverGameArea && !cursorVisible) {
+            cursor.classList.add('visible');
+            cursorVisible = true;
+        } else if (!isOverGameArea && cursorVisible) {
+            cursor.classList.remove('visible');
+            cursorVisible = false;
+        }
+    });
+
+    // Hide cursor when leaving window
+    document.addEventListener('mouseleave', () => {
+        cursor.classList.remove('visible');
+        cursorVisible = false;
+    });
+
+    console.log('[UI] Animated custom cursor initialized for web');
 }
 
 // =============================================================================
@@ -8031,32 +8307,36 @@ function exitFullscreenMode() {
 
 /**
  * Set HUD to display a specific mode (visualizer, explorer, or competitive)
+ * Uses body class for CSS-based hiding of extra stats
  * @param {string} mode - 'visualizer', 'explorer', or 'competitive'
  */
 function setHUDMode(mode) {
     const modeSection = document.getElementById('hud-mode-section');
     const modeBadge = document.getElementById('hud-mode-badge');
-    const competitiveStats = document.getElementById('hud-competitive-stats');
-    const modeStats = document.getElementById('hud-mode-stats');
     const modeExitBtn = document.getElementById('mode-exit-btn');
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     const competitiveControls = document.querySelectorAll('.competitive-control');
+    const primaryLabel = document.getElementById('stat-primary-label');
+
+    // Remove all mode classes from body, add new one
+    document.body.classList.remove('mode-competitive', 'mode-visualizer', 'mode-explorer');
+    document.body.classList.add(`mode-${mode}`);
 
     if (mode === 'competitive') {
-        // Hide mode elements, show competitive elements
+        // Hide mode badge, show competitive controls
         if (modeSection) modeSection.classList.add('hidden');
-        if (competitiveStats) competitiveStats.classList.remove('hidden');
-        if (modeStats) modeStats.classList.add('hidden');
         if (modeExitBtn) modeExitBtn.classList.add('hidden');
         if (fullscreenBtn) fullscreenBtn.classList.add('hidden');
         competitiveControls.forEach(el => el.classList.remove('hidden'));
 
+        // Set primary stat label to "Round"
+        if (primaryLabel) primaryLabel.textContent = 'Round';
+
         // Exit fullscreen mode if active
         FullscreenMode.exit();
     } else {
-        // Show mode elements, hide competitive elements
+        // Show mode badge, hide competitive controls
         if (modeSection) modeSection.classList.remove('hidden');
-        if (competitiveStats) competitiveStats.classList.add('hidden');
         if (modeExitBtn) modeExitBtn.classList.remove('hidden');
         if (fullscreenBtn) fullscreenBtn.classList.remove('hidden');
         competitiveControls.forEach(el => el.classList.add('hidden'));
@@ -8068,30 +8348,23 @@ function setHUDMode(mode) {
             modeBadge.textContent = mode.toUpperCase();
         }
 
-        // Show/hide mode stats based on mode
-        // Visualizer has a counter, Explorer doesn't
-        if (modeStats) {
-            if (mode === 'visualizer') {
-                modeStats.classList.remove('hidden');
-            } else {
-                modeStats.classList.add('hidden');
-            }
-        }
+        // Set primary stat label to "Pathfind"
+        if (primaryLabel) primaryLabel.textContent = 'Pathfind';
     }
 }
 
 /**
- * Update the mode stats display (pathfind counter)
- * @param {number} current - Current pathfind number
- * @param {number} total - Total pathfinds per city
- * @param {string} label - Label text (e.g., "Pathfind")
+ * Update the unified stats display
+ * @param {number} current - Current round/pathfind number
+ * @param {number} total - Total rounds/pathfinds
+ * @param {string} label - Optional label override
  */
-function updateModeStats(current, total, label = 'Pathfind') {
-    const labelEl = document.getElementById('mode-stat-label');
-    const currentEl = document.getElementById('mode-stat-current');
-    const totalEl = document.getElementById('mode-stat-total');
+function updateModeStats(current, total, label = null) {
+    const labelEl = document.getElementById('stat-primary-label');
+    const currentEl = document.getElementById('stat-primary-value');
+    const totalEl = document.getElementById('stat-primary-total');
 
-    if (labelEl) labelEl.textContent = label;
+    if (label && labelEl) labelEl.textContent = label;
     if (currentEl) currentEl.textContent = current;
     if (totalEl) totalEl.textContent = total;
 }
@@ -9152,15 +9425,6 @@ function selectLocationMode(mode) {
 
 function getRandomCity(mode) {
     const cities = mode === 'us' ? CONFIG.usCities : CONFIG.globalCities;
-
-    // For global mode: use New Cairo Lotus District on first play, then random
-    if (mode === 'global' && !GameState.hasPlayedGlobal) {
-        GameState.hasPlayedGlobal = true;
-        const city = cities[0];  // New Cairo is first
-        // Use the default district (Lotus District) for first play
-        return pickDefaultDistrict(city);
-    }
-
     const city = cities[Math.floor(Math.random() * cities.length)];
     return maybePickDistrict(city);
 }
@@ -9319,20 +9583,25 @@ function showResults() {
     if (GameState.currentCity?.name) {
         CityFacts.showFactInResults(GameState.currentCity.name);
     }
+
+    // Show banner ad during round recaps (if configured)
+    if (PathfindrConfig.ads.showBannerBetweenRounds && typeof PathfindrAds !== 'undefined') {
+        PathfindrAds.showBanner(PathfindrConfig.ads.bannerPosition || 'top');
+    }
 }
 
 function hideResults() {
     document.getElementById('results-panel').classList.remove('visible');
+
+    // Hide banner ad when leaving round recap
+    if (typeof PathfindrAds !== 'undefined') {
+        PathfindrAds.hideBanner();
+    }
 }
 
 async function showGameOver() {
     // Heavy haptic for game over
     GameHaptics.gameOver();
-
-    // Show placeholder ad first (if ads module is available)
-    if (typeof PathfindrAds !== 'undefined' && PathfindrAds.showPlaceholderAd) {
-        await PathfindrAds.showPlaceholderAd();
-    }
 
     // Animate the final score count-up
     const finalScoreEl = document.getElementById('final-score');
@@ -9410,7 +9679,8 @@ function updateScoreDisplay() {
 }
 
 function updateRoundDisplay() {
-    const roundEl = document.getElementById('current-round');
+    const roundEl = document.getElementById('stat-primary-value');
+    if (!roundEl) return;
     roundEl.textContent = GameState.currentRound;
 
     // Color the round number to match the round's theme color

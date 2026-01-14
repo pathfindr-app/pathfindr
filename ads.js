@@ -322,33 +322,68 @@ const PathfindrAds = {
       if (!banner.querySelector('.adsbygoogle')) {
         banner.innerHTML = `
           <ins class="adsbygoogle"
-               style="display:block"
+               style="display:block; height:90px; max-height:90px;"
                data-ad-client="${PathfindrConfig.adsense.publisherId}"
                data-ad-slot="${slotId}"
-               data-ad-format="auto"
-               data-full-width-responsive="true"></ins>
+               data-ad-format="horizontal"></ins>
         `;
         try {
           (window.adsbygoogle = window.adsbygoogle || []).push({});
+
+          // Check if ad loaded after a delay, show fallback if not
+          setTimeout(() => {
+            this.checkAdLoadedOrFallback(banner);
+          }, 2000);
         } catch (e) {
           console.warn('[Ads] AdSense push failed:', e);
+          this.showBannerFallback(banner);
         }
       }
     } else {
       // Show placeholder when AdSense not configured
-      banner.innerHTML = `
-        <div class="ad-placeholder" style="
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          border: 1px solid #00f0ff33;
-          padding: 10px 20px;
-          text-align: center;
-          font-size: 12px;
-          color: #666;
-        ">
-          <span style="color: #00f0ff;">Go Pro</span> - Remove ads & unlock all features
-        </div>
-      `;
+      this.showBannerFallback(banner);
     }
+  },
+
+  /**
+   * Check if AdSense ad loaded, show fallback if not
+   */
+  checkAdLoadedOrFallback(banner) {
+    const adElement = banner.querySelector('.adsbygoogle');
+    if (!adElement) {
+      this.showBannerFallback(banner);
+      return;
+    }
+
+    // Check if ad has actual content
+    const hasIframe = adElement.querySelector('iframe');
+    const isFilled = adElement.dataset.adStatus === 'filled';
+    const isUnfilled = adElement.dataset.adStatus === 'unfilled';
+
+    // If explicitly unfilled or no iframe after timeout, show fallback
+    if (isUnfilled || (!hasIframe && !isFilled)) {
+      console.log('[Ads] Ad did not fill, showing fallback');
+      this.showBannerFallback(banner);
+    }
+  },
+
+  /**
+   * Show Go Pro fallback banner
+   */
+  showBannerFallback(banner) {
+    banner.innerHTML = `
+      <div class="ad-placeholder" onclick="if(typeof PathfindrPayments !== 'undefined') PathfindrPayments.showPurchasePrompt();" style="
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1px solid #00f0ff33;
+        padding: 10px 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+        cursor: pointer;
+      ">
+        <span style="color: #00f0ff;">Go Pro</span> - Remove ads & unlock all features
+      </div>
+    `;
   },
 
   /**

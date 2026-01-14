@@ -89,10 +89,10 @@ const PathfindrConfig = {
   adsense: {
     // Your AdSense publisher ID (ca-pub-XXXXXXXXXXXXXXXX)
     publisherId: 'ca-pub-9697527729469740',
-    // Ad slot IDs - will be created after site verification
+    // Ad slot IDs
     slots: {
-      banner: 'YOUR_BANNER_SLOT_ID',        // 320x50 or responsive
-      interstitial: 'YOUR_INTERSTITIAL_SLOT_ID', // Full page ad
+      banner: '7519750912',  // Pathfindr Banner - horizontal responsive
+      interstitial: null,    // Web interstitials handled by Auto ads
     },
   },
 

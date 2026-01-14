@@ -646,16 +646,14 @@ const PathfindrAuth = {
                              window.Capacitor &&
                              window.Capacitor.isNativePlatform();
 
-      // Also detect if running in Capacitor WebView (localhost indicates Capacitor)
-      const isCapacitorWebView = window.location.origin.includes('localhost') ||
-                                  window.location.origin.includes('capacitor://') ||
+      // Detect Capacitor WebView (NOT localhost for web dev - check protocol)
+      const isCapacitorWebView = window.location.origin.includes('capacitor://') ||
                                   window.location.protocol === 'capacitor:';
 
       // On mobile or Capacitor WebView, redirect to deployed website
-      // On actual web deployment, use current origin
-      // Using Vercel URL for testing until pathfindr.world is set up
+      // On web (including localhost dev), use current origin
       const redirectUrl = (isNativeMobile || isCapacitorWebView)
-        ? 'https://pathfindralpha.vercel.app/auth-callback'
+        ? 'https://www.pathfindr.world/auth-callback'
         : window.location.origin;
 
       console.log('[Auth] OAuth redirect URL:', redirectUrl, '(isNative:', isNativeMobile, ', isCapacitor:', isCapacitorWebView, ')');
