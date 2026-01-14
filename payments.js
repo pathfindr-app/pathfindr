@@ -132,48 +132,51 @@ const PathfindrPayments = {
   },
 
   /**
-   * Web: Redirect to Stripe Checkout
+   * Web: Redirect to Stripe Checkout via Edge Function
    */
   async purchaseStripe() {
     try {
-      // Load Stripe.js if not already loaded
-      if (!window.Stripe) {
-        await this.loadStripeJs();
-      }
-
-      const stripe = window.Stripe(PathfindrConfig.stripe.publishableKey);
+      console.log('[Payments] Starting Stripe checkout...');
 
       // Get user email for webhook to identify purchase
       const customerEmail = PathfindrAuth?.currentProfile?.email ||
                            PathfindrAuth?.currentUser?.email;
 
-      // Build checkout options
-      const checkoutOptions = {
-        lineItems: [{
-          price: PathfindrConfig.stripe.priceId,
-          quantity: 1,
-        }],
-        mode: 'payment',
-        successUrl: window.location.origin + '?purchase=success',
-        cancelUrl: window.location.origin + '?purchase=cancelled',
-      };
+      // Create checkout session via Edge Function
+      const response = await fetch(`${PathfindrConfig.supabase.url}/functions/v1/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
+        },
+        body: JSON.stringify({
+          priceId: PathfindrConfig.stripe.priceId,
+          customerEmail: customerEmail,
+          successUrl: window.location.origin + '?purchase=success',
+          cancelUrl: window.location.origin + '?purchase=cancelled',
+        }),
+      });
 
-      // Include customer email so webhook can link purchase to user
-      if (customerEmail) {
-        checkoutOptions.customerEmail = customerEmail;
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('[Payments] Checkout session error:', data.error);
+        alert('Unable to start checkout. Please try again.');
+        return { success: false, error: data.error };
       }
 
-      // Redirect to Stripe Checkout
-      const { error } = await stripe.redirectToCheckout(checkoutOptions);
-
-      if (error) {
-        console.error('[Payments] Stripe error:', error);
-        return { success: false, error: error.message };
+      if (data.url) {
+        console.log('[Payments] Redirecting to Stripe checkout...');
+        window.location.href = data.url;
+        return { success: true };
+      } else {
+        console.error('[Payments] No checkout URL returned');
+        alert('Unable to start checkout. Please try again.');
+        return { success: false, error: 'No checkout URL' };
       }
-
-      return { success: true };
     } catch (error) {
       console.error('[Payments] Stripe purchase failed:', error);
+      alert('Payment error: ' + error.message);
       return { success: false, error: error.message };
     }
   },

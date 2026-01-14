@@ -41,7 +41,9 @@
       "Bash(npx cap:*)",
       "Bash(copy /Y \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\game.js\" \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\dist\\\\game.js\")",
       "Bash(copy /Y \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\styles.css\" \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\dist\\\\styles.css\")",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebFetch(domain:pathfindralpha.vercel.app)",
+      "Bash(echo:*)"
     ]
   }
 }
