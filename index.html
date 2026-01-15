@@ -22,6 +22,12 @@
 
     <!-- Google AdSense (for web ads) -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9697527729469740" crossorigin="anonymous"></script>
+
+    <!-- Vercel Analytics -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
     <div id="app">
@@ -243,40 +249,49 @@
                         <h2>Select Mode</h2>
                         <p class="mode-subtitle">How do you want to play?</p>
                         <div class="mode-options">
-                            <button class="mode-btn" data-mode="competitive">
-                                <div class="mode-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
-                                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
-                                        <path d="M4 22h16"/>
-                                        <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
-                                        <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
-                                    </svg>
+                            <button class="mode-btn mode-classic" data-mode="competitive">
+                                <div class="mode-bg"></div>
+                                <div class="mode-content">
+                                    <div class="mode-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
+                                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
+                                            <path d="M4 22h16"/>
+                                            <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
+                                            <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
+                                        </svg>
+                                    </div>
+                                    <span class="mode-title">Pathfindr Classic</span>
+                                    <span class="mode-desc">5 cities · 5 chances · Find the shortest path</span>
                                 </div>
-                                <span class="mode-title">Competitive</span>
-                                <span class="mode-desc">5 rounds, beat the algorithm</span>
                             </button>
-                            <button class="mode-btn premium-mode" data-mode="explorer">
-                                <span class="premium-tag">PREMIUM</span>
-                                <div class="mode-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
-                                    </svg>
+                            <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
+                                <span class="premium-tag">PRO</span>
+                                <div class="mode-bg"></div>
+                                <div class="mode-content">
+                                    <div class="mode-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                                        </svg>
+                                    </div>
+                                    <span class="mode-title">Explorer</span>
+                                    <span class="mode-desc">Drop your markers, free roam, perfect</span>
                                 </div>
-                                <span class="mode-title">Explorer</span>
-                                <span class="mode-desc">Drop your own markers, free-roam</span>
                             </button>
-                            <button class="mode-btn premium-mode" data-mode="visualizer">
-                                <span class="premium-tag">PREMIUM</span>
-                                <div class="mode-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-                                        <circle cx="12" cy="12" r="3"/>
-                                    </svg>
+                            <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
+                                <span class="premium-tag">PRO</span>
+                                <div class="mode-bg"></div>
+                                <div class="mode-content">
+                                    <div class="mode-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    </div>
+                                    <span class="mode-title">Visualizer</span>
+                                    <span class="mode-desc">Randomized, endless stream of locations</span>
                                 </div>
-                                <span class="mode-title">Visualizer</span>
-                                <span class="mode-desc">Watch A* pathfinding automatically</span>
                             </button>
                         </div>
 
@@ -423,10 +438,11 @@
                 <div id="instructions-overlay" class="overlay hidden">
                     <div class="overlay-content instructions">
                         <h2>How to Play</h2>
+                        <p class="mode-subtitle" style="margin-bottom: 1rem; color: var(--neon-cyan);">Pathfindr Classic</p>
                         <ol>
                             <li>You'll see a <span class="start-marker">START</span> and <span class="end-marker">END</span> point on the map</li>
                             <li>Draw what you think is the shortest path between them</li>
-                            <li>Click and drag along the roads to draw your route</li>
+                            <li>Tap to draw line segments along the roads</li>
                             <li>Reach the <span class="end-marker">END</span> point to submit your route</li>
                             <li>Watch the A* algorithm find the optimal path</li>
                             <li>Your score is based on how close your route is to optimal!</li>
@@ -650,7 +666,7 @@
                                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                                         </svg>
-                                        Go Premium · $2.99
+                                        Go Premium · $2
                                     </span>
                                 </button>
                                 <button id="logout-btn" class="btn-holo-secondary">Sign Out</button>
@@ -784,13 +800,16 @@
                             </div>
                         </div>
 
-                        <!-- Next Round Button -->
-                        <button id="next-round-btn" class="btn btn-next">
-                            <span>Next Round</span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                            </svg>
-                        </button>
+                        <!-- Next Round Button with attention glow -->
+                        <div class="next-round-wrapper">
+                            <div class="glow-border"></div>
+                            <button id="next-round-btn" class="btn btn-next">
+                                <span>Next Round</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -824,9 +843,21 @@
 
     <!-- Initialize monetization modules after DOM ready -->
     <script>
+        // Update Pro user status on body class
+        function updateProUserStatus() {
+            if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased()) {
+                document.body.classList.add('pro-user');
+            } else {
+                document.body.classList.remove('pro-user');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             // Initialize auth (will restore session if exists)
             await PathfindrAuth.init();
+
+            // Update Pro status after auth init
+            updateProUserStatus();
 
             // Initialize analytics (after auth so we have user info)
             if (typeof PathfindrAnalytics !== 'undefined') {
@@ -937,7 +968,7 @@
 
                 if (!result.success) {
                     removeAdsBtn.disabled = false;
-                    removeAdsBtn.textContent = 'Remove Ads - $2.99';
+                    removeAdsBtn.textContent = 'Remove Ads - $2';
                     if (result.error) {
                         alert('Purchase failed: ' + result.error);
                     }
@@ -1002,10 +1033,12 @@
             // Listen for auth changes
             PathfindrAuth.onAuthStateChange(() => {
                 updateAuthUI();
+                updateProUserStatus();
             });
 
             // Initial UI update
             updateAuthUI();
+            updateProUserStatus();
         });
     </script>
 </body>

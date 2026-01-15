@@ -92,7 +92,7 @@ const PathfindrPayments = {
         id: 'pathfindr_premium',
         title: 'Pathfindr Premium',
         description: 'Remove ads + unlock Explorer & Visualizer modes',
-        price: '$2.99',
+        price: '$2',
         priceId: PathfindrConfig.stripe.priceId,
       }];
     } else if (this.Purchases) {
@@ -324,6 +324,11 @@ const PathfindrPayments = {
     // Remove ads immediately
     if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
       await PathfindrAds.removeAllAds();
+    }
+
+    // Update Pro user status in UI
+    if (typeof updateProUserStatus === 'function') {
+      updateProUserStatus();
     }
 
     console.log('[Payments] Purchase successful - premium unlocked');

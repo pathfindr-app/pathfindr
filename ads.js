@@ -368,20 +368,177 @@ const PathfindrAds = {
   },
 
   /**
-   * Show Go Pro fallback banner
+   * Show Go Pro fallback banner - Premium glassmorphism design
    */
   showBannerFallback(banner) {
+    // Inject styles if not present
+    if (!document.getElementById('pro-banner-styles')) {
+      const style = document.createElement('style');
+      style.id = 'pro-banner-styles';
+      style.textContent = `
+        .pro-banner {
+          position: relative;
+          overflow: hidden;
+          cursor: pointer;
+          border-radius: 0;
+        }
+
+        .pro-banner-bg {
+          position: absolute;
+          inset: 0;
+          background-image: url('https://tile.openstreetmap.org/12/2048/1360.png');
+          background-size: cover;
+          background-position: center;
+          filter: blur(8px) saturate(0.3) brightness(0.4);
+          transform: scale(1.1);
+        }
+
+        .pro-banner-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            135deg,
+            rgba(13, 10, 20, 0.85) 0%,
+            rgba(20, 15, 35, 0.75) 50%,
+            rgba(13, 10, 20, 0.85) 100%
+          );
+        }
+
+        .pro-banner-glow {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(65, 217, 217, 0.08) 25%,
+            rgba(255, 107, 157, 0.08) 75%,
+            transparent 100%
+          );
+          animation: bannerShimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes bannerShimmer {
+          0%, 100% { opacity: 0.5; transform: translateX(-10%); }
+          50% { opacity: 1; transform: translateX(10%); }
+        }
+
+        .pro-banner-content {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 1.5rem;
+          padding: 12px 24px;
+        }
+
+        .pro-banner-text {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        .pro-banner-label {
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          color: rgba(254, 248, 244, 0.5);
+        }
+
+        .pro-banner-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: #fef8f4;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .pro-banner-title svg {
+          width: 14px;
+          height: 14px;
+          color: #ff6b9d;
+          filter: drop-shadow(0 0 4px rgba(255, 107, 157, 0.5));
+        }
+
+        .pro-banner-price {
+          display: flex;
+          align-items: baseline;
+          gap: 2px;
+          padding: 6px 14px;
+          background: linear-gradient(135deg, rgba(65, 217, 217, 0.2), rgba(255, 107, 157, 0.2));
+          border: 1px solid rgba(65, 217, 217, 0.3);
+          border-radius: 20px;
+          font-family: 'Segoe UI', system-ui, sans-serif;
+          transition: all 0.3s ease;
+        }
+
+        .pro-banner:hover .pro-banner-price {
+          background: linear-gradient(135deg, rgba(65, 217, 217, 0.3), rgba(255, 107, 157, 0.3));
+          border-color: rgba(65, 217, 217, 0.5);
+          box-shadow: 0 0 20px rgba(65, 217, 217, 0.2);
+        }
+
+        .pro-banner-currency {
+          font-size: 12px;
+          font-weight: 500;
+          color: #41d9d9;
+        }
+
+        .pro-banner-amount {
+          font-size: 18px;
+          font-weight: 700;
+          color: #fef8f4;
+          text-shadow: 0 0 10px rgba(65, 217, 217, 0.3);
+        }
+
+        .pro-banner-border {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(65, 217, 217, 0.5) 20%,
+            rgba(255, 107, 157, 0.5) 80%,
+            transparent
+          );
+        }
+
+        .pro-banner-border-bottom {
+          top: auto;
+          bottom: 0;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     banner.innerHTML = `
-      <div class="ad-placeholder" onclick="if(typeof PathfindrPayments !== 'undefined') PathfindrPayments.showPurchasePrompt();" style="
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1px solid #00f0ff33;
-        padding: 10px 20px;
-        text-align: center;
-        font-size: 12px;
-        color: #666;
-        cursor: pointer;
-      ">
-        <span style="color: #00f0ff;">Go Pro</span> - Remove ads & unlock all features
+      <div class="pro-banner" onclick="if(typeof PathfindrPayments !== 'undefined') PathfindrPayments.showPurchasePrompt();">
+        <div class="pro-banner-bg"></div>
+        <div class="pro-banner-overlay"></div>
+        <div class="pro-banner-glow"></div>
+        <div class="pro-banner-border"></div>
+        <div class="pro-banner-border pro-banner-border-bottom"></div>
+        <div class="pro-banner-content">
+          <div class="pro-banner-text">
+            <span class="pro-banner-title">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              Go Pro
+            </span>
+            <span class="pro-banner-label">Remove ads forever</span>
+          </div>
+          <div class="pro-banner-price">
+            <span class="pro-banner-currency">$</span>
+            <span class="pro-banner-amount">2</span>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -436,28 +593,54 @@ const PathfindrAds = {
       const overlay = document.createElement('div');
       overlay.id = 'placeholder-ad-overlay';
       overlay.innerHTML = `
-        <div class="placeholder-ad-container">
-          <div class="placeholder-ad-label">ADVERTISEMENT</div>
-          <div class="placeholder-ad-content">
-            <div class="placeholder-ad-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <div class="pro-ad-map-bg"></div>
+        <div class="pro-ad-card">
+          <div class="pro-ad-glow"></div>
+          <div class="pro-ad-border-top"></div>
+          <div class="pro-ad-border-bottom"></div>
+
+          <div class="pro-ad-header">
+            <div class="pro-ad-icon-ring">
+              <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>
             </div>
-            <div class="placeholder-ad-text">
-              <span class="ad-title">Go Pro - $2.99</span>
-              <span class="ad-subtitle">Remove ads forever & unlock all modes</span>
+            <div class="pro-ad-badge">PRO</div>
+          </div>
+
+          <h2 class="pro-ad-title">Go Pro</h2>
+          <p class="pro-ad-subtitle">Remove ads forever & unlock all modes</p>
+
+          <div class="pro-ad-price-container">
+            <span class="pro-ad-price-currency">$</span>
+            <span class="pro-ad-price-amount">2</span>
+            <span class="pro-ad-price-period">one time</span>
+          </div>
+
+          <div class="pro-ad-features">
+            <div class="pro-ad-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>No more ads</span>
+            </div>
+            <div class="pro-ad-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>Explorer mode</span>
+            </div>
+            <div class="pro-ad-feature">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>Visualizer mode</span>
             </div>
           </div>
-          <button id="go-pro-ad-btn" class="go-pro-ad-btn">
-            Remove Ads
+
+          <button id="go-pro-ad-btn" class="pro-ad-cta">
+            <span>Unlock Pro</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </button>
-          <div class="placeholder-ad-timer">
-            <span id="ad-countdown">5</span>s
+
+          <div class="pro-ad-skip-section">
+            <span class="pro-ad-timer"><span id="ad-countdown">5</span>s</span>
+            <button id="close-placeholder-ad" class="pro-ad-skip" disabled>Skip</button>
           </div>
-          <button id="close-placeholder-ad" class="placeholder-ad-close" disabled>
-            Skip
-          </button>
         </div>
       `;
 
@@ -468,103 +651,245 @@ const PathfindrAds = {
         styles.textContent = `
           #placeholder-ad-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
+            inset: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 10000;
-            animation: fadeIn 0.3s ease;
+            animation: proAdFadeIn 0.4s ease;
           }
-          @keyframes fadeIn {
+
+          @keyframes proAdFadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
           }
-          .placeholder-ad-container {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid #00f0ff33;
-            border-radius: 12px;
-            padding: 32px;
-            max-width: 400px;
+
+          .pro-ad-map-bg {
+            position: absolute;
+            inset: 0;
+            background:
+              linear-gradient(180deg, rgba(13,10,20,0.7) 0%, rgba(13,10,20,0.95) 100%),
+              url('https://tile.openstreetmap.org/10/512/340.png');
+            background-size: cover, 400px;
+            background-position: center;
+            filter: blur(4px) saturate(0.4);
+            transform: scale(1.05);
+          }
+
+          .pro-ad-card {
+            position: relative;
+            background: linear-gradient(
+              165deg,
+              rgba(25, 20, 40, 0.95) 0%,
+              rgba(15, 12, 28, 0.98) 100%
+            );
+            border-radius: 20px;
+            padding: 36px 32px 28px;
+            max-width: 360px;
             width: 90%;
             text-align: center;
+            overflow: hidden;
+            box-shadow:
+              0 25px 80px rgba(0, 0, 0, 0.6),
+              0 0 0 1px rgba(255,255,255,0.05) inset;
+          }
+
+          .pro-ad-glow {
+            position: absolute;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(65,217,217,0.15) 0%, transparent 70%);
+            pointer-events: none;
+          }
+
+          .pro-ad-border-top, .pro-ad-border-bottom {
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(65,217,217,0.5), rgba(255,107,157,0.5), transparent);
+          }
+          .pro-ad-border-top { top: 0; }
+          .pro-ad-border-bottom { bottom: 0; }
+
+          .pro-ad-header {
             position: relative;
-            box-shadow: 0 0 40px rgba(0, 240, 255, 0.15);
-          }
-          .placeholder-ad-label {
-            font-size: 10px;
-            letter-spacing: 2px;
-            color: #666;
-            margin-bottom: 24px;
-          }
-          .placeholder-ad-content {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
+            margin-bottom: 16px;
+          }
+
+          .pro-ad-icon-ring {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(65,217,217,0.2), rgba(255,107,157,0.2));
+            border: 2px solid rgba(65,217,217,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: proAdPulse 2s ease-in-out infinite;
+          }
+
+          @keyframes proAdPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(65,217,217,0.2); }
+            50% { box-shadow: 0 0 35px rgba(65,217,217,0.4); }
+          }
+
+          .pro-ad-icon-ring svg {
+            width: 32px;
+            height: 32px;
+            color: #41d9d9;
+            filter: drop-shadow(0 0 8px rgba(65,217,217,0.6));
+          }
+
+          .pro-ad-badge {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: #0d0a14;
+            background: linear-gradient(135deg, #41d9d9, #ff6b9d);
+            padding: 4px 14px;
+            border-radius: 12px;
+          }
+
+          .pro-ad-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fef8f4;
+            margin: 0 0 6px 0;
+            letter-spacing: -0.02em;
+          }
+
+          .pro-ad-subtitle {
+            font-size: 14px;
+            color: rgba(254,248,244,0.5);
+            margin: 0 0 24px 0;
+          }
+
+          .pro-ad-price-container {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 4px;
             margin-bottom: 24px;
           }
-          .placeholder-ad-icon svg {
-            width: 64px;
-            height: 64px;
-            stroke: #00f0ff;
+
+          .pro-ad-price-currency {
+            font-size: 24px;
+            font-weight: 600;
+            color: #41d9d9;
           }
-          .placeholder-ad-text {
+
+          .pro-ad-price-amount {
+            font-size: 56px;
+            font-weight: 800;
+            color: #fef8f4;
+            line-height: 1;
+            text-shadow: 0 0 30px rgba(65,217,217,0.3);
+          }
+
+          .pro-ad-price-period {
+            font-size: 13px;
+            color: rgba(254,248,244,0.4);
+            margin-left: 6px;
+          }
+
+          .pro-ad-features {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 10px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
           }
-          .ad-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #fff;
-          }
-          .ad-subtitle {
+
+          .pro-ad-feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             font-size: 14px;
-            color: #888;
+            color: rgba(254,248,244,0.8);
           }
-          .placeholder-ad-timer {
-            font-size: 14px;
-            color: #00f0ff;
-            margin-bottom: 16px;
+
+          .pro-ad-feature svg {
+            width: 18px;
+            height: 18px;
+            color: #41d9d9;
+            flex-shrink: 0;
           }
-          .placeholder-ad-close {
-            background: transparent;
-            border: 1px solid #444;
-            color: #666;
-            padding: 10px 32px;
-            border-radius: 6px;
-            cursor: not-allowed;
-            font-size: 14px;
-            transition: all 0.3s ease;
-          }
-          .placeholder-ad-close:not(:disabled) {
-            border-color: #00f0ff;
-            color: #00f0ff;
-            cursor: pointer;
-          }
-          .placeholder-ad-close:not(:disabled):hover {
-            background: #00f0ff22;
-          }
-          .go-pro-ad-btn {
-            background: linear-gradient(135deg, #00f0ff 0%, #00b8d4 100%);
-            border: none;
-            color: #000;
-            padding: 14px 32px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            transition: all 0.3s ease;
+
+          .pro-ad-cta {
             width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #41d9d9, #00b8d4);
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #0d0a14;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
           }
-          .go-pro-ad-btn:hover {
-            transform: scale(1.02);
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+
+          .pro-ad-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(65,217,217,0.4);
+          }
+
+          .pro-ad-cta svg {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.3s ease;
+          }
+
+          .pro-ad-cta:hover svg {
+            transform: translateX(4px);
+          }
+
+          .pro-ad-skip-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+          }
+
+          .pro-ad-timer {
+            font-size: 13px;
+            color: rgba(254,248,244,0.3);
+            font-variant-numeric: tabular-nums;
+          }
+
+          .pro-ad-skip {
+            background: transparent;
+            border: 1px solid rgba(254,248,244,0.15);
+            color: rgba(254,248,244,0.3);
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: not-allowed;
+            transition: all 0.3s ease;
+          }
+
+          .pro-ad-skip:not(:disabled) {
+            border-color: rgba(65,217,217,0.4);
+            color: #41d9d9;
+            cursor: pointer;
+          }
+
+          .pro-ad-skip:not(:disabled):hover {
+            background: rgba(65,217,217,0.1);
           }
         `;
         document.head.appendChild(styles);

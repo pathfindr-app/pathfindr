@@ -1909,6 +1909,10 @@ const SoundEngine = {
         scanning: null,
         found: null,
         soundtrack: null,
+        // UI sounds
+        click: null,
+        tick: null,
+        success: null,
     },
 
     // Active audio sources (so we can stop them)
@@ -1939,7 +1943,7 @@ const SoundEngine = {
     // Load external audio files
     async loadAudioFiles() {
         try {
-            // Load sound effects
+            // Load gameplay sound effects
             const [scanningResponse, foundResponse] = await Promise.all([
                 fetch('Scanning.wav'),
                 fetch('Found1.wav')
@@ -1953,12 +1957,40 @@ const SoundEngine = {
             this.buffers.scanning = await this.ctx.decodeAudioData(scanningData);
             this.buffers.found = await this.ctx.decodeAudioData(foundData);
 
-            console.log('Sound effects loaded successfully');
+            console.log('[Sound] Gameplay effects loaded');
+
+            // Load UI sound effects (non-blocking)
+            this.loadUISounds();
 
             // Load soundtrack separately (larger file)
             this.loadSoundtrack();
         } catch (e) {
             console.warn('Could not load audio files:', e);
+        }
+    },
+
+    // Load UI sound effects
+    async loadUISounds() {
+        try {
+            const [clickRes, tickRes, successRes] = await Promise.all([
+                fetch('sounds/click.wav'),
+                fetch('sounds/tick.wav'),
+                fetch('sounds/success.wav')
+            ]);
+
+            const [clickData, tickData, successData] = await Promise.all([
+                clickRes.arrayBuffer(),
+                tickRes.arrayBuffer(),
+                successRes.arrayBuffer()
+            ]);
+
+            this.buffers.click = await this.ctx.decodeAudioData(clickData);
+            this.buffers.tick = await this.ctx.decodeAudioData(tickData);
+            this.buffers.success = await this.ctx.decodeAudioData(successData);
+
+            console.log('[Sound] UI sounds loaded');
+        } catch (e) {
+            console.warn('[Sound] Could not load UI sounds:', e);
         }
     },
 
@@ -2180,23 +2212,26 @@ const SoundEngine = {
         return buffer;
     },
 
-    // 1. TICK - Typewriter/CRT click for score counting
+    // 1. TICK - Typewriter/CRT click for score counting (uses custom audio if available)
     tick() {
         if (!this.initialized || this.muted) return;
 
-        const now = this.ctx.currentTime;
+        // Use custom tick sound if loaded
+        if (this.buffers.tick) {
+            this.playBuffer(this.buffers.tick, 0.4);
+            return;
+        }
 
-        // Noise burst
+        // Fallback to synthesized
+        const now = this.ctx.currentTime;
         const noise = this.ctx.createBufferSource();
         noise.buffer = this.createNoiseBuffer(0.05);
 
-        // Bandpass filter for click character
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
         filter.frequency.value = 2500 + Math.random() * 1500;
         filter.Q.value = 2;
 
-        // Envelope
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.3, now);
         gain.gain.exponentialDecayTo = 0.01;
@@ -2210,25 +2245,28 @@ const SoundEngine = {
         noise.stop(now + 0.04);
     },
 
-    // 2. CLICK - UI button click
+    // 2. CLICK - UI button click (uses custom audio if available)
     click() {
         if (!this.initialized || this.muted) return;
 
-        const now = this.ctx.currentTime;
+        // Use custom click sound if loaded
+        if (this.buffers.click) {
+            this.playBuffer(this.buffers.click, 0.5);
+            return;
+        }
 
-        // Low square wave blip
+        // Fallback to synthesized
+        const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         osc.type = 'square';
         osc.frequency.setValueAtTime(100, now);
         osc.frequency.setTargetAtTime(60, now + 0.05, 0.03);
 
-        // Lowpass filter
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(800, now);
         filter.frequency.setTargetAtTime(200, now + 0.08, 0.05);
 
-        // Envelope
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.25, now);
         gain.gain.setTargetAtTime(0.001, now + 0.08, 0.03);
@@ -2241,12 +2279,18 @@ const SoundEngine = {
         osc.stop(now + 0.12);
     },
 
-    // 3. HOVER - Subtle button hover
+    // 3. HOVER - Subtle button hover (uses custom audio if available)
     hover() {
         if (!this.initialized || this.muted) return;
 
-        const now = this.ctx.currentTime;
+        // Use custom click at lower volume for hover (if loaded)
+        if (this.buffers.click) {
+            this.playBuffer(this.buffers.click, 0.15);
+            return;
+        }
 
+        // Fallback to synthesized
+        const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         osc.type = 'sine';
         osc.frequency.value = 1800 + Math.random() * 400;
@@ -2261,6 +2305,21 @@ const SoundEngine = {
 
         osc.start(now);
         osc.stop(now + 0.08);
+    },
+
+    // Helper: Play an audio buffer at specified volume
+    playBuffer(buffer, volume = 1.0) {
+        if (!this.initialized || this.muted || !buffer) return;
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = volume;
+
+        source.connect(gain);
+        gain.connect(this.masterGain);
+        source.start();
     },
 
     // 4. SUBMIT - Satisfying confirm sound
@@ -2405,10 +2464,17 @@ const SoundEngine = {
         this.traceNode = null;
     },
 
-    // 7. RESOLVE - Path complete chime (A major chord)
+    // 7. RESOLVE - Path complete chime (uses custom success audio if available)
     resolve() {
         if (!this.initialized || this.muted) return;
 
+        // Use custom success sound if loaded
+        if (this.buffers.success) {
+            this.playBuffer(this.buffers.success, 0.6);
+            return;
+        }
+
+        // Fallback to synthesized A major chord
         const now = this.ctx.currentTime;
         const freqs = [440, 554, 659]; // A, C#, E
 
@@ -2418,7 +2484,7 @@ const SoundEngine = {
             osc.frequency.value = freq;
 
             const gain = this.ctx.createGain();
-            const startTime = now + i * 0.05; // Stagger
+            const startTime = now + i * 0.05;
             gain.gain.setValueAtTime(0, startTime);
             gain.gain.setTargetAtTime(0.15, startTime, 0.05);
             gain.gain.setTargetAtTime(0.001, startTime + 0.5, 0.3);
@@ -2430,10 +2496,9 @@ const SoundEngine = {
             osc.stop(startTime + 1.2);
         });
 
-        // Add shimmer with high harmonics
         const shimmer = this.ctx.createOscillator();
         shimmer.type = 'sine';
-        shimmer.frequency.value = 1760; // High A
+        shimmer.frequency.value = 1760;
 
         const shimmerGain = this.ctx.createGain();
         shimmerGain.gain.setValueAtTime(0, now + 0.1);
@@ -2446,12 +2511,11 @@ const SoundEngine = {
         shimmer.stop(now + 1.5);
     },
 
-    // 8. SLIDE - Panel whoosh
+    // 8. SLIDE - Panel whoosh (synthesized)
     slide() {
         if (!this.initialized || this.muted) return;
 
         const now = this.ctx.currentTime;
-
         const noise = this.ctx.createBufferSource();
         noise.buffer = this.createNoiseBuffer(0.3);
 
@@ -2586,6 +2650,161 @@ const SoundEngine = {
         if (this.ctx.state === 'suspended') {
             this.ctx.resume().catch(e => console.warn('Audio resume failed:', e));
         }
+    },
+
+    // ==========================================================================
+    // UI SOUND EFFECTS - Subtle audio feedback for interface interactions
+    // ==========================================================================
+
+    // Soft hover/highlight sound - gentle tonal shimmer
+    uiHover() {
+        if (!this.initialized || this.muted) return;
+
+        const now = this.ctx.currentTime;
+
+        // High-frequency soft tone
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.setTargetAtTime(1400, now, 0.05);
+
+        // Very short, quiet envelope
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.06, now + 0.01);
+        gain.gain.setTargetAtTime(0, now + 0.02, 0.03);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc.start(now);
+        osc.stop(now + 0.1);
+    },
+
+    // Satisfying click sound - crisp, warm tactile feel
+    uiClick() {
+        if (!this.initialized || this.muted) return;
+
+        const now = this.ctx.currentTime;
+
+        // Two-tone click: low thump + high tap
+        const lowOsc = this.ctx.createOscillator();
+        lowOsc.type = 'sine';
+        lowOsc.frequency.setValueAtTime(180, now);
+        lowOsc.frequency.setTargetAtTime(80, now, 0.02);
+
+        const highOsc = this.ctx.createOscillator();
+        highOsc.type = 'triangle';
+        highOsc.frequency.setValueAtTime(2400, now);
+        highOsc.frequency.setTargetAtTime(1800, now, 0.015);
+
+        // Low thump envelope
+        const lowGain = this.ctx.createGain();
+        lowGain.gain.setValueAtTime(0.15, now);
+        lowGain.gain.setTargetAtTime(0, now + 0.01, 0.02);
+
+        // High tap envelope
+        const highGain = this.ctx.createGain();
+        highGain.gain.setValueAtTime(0.08, now);
+        highGain.gain.setTargetAtTime(0, now + 0.005, 0.01);
+
+        lowOsc.connect(lowGain);
+        highOsc.connect(highGain);
+        lowGain.connect(this.masterGain);
+        highGain.connect(this.masterGain);
+
+        lowOsc.start(now);
+        highOsc.start(now);
+        lowOsc.stop(now + 0.08);
+        highOsc.stop(now + 0.05);
+    },
+
+    // Smooth transition whoosh - rising sweep
+    uiTransition() {
+        if (!this.initialized || this.muted) return;
+
+        const now = this.ctx.currentTime;
+
+        // Filtered noise sweep
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(0.25);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 2;
+        filter.frequency.setValueAtTime(400, now);
+        filter.frequency.exponentialRampToValueAtTime(2000, now + 0.15);
+        filter.frequency.setTargetAtTime(800, now + 0.15, 0.05);
+
+        // Soft oscillator sweep for warmth
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.12);
+
+        // Envelopes
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(0.08, now + 0.05);
+        noiseGain.gain.setTargetAtTime(0, now + 0.12, 0.05);
+
+        const oscGain = this.ctx.createGain();
+        oscGain.gain.setValueAtTime(0, now);
+        oscGain.gain.linearRampToValueAtTime(0.04, now + 0.03);
+        oscGain.gain.setTargetAtTime(0, now + 0.1, 0.04);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(this.masterGain);
+
+        osc.connect(oscGain);
+        oscGain.connect(this.masterGain);
+
+        noise.start(now);
+        osc.start(now);
+        noise.stop(now + 0.25);
+        osc.stop(now + 0.2);
+    },
+
+    // Success chime - warm, positive feedback (uses custom success audio if available)
+    uiSuccess() {
+        if (!this.initialized || this.muted) return;
+
+        // Use custom success sound if loaded
+        if (this.buffers.success) {
+            this.playBuffer(this.buffers.success, 0.5);
+            return;
+        }
+
+        // Fallback to synthesized two-note chime
+        const now = this.ctx.currentTime;
+
+        const osc1 = this.ctx.createOscillator();
+        osc1.type = 'sine';
+        osc1.frequency.value = 523.25; // C5
+
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = 659.25; // E5
+
+        const gain1 = this.ctx.createGain();
+        gain1.gain.setValueAtTime(0.12, now);
+        gain1.gain.setTargetAtTime(0, now + 0.1, 0.08);
+
+        const gain2 = this.ctx.createGain();
+        gain2.gain.setValueAtTime(0, now);
+        gain2.gain.setValueAtTime(0.12, now + 0.08);
+        gain2.gain.setTargetAtTime(0, now + 0.2, 0.1);
+
+        osc1.connect(gain1);
+        osc2.connect(gain2);
+        gain1.connect(this.masterGain);
+        gain2.connect(this.masterGain);
+
+        osc1.start(now);
+        osc2.start(now + 0.08);
+        osc1.stop(now + 0.25);
+        osc2.stop(now + 0.35);
     },
 
     // Stop all sounds completely (for clean shutdown)
@@ -4616,6 +4835,7 @@ const GameState = {
     // Game progress
     currentRound: 1,
     totalScore: 0,
+    gamesCompleted: parseInt(localStorage.getItem('pathfindr_games_completed') || '0', 10),
     isLoading: true,
     gameStarted: false,
     canDraw: false,
@@ -4647,8 +4867,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize sound on first user interaction
 function initSoundListeners() {
-    // Add hover/click sounds to all buttons
-    document.querySelectorAll('.btn, .speed-btn, .replay-btn, .location-option').forEach(btn => {
+    // Add hover/click sounds to all buttons (including HUD buttons)
+    document.querySelectorAll('.btn, .speed-btn, .replay-btn, .location-option, .hud-btn').forEach(btn => {
         btn.addEventListener('mouseenter', () => {
             SoundEngine.init();
             SoundEngine.hover();
@@ -4799,13 +5019,31 @@ function initEventListeners() {
         lastTouchEnd = now;
     }, { passive: false });
 
-    // Buttons
-    document.getElementById('start-game-btn').addEventListener('click', startGame);
-    document.getElementById('clear-btn').addEventListener('click', clearUserPath);
-    document.getElementById('undo-btn').addEventListener('click', undoLastSegment);
-    document.getElementById('submit-btn').addEventListener('click', submitRoute);
-    document.getElementById('next-round-btn').addEventListener('click', nextRound);
-    document.getElementById('play-again-btn').addEventListener('click', playAgain);
+    // Buttons with UI sounds
+    document.getElementById('start-game-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        startGame();
+    });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        clearUserPath();
+    });
+    document.getElementById('undo-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        undoLastSegment();
+    });
+    document.getElementById('submit-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        submitRoute();
+    });
+    document.getElementById('next-round-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        nextRound();
+    });
+    document.getElementById('play-again-btn').addEventListener('click', () => {
+        SoundEngine.uiClick();
+        playAgain();
+    });
     document.getElementById('mute-btn').addEventListener('click', toggleMute);
 
     // Optional controls (may be hidden in new UI)
@@ -5601,7 +5839,8 @@ function handlePathClick(e) {
 
     if (addPointToUserPath(point.lat, point.lng)) {
         redrawUserPath();
-        // Quick visual feedback
+        // Audio and visual feedback
+        SoundEngine.click();
         GameState.drawCanvas.classList.add('click-feedback');
         setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
     }
@@ -7562,7 +7801,9 @@ function hideLoading() {
 function initModeSelector() {
     // Mode buttons
     document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => SoundEngine.uiHover());
         btn.addEventListener('click', () => {
+            SoundEngine.uiClick();
             const mode = btn.dataset.mode;
             selectGameMode(mode);
         });
@@ -7570,7 +7811,9 @@ function initModeSelector() {
 
     // Difficulty buttons
     document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => SoundEngine.uiHover());
         btn.addEventListener('click', () => {
+            SoundEngine.uiClick();
             const difficulty = btn.dataset.difficulty;
             setDifficulty(difficulty);
         });
@@ -7596,6 +7839,7 @@ function setDifficulty(difficulty) {
 function showModeSelector() {
     document.getElementById('loading-overlay').classList.add('hidden');
     document.getElementById('mode-selector').classList.remove('hidden');
+    SoundEngine.uiTransition();
 }
 
 function hideModeSelector() {
@@ -7640,7 +7884,7 @@ async function showPremiumRequired(modeName) {
             </div>
             <h2>Unlock ${modeName} Mode</h2>
             <p>Go Pro to unlock Explorer and Visualizer modes, plus remove all ads forever.</p>
-            <div class="premium-price">$2.99 <span>one-time purchase</span></div>
+            <div class="premium-price">$2 <span>one-time purchase</span></div>
             <div class="premium-prompt-buttons">
                 <button id="premium-buy-btn" class="btn btn-primary">Go Pro</button>
                 <button id="premium-cancel-btn" class="btn btn-secondary">Maybe Later</button>
@@ -9316,20 +9560,7 @@ function disableContinuousPlay() {
 }
 
 function updateContinuousHUD() {
-    // Add city counter to HUD if continuous mode is active
-    const hudStats = document.querySelector('.hud-stats');
-    if (hudStats && GameState.continuousPlay.enabled) {
-        let cityIndicator = document.getElementById('city-indicator');
-        if (!cityIndicator) {
-            cityIndicator = document.createElement('div');
-            cityIndicator.id = 'city-indicator';
-            cityIndicator.className = 'city-indicator';
-            // Insert at beginning of hud-stats
-            hudStats.insertBefore(cityIndicator, hudStats.firstChild);
-        }
-        const cityNum = GameState.continuousPlay.citiesCompleted + 1;
-        cityIndicator.textContent = `CITY ${cityNum}`;
-    }
+    // City indicator removed - users see city count in the round recap
 }
 
 function removeContinuousHUD() {
@@ -9572,6 +9803,31 @@ function hideInstructions() {
     document.getElementById('instructions-overlay').classList.add('hidden');
 }
 
+/**
+ * Determine if an ad should show based on games completed and current round
+ * Progressive ad frequency:
+ * - Game 1: No ads (first experience is clean)
+ * - Game 2: Rounds 1, 3
+ * - Game 3: Rounds 1, 3, 5
+ * - Game 4+: Every round
+ */
+function shouldShowRoundAd() {
+    const gamesCompleted = GameState.gamesCompleted;
+    const round = GameState.currentRound;
+
+    // First game: no ads
+    if (gamesCompleted === 0) return false;
+
+    // Second game: rounds 1 and 3
+    if (gamesCompleted === 1) return round === 1 || round === 3;
+
+    // Third game: rounds 1, 3, and 5
+    if (gamesCompleted === 2) return round === 1 || round === 3 || round === 5;
+
+    // Fourth game and beyond: every round
+    return true;
+}
+
 function showResults() {
     SoundEngine.slide();
     document.getElementById('results-panel').classList.add('visible');
@@ -9581,9 +9837,13 @@ function showResults() {
         CityFacts.showFactInResults(GameState.currentCity.name);
     }
 
-    // Show banner ad during round recaps (if configured)
+    // Show banner ad during round recaps (progressive frequency, delayed)
     if (PathfindrConfig.ads.showBannerBetweenRounds && typeof PathfindrAds !== 'undefined') {
-        PathfindrAds.showBanner(PathfindrConfig.ads.bannerPosition || 'top');
+        if (shouldShowRoundAd()) {
+            setTimeout(() => {
+                PathfindrAds.showBanner(PathfindrConfig.ads.bannerPosition || 'top');
+            }, 600);
+        }
     }
 }
 
@@ -9597,6 +9857,10 @@ function hideResults() {
 }
 
 async function showGameOver() {
+    // Increment games completed counter (persists to localStorage)
+    GameState.gamesCompleted++;
+    localStorage.setItem('pathfindr_games_completed', GameState.gamesCompleted.toString());
+
     // Heavy haptic for game over
     GameHaptics.gameOver();
 
