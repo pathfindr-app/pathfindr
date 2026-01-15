@@ -270,6 +270,17 @@ const PathfindrAuth = {
       window.pathfindrUser = data;
 
       console.log('[Auth] Profile loaded:', data.username);
+
+      // Check for pending purchase from pre-auth Stripe payment
+      if (typeof PathfindrPayments !== 'undefined' && PathfindrPayments.handlePendingPurchase) {
+        const hadPending = await PathfindrPayments.handlePendingPurchase();
+        if (hadPending) {
+          console.log('[Auth] Pending purchase processed');
+          if (typeof showToast === 'function') {
+            showToast('Pro access activated!');
+          }
+        }
+      }
     } catch (error) {
       console.error('[Auth] Error loading profile:', error);
     }
@@ -309,6 +320,20 @@ const PathfindrAuth = {
       this.needsCallsign = true;
 
       console.log('[Auth] Created OAuth profile, showing callsign prompt...');
+
+      // Check for pending purchase from pre-auth Stripe payment
+      // The database trigger should have linked the transaction, but we still need to refresh
+      if (typeof PathfindrPayments !== 'undefined' && PathfindrPayments.handlePendingPurchase) {
+        const hadPending = await PathfindrPayments.handlePendingPurchase();
+        if (hadPending) {
+          console.log('[Auth] Pending purchase linked to new OAuth profile');
+          // Refresh profile to get updated has_purchased status
+          await this.refreshProfile();
+          if (typeof showToast === 'function') {
+            showToast('Pro access activated!');
+          }
+        }
+      }
 
       // Show callsign modal for new user
       this.showCallsignModal();
