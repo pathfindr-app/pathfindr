@@ -595,7 +595,12 @@ const PathfindrAds = {
       overlay.innerHTML = `
         <div class="pro-ad-map-bg"></div>
         <div class="pro-ad-card">
+          <div class="pro-ad-noise"></div>
           <div class="pro-ad-glow"></div>
+          <div class="pro-ad-corner pro-ad-corner-tl"></div>
+          <div class="pro-ad-corner pro-ad-corner-tr"></div>
+          <div class="pro-ad-corner pro-ad-corner-bl"></div>
+          <div class="pro-ad-corner pro-ad-corner-br"></div>
           <div class="pro-ad-border-top"></div>
           <div class="pro-ad-border-bottom"></div>
 
@@ -666,22 +671,47 @@ const PathfindrAds = {
 
           .pro-ad-map-bg {
             position: absolute;
+            inset: -50px;
+            background-image: url('https://tile.openstreetmap.org/13/4096/2720.png');
+            background-size: 300px 300px;
+            background-repeat: repeat;
+            filter: brightness(0.5) contrast(1.4) saturate(0.5);
+            animation: proMapDrift 30s linear infinite;
+          }
+
+          @keyframes proMapDrift {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 300px; }
+          }
+
+          .pro-ad-map-bg::before {
+            content: '';
+            position: absolute;
             inset: 0;
             background:
-              linear-gradient(180deg, rgba(13,10,20,0.7) 0%, rgba(13,10,20,0.95) 100%),
-              url('https://tile.openstreetmap.org/10/512/340.png');
-            background-size: cover, 400px;
-            background-position: center;
-            filter: blur(4px) saturate(0.4);
-            transform: scale(1.05);
+              radial-gradient(ellipse at 30% 20%, rgba(65, 217, 217, 0.15) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 80%, rgba(255, 107, 157, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+          }
+
+          .pro-ad-map-bg::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+              180deg,
+              rgba(13, 10, 20, 0.6) 0%,
+              rgba(13, 10, 20, 0.3) 40%,
+              rgba(13, 10, 20, 0.5) 100%
+            );
           }
 
           .pro-ad-card {
             position: relative;
             background: linear-gradient(
               165deg,
-              rgba(25, 20, 40, 0.95) 0%,
-              rgba(15, 12, 28, 0.98) 100%
+              rgba(25, 20, 40, 0.97) 0%,
+              rgba(15, 12, 28, 0.99) 100%
             );
             border-radius: 20px;
             padding: 36px 32px 28px;
@@ -691,7 +721,42 @@ const PathfindrAds = {
             overflow: hidden;
             box-shadow:
               0 25px 80px rgba(0, 0, 0, 0.6),
-              0 0 0 1px rgba(255,255,255,0.05) inset;
+              0 0 60px rgba(65, 217, 217, 0.1),
+              0 0 0 1px rgba(65, 217, 217, 0.15) inset;
+            border: 1px solid rgba(65, 217, 217, 0.1);
+          }
+
+          /* Scanlines overlay */
+          .pro-ad-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 2px,
+              rgba(0, 0, 0, 0.1) 2px,
+              rgba(0, 0, 0, 0.1) 4px
+            );
+            pointer-events: none;
+            opacity: 0.3;
+            border-radius: 20px;
+          }
+
+          /* Corner accents */
+          .pro-ad-card::after {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 1px solid transparent;
+            border-image: linear-gradient(
+              135deg,
+              rgba(65, 217, 217, 0.3) 0%,
+              transparent 30%,
+              transparent 70%,
+              rgba(255, 107, 157, 0.3) 100%
+            ) 1;
+            pointer-events: none;
           }
 
           .pro-ad-glow {
@@ -701,19 +766,76 @@ const PathfindrAds = {
             transform: translateX(-50%);
             width: 300px;
             height: 300px;
-            background: radial-gradient(circle, rgba(65,217,217,0.15) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(65,217,217,0.2) 0%, transparent 60%);
             pointer-events: none;
+            animation: proGlowPulse 3s ease-in-out infinite;
+          }
+
+          @keyframes proGlowPulse {
+            0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
           }
 
           .pro-ad-border-top, .pro-ad-border-bottom {
             position: absolute;
-            left: 10%;
-            right: 10%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(65,217,217,0.5), rgba(255,107,157,0.5), transparent);
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg,
+              transparent 0%,
+              rgba(65,217,217,0.6) 20%,
+              rgba(65,217,217,0.8) 50%,
+              rgba(255,107,157,0.6) 80%,
+              transparent 100%
+            );
+            animation: borderGlow 2s ease-in-out infinite;
           }
-          .pro-ad-border-top { top: 0; }
-          .pro-ad-border-bottom { bottom: 0; }
+          .pro-ad-border-top { top: 0; border-radius: 20px 20px 0 0; }
+          .pro-ad-border-bottom { bottom: 0; border-radius: 0 0 20px 20px; }
+
+          @keyframes borderGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+          }
+
+          .pro-ad-noise {
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            border-radius: 20px;
+          }
+
+          .pro-ad-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+          }
+
+          .pro-ad-corner::before,
+          .pro-ad-corner::after {
+            content: '';
+            position: absolute;
+            background: linear-gradient(135deg, #41d9d9, #ff6b9d);
+          }
+
+          .pro-ad-corner-tl { top: 12px; left: 12px; }
+          .pro-ad-corner-tl::before { top: 0; left: 0; width: 12px; height: 2px; }
+          .pro-ad-corner-tl::after { top: 0; left: 0; width: 2px; height: 12px; }
+
+          .pro-ad-corner-tr { top: 12px; right: 12px; }
+          .pro-ad-corner-tr::before { top: 0; right: 0; width: 12px; height: 2px; }
+          .pro-ad-corner-tr::after { top: 0; right: 0; width: 2px; height: 12px; }
+
+          .pro-ad-corner-bl { bottom: 12px; left: 12px; }
+          .pro-ad-corner-bl::before { bottom: 0; left: 0; width: 12px; height: 2px; }
+          .pro-ad-corner-bl::after { bottom: 0; left: 0; width: 2px; height: 12px; }
+
+          .pro-ad-corner-br { bottom: 12px; right: 12px; }
+          .pro-ad-corner-br::before { bottom: 0; right: 0; width: 12px; height: 2px; }
+          .pro-ad-corner-br::after { bottom: 0; right: 0; width: 2px; height: 12px; }
 
           .pro-ad-header {
             position: relative;
@@ -938,6 +1060,278 @@ const PathfindrAds = {
 
       console.log('[Ads] Showing placeholder ad');
     });
+  },
+
+  /**
+   * Show inline interstitial ad inside the results panel
+   * Appears above the Next Round button after a delay
+   */
+  showInlineInterstitial() {
+    // Don't show if user is ad-free
+    if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
+      console.log('[Ads] User is ad-free, skipping inline interstitial');
+      return;
+    }
+
+    // Find the results panel's next-round-wrapper
+    const wrapper = document.querySelector('.next-round-wrapper');
+    if (!wrapper) return;
+
+    // Remove any existing inline ad
+    const existing = document.getElementById('inline-interstitial');
+    if (existing) existing.remove();
+
+    // Create inline interstitial
+    const interstitial = document.createElement('div');
+    interstitial.id = 'inline-interstitial';
+    interstitial.innerHTML = `
+      <div class="inline-ad-map-bg"></div>
+      <div class="inline-ad-content">
+        <div class="inline-ad-left">
+          <div class="inline-ad-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </div>
+          <div class="inline-ad-text">
+            <span class="inline-ad-title">Go Pro</span>
+            <span class="inline-ad-subtitle">Remove ads · $2</span>
+          </div>
+        </div>
+        <div class="inline-ad-right">
+          <button class="inline-ad-cta" id="inline-ad-cta">Unlock</button>
+          <button class="inline-ad-close" id="inline-ad-close" disabled>
+            <span class="inline-ad-timer"><span id="inline-ad-countdown">3</span>s</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Add styles if not present
+    if (!document.getElementById('inline-interstitial-styles')) {
+      const styles = document.createElement('style');
+      styles.id = 'inline-interstitial-styles';
+      styles.textContent = `
+        #inline-interstitial {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 10;
+          border-radius: 14px;
+          overflow: hidden;
+          animation: inlineAdSlideIn 0.3s ease;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+          transition: transform 0.4s ease;
+        }
+
+        #inline-interstitial.revealed {
+          transform: translateY(-100%) translateY(-8px);
+        }
+
+        @keyframes inlineAdSlideIn {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .inline-ad-map-bg {
+          position: absolute;
+          inset: 0;
+          background-image: url('https://tile.openstreetmap.org/14/4096/5680.png'),
+                            url('https://tile.openstreetmap.org/14/4097/5680.png');
+          background-size: 256px 256px;
+          background-position: 0 0, 256px 0;
+          filter: saturate(0.4) brightness(0.35) contrast(1.2);
+          opacity: 0.8;
+        }
+
+        .inline-ad-map-bg::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            135deg,
+            rgba(13, 10, 20, 0.7) 0%,
+            rgba(65, 217, 217, 0.1) 50%,
+            rgba(13, 10, 20, 0.7) 100%
+          );
+        }
+
+        .inline-ad-content {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 16px;
+          gap: 12px;
+        }
+
+        .inline-ad-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .inline-ad-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, rgba(65,217,217,0.3), rgba(255,107,157,0.3));
+          border: 1px solid rgba(65,217,217,0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .inline-ad-icon svg {
+          width: 18px;
+          height: 18px;
+          color: #41d9d9;
+          filter: drop-shadow(0 0 4px rgba(65,217,217,0.6));
+        }
+
+        .inline-ad-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .inline-ad-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #fef8f4;
+        }
+
+        .inline-ad-subtitle {
+          font-size: 11px;
+          color: rgba(254, 248, 244, 0.5);
+        }
+
+        .inline-ad-right {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .inline-ad-cta {
+          padding: 8px 16px;
+          background: linear-gradient(135deg, #41d9d9, #00b8d4);
+          border: none;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #0d0a14;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .inline-ad-cta:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 15px rgba(65, 217, 217, 0.4);
+        }
+
+        .inline-ad-close {
+          width: 36px;
+          height: 36px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: not-allowed;
+          transition: all 0.2s ease;
+        }
+
+        .inline-ad-timer {
+          font-size: 11px;
+          font-weight: 500;
+          color: rgba(254, 248, 244, 0.4);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .inline-ad-close:not(:disabled) {
+          cursor: pointer;
+          border-color: rgba(65, 217, 217, 0.3);
+        }
+
+        .inline-ad-close:not(:disabled) .inline-ad-timer {
+          color: #41d9d9;
+        }
+
+        .inline-ad-close:not(:disabled):hover {
+          background: rgba(65, 217, 217, 0.1);
+        }
+
+        .inline-ad-close:not(:disabled)::after {
+          content: '×';
+          font-size: 18px;
+          font-weight: 300;
+        }
+
+        .inline-ad-close:not(:disabled) .inline-ad-timer {
+          display: none;
+        }
+      `;
+      document.head.appendChild(styles);
+    }
+
+    // Insert inside the next-round-wrapper to overlay the button
+    wrapper.style.position = 'relative';
+    wrapper.appendChild(interstitial);
+
+    // Ad stays covering the button until user dismisses it
+    // No automatic reveal - user must click X to access Next Round
+
+    // Countdown timer
+    let countdown = 3;
+    const countdownEl = document.getElementById('inline-ad-countdown');
+    const closeBtn = document.getElementById('inline-ad-close');
+
+    const timer = setInterval(() => {
+      countdown--;
+      if (countdownEl) countdownEl.textContent = countdown;
+
+      if (countdown <= 0) {
+        clearInterval(timer);
+        if (closeBtn) {
+          closeBtn.disabled = false;
+        }
+      }
+    }, 1000);
+
+    // Close handler
+    closeBtn?.addEventListener('click', () => {
+      if (closeBtn.disabled) return;
+      interstitial.remove();
+    });
+
+    // Go Pro button handler
+    const ctaBtn = document.getElementById('inline-ad-cta');
+    ctaBtn?.addEventListener('click', async () => {
+      clearInterval(timer);
+      interstitial.remove();
+      if (typeof PathfindrPayments !== 'undefined') {
+        await PathfindrPayments.showPurchasePrompt();
+      }
+    });
+
+    console.log('[Ads] Showing inline interstitial');
+  },
+
+  /**
+   * Hide inline interstitial
+   */
+  hideInlineInterstitial() {
+    const interstitial = document.getElementById('inline-interstitial');
+    if (interstitial) interstitial.remove();
   },
 };
 

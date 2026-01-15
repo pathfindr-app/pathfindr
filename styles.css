@@ -492,6 +492,25 @@ body::after {
     color: var(--neon-cyan);
 }
 
+/* Search PRO Badge - shown in Classic mode for non-premium users */
+.search-pro-badge {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #0d0a14;
+    background: linear-gradient(135deg, #41d9d9, #ff6b9d);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    flex-shrink: 0;
+    animation: proBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes proBadgePulse {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 1; box-shadow: 0 0 8px rgba(65, 217, 217, 0.5); }
+}
+
 /* Inline Location Search */
 .location-search-inline {
     display: flex;

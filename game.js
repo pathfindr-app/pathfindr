@@ -8044,6 +8044,7 @@ function selectGameMode(mode) {
 
     GameState.gameMode = mode;
     hideModeSelector();
+    updateSearchProBadge();
 
     // Analytics: Track mode selection
     if (typeof PathfindrAnalytics !== 'undefined') {
@@ -8181,7 +8182,19 @@ function initInlineLocationSearch() {
     }
 
     // Click location to show search
-    locationDisplay.addEventListener('click', () => {
+    locationDisplay.addEventListener('click', async () => {
+        // In Classic (competitive) mode, search is premium-only
+        if (GameState.gameMode === 'competitive') {
+            const isPremium = typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree();
+            if (!isPremium) {
+                // Show purchase prompt instead
+                if (typeof PathfindrPayments !== 'undefined') {
+                    await PathfindrPayments.showPurchasePrompt();
+                }
+                return;
+            }
+        }
+
         locationDisplay.classList.add('hidden');
         searchInline.classList.remove('hidden');
         // Small delay to ensure display:flex is applied before focusing
@@ -9793,6 +9806,27 @@ function startGameWithLocation(location) {
 function updateLocationDisplay(name) {
     const el = document.getElementById('current-location');
     if (el) el.textContent = name;
+    updateSearchProBadge();
+}
+
+function updateSearchProBadge() {
+    const locationDisplay = document.getElementById('location-display');
+    if (!locationDisplay) return;
+
+    // Remove existing badge if any
+    const existingBadge = locationDisplay.querySelector('.search-pro-badge');
+    if (existingBadge) existingBadge.remove();
+
+    // Add PRO badge in competitive mode for non-premium users
+    if (GameState.gameMode === 'competitive') {
+        const isPremium = typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree();
+        if (!isPremium) {
+            const badge = document.createElement('span');
+            badge.className = 'search-pro-badge';
+            badge.textContent = 'PRO';
+            locationDisplay.appendChild(badge);
+        }
+    }
 }
 
 function showInstructions() {
@@ -9845,6 +9879,13 @@ function showResults() {
             }, 600);
         }
     }
+
+    // Show inline interstitial above Next Round button (0.5s delay)
+    if (typeof PathfindrAds !== 'undefined') {
+        setTimeout(() => {
+            PathfindrAds.showInlineInterstitial();
+        }, 500);
+    }
 }
 
 function hideResults() {
@@ -9853,6 +9894,7 @@ function hideResults() {
     // Hide banner ad when leaving round recap
     if (typeof PathfindrAds !== 'undefined') {
         PathfindrAds.hideBanner();
+        PathfindrAds.hideInlineInterstitial();
     }
 }
 
