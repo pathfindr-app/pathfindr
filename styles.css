@@ -3637,29 +3637,83 @@ body.fullscreen-mode .fullscreen-btn {
     #results-panel {
         width: 100%;
         border-radius: 20px 20px 0 0;
-        padding: 1rem 1.25rem 1.5rem;
+        padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+        max-height: calc(85vh - env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    #results-panel .results-content {
+        gap: 0.6rem;
     }
 
     .results-hero {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding-bottom: 0.5rem;
     }
 
     .hero-efficiency {
-        align-items: flex-start;
+        align-items: flex-end;
     }
 
     .hero-score {
-        font-size: 2.25rem;
+        font-size: 2rem;
     }
 
     .efficiency-value {
-        font-size: 1.25rem;
+        font-size: 1.1rem;
+    }
+
+    .results-comparison {
+        gap: 0.4rem;
+    }
+
+    .comparison-item {
+        gap: 0.4rem;
     }
 
     .comparison-data {
-        min-width: 70px;
+        min-width: 60px;
+    }
+
+    .comparison-label {
+        font-size: 0.6rem;
+    }
+
+    .comparison-value {
+        font-size: 0.75rem;
+    }
+
+    /* Compact the location fact */
+    .location-fact {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    /* Compact meta section */
+    .results-meta {
+        padding: 0.5rem 0;
+    }
+
+    .meta-label {
+        font-size: 0.6rem;
+    }
+
+    .meta-value {
+        font-size: 0.85rem;
+    }
+
+    /* Compact next round button */
+    .next-round-wrapper {
+        margin-top: 0.25rem;
+    }
+
+    .btn-next {
+        padding: 0.7rem 1rem;
+        font-size: 0.85rem;
     }
 
     .gameover-score {
@@ -5183,6 +5237,63 @@ body.has-ad-banner #gameplay-hud {
     .journey-holo-map .journey-map-canvas {
         height: 80px;
     }
+
+    /* Very small screens - ultra compact results panel */
+    #results-panel {
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        max-height: calc(80vh - env(safe-area-inset-bottom, 0px));
+    }
+
+    #results-panel .results-content {
+        gap: 0.5rem;
+    }
+
+    .results-hero {
+        padding-bottom: 0.4rem;
+    }
+
+    .hero-label {
+        font-size: 0.55rem;
+    }
+
+    .hero-score {
+        font-size: 1.75rem;
+    }
+
+    .efficiency-value {
+        font-size: 1rem;
+    }
+
+    .efficiency-label {
+        font-size: 0.5rem;
+    }
+
+    .results-comparison {
+        gap: 0.3rem;
+    }
+
+    .comparison-bar {
+        height: 6px;
+    }
+
+    .location-fact {
+        padding: 0.5rem 0.6rem;
+        font-size: 0.75rem;
+        gap: 0.4rem;
+    }
+
+    .fact-icon {
+        font-size: 0.85rem;
+    }
+
+    .results-meta {
+        padding: 0.4rem 0;
+    }
+
+    .btn-next {
+        padding: 0.6rem 0.875rem;
+        font-size: 0.8rem;
+    }
 }
 
 /* =============================================================================
@@ -5495,14 +5606,43 @@ html, body {
         display: none;
     }
 
-    /* Compact results panel */
-    .results-panel {
-        padding: 1rem;
+    /* Landscape results panel - side positioned, scrollable */
+    #results-panel {
+        max-height: calc(100vh - 1rem - env(safe-area-inset-bottom, 0px));
+        max-width: 360px;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
     }
 
-    .results-panel h2 {
-        font-size: 1.25rem;
-        margin-bottom: 0.75rem;
+    #results-panel .results-content {
+        gap: 0.4rem;
+    }
+
+    .results-hero {
+        flex-direction: row;
+        padding-bottom: 0.4rem;
+    }
+
+    .hero-score {
+        font-size: 1.5rem;
+    }
+
+    .efficiency-value {
+        font-size: 0.9rem;
+    }
+
+    .location-fact {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.7rem;
+    }
+
+    .results-meta {
+        padding: 0.3rem 0;
+    }
+
+    .btn-next {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
     }
 
     /* Overlay content scrollable */
