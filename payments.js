@@ -578,8 +578,251 @@ const PathfindrPayments = {
       return { success: true, alreadyPremium: true };
     }
 
+    // Check if user is logged in - require auth first
+    const isLoggedIn = typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn();
+    if (!isLoggedIn) {
+      console.log('[Payments] User not logged in, showing auth first');
+      // Store intent to purchase after auth
+      localStorage.setItem('pathfindr_purchase_after_auth', 'true');
+      // Show auth modal
+      this.showAuthRequiredForPurchase();
+      return { success: false, requiresAuth: true };
+    }
+
     // Trigger purchase flow
     return await this.purchasePremium();
+  },
+
+  /**
+   * Show auth modal with message about needing account for purchase
+   */
+  showAuthRequiredForPurchase() {
+    // Create a custom modal explaining they need to sign in
+    const existingModal = document.getElementById('auth-for-purchase-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'auth-for-purchase-modal';
+    modal.innerHTML = `
+      <div class="auth-purchase-backdrop"></div>
+      <div class="auth-purchase-card">
+        <button class="auth-purchase-close" id="auth-purchase-close">&times;</button>
+        <div class="auth-purchase-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </div>
+        <h2>Create Account to Go Pro</h2>
+        <p>Sign up to purchase Pro and sync your progress across devices.</p>
+        <div class="auth-purchase-benefits">
+          <div class="auth-benefit"><span class="benefit-check">✓</span> Remove all ads forever</div>
+          <div class="auth-benefit"><span class="benefit-check">✓</span> Unlock Explorer & Visualizer modes</div>
+          <div class="auth-benefit"><span class="benefit-check">✓</span> Sync progress across devices</div>
+        </div>
+        <button id="auth-purchase-signup-btn" class="auth-purchase-cta">
+          <span>Create Account</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <button id="auth-purchase-signin-btn" class="auth-purchase-secondary">Already have an account? Sign in</button>
+      </div>
+    `;
+
+    // Add styles
+    if (!document.getElementById('auth-purchase-styles')) {
+      const styles = document.createElement('style');
+      styles.id = 'auth-purchase-styles';
+      styles.textContent = `
+        #auth-for-purchase-modal {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10001;
+          animation: authPurchaseFadeIn 0.3s ease;
+        }
+        @keyframes authPurchaseFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .auth-purchase-backdrop {
+          position: absolute;
+          inset: 0;
+          background: rgba(13, 10, 20, 0.9);
+          backdrop-filter: blur(8px);
+        }
+        .auth-purchase-card {
+          position: relative;
+          background: linear-gradient(165deg, rgba(25, 20, 40, 0.98) 0%, rgba(15, 12, 28, 0.99) 100%);
+          border: 1px solid rgba(65, 217, 217, 0.2);
+          border-radius: 20px;
+          padding: 2rem 1.75rem;
+          max-width: 360px;
+          width: 90%;
+          text-align: center;
+          box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(65, 217, 217, 0.1);
+        }
+        .auth-purchase-close {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          width: 32px;
+          height: 32px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 20px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+        .auth-purchase-close:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+        }
+        .auth-purchase-icon {
+          width: 56px;
+          height: 56px;
+          margin: 0 auto 1rem;
+          background: linear-gradient(135deg, rgba(65,217,217,0.2), rgba(255,107,157,0.2));
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid rgba(65,217,217,0.3);
+        }
+        .auth-purchase-icon svg {
+          width: 26px;
+          height: 26px;
+          color: #41d9d9;
+          filter: drop-shadow(0 0 6px rgba(65,217,217,0.6));
+        }
+        .auth-purchase-card h2 {
+          font-size: 1.35rem;
+          font-weight: 700;
+          color: #fef8f4;
+          margin: 0 0 0.5rem;
+        }
+        .auth-purchase-card p {
+          font-size: 0.9rem;
+          color: rgba(254, 248, 244, 0.6);
+          margin: 0 0 1.25rem;
+          line-height: 1.4;
+        }
+        .auth-purchase-benefits {
+          text-align: left;
+          margin-bottom: 1.25rem;
+          padding: 0.75rem 1rem;
+          background: rgba(65, 217, 217, 0.05);
+          border-radius: 10px;
+          border: 1px solid rgba(65, 217, 217, 0.1);
+        }
+        .auth-benefit {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.85rem;
+          color: rgba(254, 248, 244, 0.8);
+          padding: 0.35rem 0;
+        }
+        .benefit-check {
+          color: #41d9d9;
+          font-weight: bold;
+        }
+        .auth-purchase-cta {
+          width: 100%;
+          padding: 0.8rem 1.25rem;
+          background: linear-gradient(135deg, #41d9d9, #00b8d4);
+          border: none;
+          border-radius: 12px;
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #0d0a14;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: all 0.2s ease;
+          margin-bottom: 0.6rem;
+        }
+        .auth-purchase-cta:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(65, 217, 217, 0.4);
+        }
+        .auth-purchase-cta svg {
+          width: 16px;
+          height: 16px;
+        }
+        .auth-purchase-secondary {
+          width: 100%;
+          padding: 0.65rem 1rem;
+          background: transparent;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          font-size: 0.8rem;
+          color: rgba(254, 248, 244, 0.5);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .auth-purchase-secondary:hover {
+          background: rgba(255, 255, 255, 0.05);
+          color: rgba(254, 248, 244, 0.8);
+        }
+      `;
+      document.head.appendChild(styles);
+    }
+    document.body.appendChild(modal);
+
+    // Close button
+    document.getElementById('auth-purchase-close').addEventListener('click', () => {
+      localStorage.removeItem('pathfindr_purchase_after_auth');
+      modal.remove();
+    });
+
+    // Backdrop click to close
+    modal.querySelector('.auth-purchase-backdrop').addEventListener('click', () => {
+      localStorage.removeItem('pathfindr_purchase_after_auth');
+      modal.remove();
+    });
+
+    // Sign up button
+    document.getElementById('auth-purchase-signup-btn').addEventListener('click', () => {
+      modal.remove();
+      if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.showAuthModal) {
+        PathfindrAuth.showAuthModal('signup');
+      }
+    });
+
+    // Sign in button
+    document.getElementById('auth-purchase-signin-btn').addEventListener('click', () => {
+      modal.remove();
+      if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.showAuthModal) {
+        PathfindrAuth.showAuthModal('login');
+      }
+    });
+  },
+
+  /**
+   * Check if user wanted to purchase after auth and proceed
+   * Call this from auth.js after successful authentication
+   */
+  async proceedWithPurchaseAfterAuth() {
+    const wantsPurchase = localStorage.getItem('pathfindr_purchase_after_auth');
+    if (!wantsPurchase) return false;
+
+    console.log('[Payments] User authenticated, proceeding with purchase...');
+    localStorage.removeItem('pathfindr_purchase_after_auth');
+
+    // Small delay to let auth UI close
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Now proceed with purchase
+    await this.purchasePremium();
+    return true;
   },
 };
 

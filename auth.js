@@ -281,6 +281,11 @@ const PathfindrAuth = {
           }
         }
       }
+
+      // Check if user wanted to purchase after signing in
+      if (typeof PathfindrPayments !== 'undefined' && PathfindrPayments.proceedWithPurchaseAfterAuth) {
+        await PathfindrPayments.proceedWithPurchaseAfterAuth();
+      }
     } catch (error) {
       console.error('[Auth] Error loading profile:', error);
     }
@@ -332,6 +337,15 @@ const PathfindrAuth = {
           if (typeof showToast === 'function') {
             showToast('Pro access activated!');
           }
+        }
+      }
+
+      // Check if user wanted to purchase after signing up
+      if (typeof PathfindrPayments !== 'undefined' && PathfindrPayments.proceedWithPurchaseAfterAuth) {
+        const wantsPurchase = await PathfindrPayments.proceedWithPurchaseAfterAuth();
+        if (wantsPurchase) {
+          // Skip callsign modal for now - they're going to Stripe
+          return;
         }
       }
 
