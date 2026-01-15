@@ -3637,22 +3637,29 @@ body.fullscreen-mode .fullscreen-btn {
     #results-panel {
         width: 100%;
         border-radius: 20px 20px 0 0;
-        padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
-        max-height: calc(85vh - env(safe-area-inset-bottom, 0px));
-        overflow-y: auto;
-        overflow-x: hidden;
+        padding: 0.75rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
     }
 
+    /* Reorder: put Next Round button right after score on mobile */
     #results-panel .results-content {
-        gap: 0.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
     }
+
+    #results-panel .results-hero { order: 1; }
+    #results-panel .next-round-wrapper { order: 2; }
+    #results-panel .results-comparison { order: 3; }
+    #results-panel .location-fact { order: 4; }
+    #results-panel .results-meta { order: 5; }
 
     .results-hero {
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
         gap: 0.5rem;
-        padding-bottom: 0.5rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
     .hero-efficiency {
@@ -3660,60 +3667,61 @@ body.fullscreen-mode .fullscreen-btn {
     }
 
     .hero-score {
-        font-size: 2rem;
+        font-size: 1.75rem;
     }
 
     .efficiency-value {
-        font-size: 1.1rem;
+        font-size: 1rem;
+    }
+
+    /* Next Round button - now at top, always visible */
+    .next-round-wrapper {
+        margin: 0;
+    }
+
+    .btn-next {
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
     }
 
     .results-comparison {
-        gap: 0.4rem;
+        gap: 0.35rem;
     }
 
     .comparison-item {
-        gap: 0.4rem;
+        gap: 0.35rem;
     }
 
     .comparison-data {
-        min-width: 60px;
+        min-width: 55px;
     }
 
     .comparison-label {
-        font-size: 0.6rem;
+        font-size: 0.55rem;
     }
 
     .comparison-value {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
     }
 
     /* Compact the location fact */
     .location-fact {
-        padding: 0.6rem 0.75rem;
-        font-size: 0.8rem;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.75rem;
     }
 
-    /* Compact meta section */
+    /* Compact meta section - now at bottom */
     .results-meta {
-        padding: 0.5rem 0;
+        padding: 0.4rem 0 0;
+        border-top: 1px solid rgba(255,255,255,0.05);
     }
 
     .meta-label {
-        font-size: 0.6rem;
+        font-size: 0.55rem;
     }
 
     .meta-value {
-        font-size: 0.85rem;
-    }
-
-    /* Compact next round button */
-    .next-round-wrapper {
-        margin-top: 0.25rem;
-    }
-
-    .btn-next {
-        padding: 0.7rem 1rem;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
 
     .gameover-score {
@@ -5240,59 +5248,54 @@ body.has-ad-banner #gameplay-hud {
 
     /* Very small screens - ultra compact results panel */
     #results-panel {
-        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
-        max-height: calc(80vh - env(safe-area-inset-bottom, 0px));
+        padding: 0.6rem 0.875rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
     }
 
     #results-panel .results-content {
-        gap: 0.5rem;
-    }
-
-    .results-hero {
-        padding-bottom: 0.4rem;
-    }
-
-    .hero-label {
-        font-size: 0.55rem;
-    }
-
-    .hero-score {
-        font-size: 1.75rem;
-    }
-
-    .efficiency-value {
-        font-size: 1rem;
-    }
-
-    .efficiency-label {
-        font-size: 0.5rem;
-    }
-
-    .results-comparison {
-        gap: 0.3rem;
-    }
-
-    .comparison-bar {
-        height: 6px;
-    }
-
-    .location-fact {
-        padding: 0.5rem 0.6rem;
-        font-size: 0.75rem;
         gap: 0.4rem;
     }
 
-    .fact-icon {
-        font-size: 0.85rem;
+    .hero-label {
+        font-size: 0.5rem;
     }
 
-    .results-meta {
-        padding: 0.4rem 0;
+    .hero-score {
+        font-size: 1.5rem;
+    }
+
+    .efficiency-value {
+        font-size: 0.9rem;
+    }
+
+    .efficiency-label {
+        font-size: 0.45rem;
     }
 
     .btn-next {
-        padding: 0.6rem 0.875rem;
+        padding: 0.5rem 0.875rem;
         font-size: 0.8rem;
+    }
+
+    .results-comparison {
+        gap: 0.25rem;
+    }
+
+    .comparison-bar {
+        height: 5px;
+    }
+
+    .location-fact {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.7rem;
+        gap: 0.35rem;
+    }
+
+    .fact-icon {
+        font-size: 0.8rem;
+    }
+
+    .results-meta {
+        padding: 0.35rem 0 0;
     }
 }
 
