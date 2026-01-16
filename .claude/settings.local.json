@@ -43,7 +43,22 @@
       "Bash(copy /Y \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\styles.css\" \"C:\\\\Users\\\\kyler\\\\Desktop\\\\Astar\\\\dist\\\\styles.css\")",
       "Bash(npm run build:*)",
       "WebFetch(domain:pathfindralpha.vercel.app)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(npm start)",
+      "Bash(copy /Y index.html dist )",
+      "Bash(copy /Y game.js dist )",
+      "Bash(copy /Y styles.css dist )",
+      "Bash(copy /Y config.js dist )",
+      "Bash(copy /Y auth.js dist )",
+      "Bash(copy /Y ads.js dist )",
+      "Bash(copy /Y:*)",
+      "Bash(copy:*)",
+      "Bash(npx serve -l 3000)",
+      "Bash(timeout:*)",
+      "Bash(move \"click.wav\" \"sounds\\\\click.wav\")",
+      "Bash(move \"tick.wav.wav\" \"sounds\\\\tick.wav\")",
+      "Bash(move \"success.wav.wav\" \"sounds\\\\success.wav\")",
+      "Bash(move \"Level 2.wav\" \"sounds\\\\transition.wav\")"
     ]
   }
 }
