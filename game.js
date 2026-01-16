@@ -5019,46 +5019,6 @@ function initMap() {
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
     });
-
-    // Sync canvas transforms during zoom animation (fixes desync with zoomSnap: 0)
-    GameState.map.on('zoomanim', (e) => {
-        const scale = GameState.map.getZoomScale(e.zoom);
-        const offset = GameState.map._getCenterOffset(e.center)._multiplyBy(-scale).subtract(GameState.map._getMapPanePos());
-
-        const transform = `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`;
-
-        // Apply transform to canvases to match tile animation
-        if (GameState.vizCanvas) {
-            GameState.vizCanvas.style.transform = transform;
-            GameState.vizCanvas.style.transformOrigin = '0 0';
-        }
-        if (GameState.drawCanvas) {
-            GameState.drawCanvas.style.transform = transform;
-            GameState.drawCanvas.style.transformOrigin = '0 0';
-        }
-        const webglCanvas = document.getElementById('webgl-canvas');
-        if (webglCanvas) {
-            webglCanvas.style.transform = transform;
-            webglCanvas.style.transformOrigin = '0 0';
-        }
-    });
-
-    // Reset canvas transforms after zoom ends and redraw with correct coordinates
-    GameState.map.on('zoomend', () => {
-        // Clear transforms - coordinates are now accurate
-        if (GameState.vizCanvas) GameState.vizCanvas.style.transform = '';
-        if (GameState.drawCanvas) GameState.drawCanvas.style.transform = '';
-        const webglCanvas = document.getElementById('webgl-canvas');
-        if (webglCanvas) webglCanvas.style.transform = '';
-
-        // Final redraw with correct coordinates
-        ScreenCoordCache.invalidate();
-        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
-        updateMarkerPositions();
-        redrawUserPath();
-        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
-        if (GameState.vizState.active) renderVisualization();
-    });
 }
 
 function initCanvases() {

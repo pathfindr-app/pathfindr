@@ -1945,13 +1945,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     mix-blend-mode: screen;
 }
 
-/* iOS Safari: Disable mix-blend-mode which causes tile disappearing during zoom */
-.ios-safari #map-container.custom-roads-mode .leaflet-tile-pane {
-    filter: brightness(0.25) saturate(0.1) !important;
-    mix-blend-mode: normal !important;
-    opacity: 1 !important;
-}
-
 /* Vignette overlay for map - warm purple edges */
 #map-container::after {
     content: '';
@@ -1999,25 +1992,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
         hue-rotate(-15deg);
     opacity: 0.65;
     mix-blend-mode: screen;
-}
-
-/* iOS Safari: complex filters cause compositing issues - use simple brightness */
-.ios-safari .leaflet-tile-pane {
-    filter: brightness(0.4) saturate(0.2) !important;
-    mix-blend-mode: normal !important;
-    opacity: 1 !important;
-}
-
-/* iOS Safari: force separate compositing layers to prevent tile disappearing */
-.ios-safari #draw-canvas,
-.ios-safari #viz-canvas {
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-}
-
-/* iOS Safari: disable vignette to avoid compositing issues */
-.ios-safari #map-container::after {
-    display: none !important;
 }
 
 /* Add a color overlay effect via the tile container */
