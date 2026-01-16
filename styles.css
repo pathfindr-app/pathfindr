@@ -2000,6 +2000,12 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     mix-blend-mode: screen;
 }
 
+/* iOS Safari: mix-blend-mode causes tiles to disappear during pinch-zoom */
+.ios-safari .leaflet-tile-pane {
+    mix-blend-mode: normal;
+    opacity: 0.5;
+}
+
 /* Add a color overlay effect via the tile container */
 .leaflet-tile-container {
     position: relative;
