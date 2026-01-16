@@ -5013,6 +5013,11 @@ function initMap() {
     let isZooming = false;
     let preZoomLevel = null;
 
+    // Pan state for canvas sync
+    let isPanning = false;
+    let panSyncFrame = null;
+    const mapPane = GameState.map.getPane('mapPane');
+
     const canvases = [
         document.getElementById('webgl-canvas'),
         document.getElementById('draw-canvas'),
@@ -5020,9 +5025,54 @@ function initMap() {
         document.getElementById('marker-container')
     ];
 
+    // Sync canvas transforms to map pane during pan (for iOS Safari)
+    function syncCanvasTransforms() {
+        if (!isPanning || isZooming) return;
+
+        if (mapPane) {
+            const transform = mapPane.style.transform || '';
+            canvases.forEach(c => {
+                if (c) c.style.transform = transform;
+            });
+        }
+
+        panSyncFrame = requestAnimationFrame(syncCanvasTransforms);
+    }
+
+    GameState.map.on('movestart', () => {
+        if (!isZooming) {
+            isPanning = true;
+            // Start syncing canvas transforms to map pane
+            panSyncFrame = requestAnimationFrame(syncCanvasTransforms);
+        }
+    });
+
+    GameState.map.on('moveend', () => {
+        isPanning = false;
+        if (panSyncFrame) {
+            cancelAnimationFrame(panSyncFrame);
+            panSyncFrame = null;
+        }
+
+        // Clear transforms and redraw at final position
+        if (!isZooming) {
+            canvases.forEach(c => {
+                if (c) c.style.transform = '';
+            });
+
+            ScreenCoordCache.invalidate();
+            if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
+            updateMarkerPositions();
+            redrawUserPath();
+            if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
+            if (GameState.vizState.active) renderVisualization();
+        }
+    });
+
     GameState.map.on('move', () => {
         ScreenCoordCache.invalidate();
-        if (!isZooming) {
+        // Only do full redraw if not actively panning (for programmatic moves)
+        if (!isZooming && !isPanning) {
             if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
             updateMarkerPositions();
             redrawUserPath();
