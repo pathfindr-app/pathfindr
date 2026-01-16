@@ -27,6 +27,20 @@
     --bottom-bar-offset: 25px;
 }
 
+/* iOS Safari tile-pane compositor fix
+   Forces WebKit to keep the tile layer in the active paint cycle
+   by making it technically "animated" - prevents the compositor
+   from caching and forgetting to repaint it */
+@keyframes ios-tile-compositor-fix {
+    0% { transform: translateZ(0); }
+    100% { transform: translateZ(0.01px); }
+}
+
+.ios-safari .leaflet-tile-pane {
+    animation: ios-tile-compositor-fix 1s linear infinite alternate;
+    will-change: transform;
+}
+
 /* Use dvh where supported, fallback to vh */
 @supports (height: 100dvh) {
     :root {
