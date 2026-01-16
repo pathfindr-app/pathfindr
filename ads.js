@@ -270,6 +270,7 @@ const PathfindrAds = {
   // ===========================================
 
   adsenseLoaded: false,
+  bannerRotationIndex: 0,  // Track rotation between Go Pro and AdSense
 
   /**
    * Load AdSense script if not already loaded
@@ -302,45 +303,54 @@ const PathfindrAds = {
   },
 
   /**
-   * Show web banner ad
+   * Show web banner ad - rotates between Go Pro promo and AdSense
    */
   async showWebBanner() {
     const banner = document.getElementById('adsense-banner');
     if (!banner) return;
 
-    // Load AdSense if needed
-    await this.loadAdSense();
-
     // Show the container
     banner.style.display = 'block';
     document.body.classList.add('ad-visible');
 
-    // Initialize ad slot if AdSense loaded and configured
+    // Rotate between Go Pro (index 0) and AdSense (index 1, 2, 3...)
+    // Show Go Pro every 3rd impression
+    const showGoPro = this.bannerRotationIndex % 3 === 0;
+    this.bannerRotationIndex++;
+
+    if (showGoPro) {
+      console.log('[Ads] Showing Go Pro banner (rotation)');
+      this.showBannerFallback(banner);
+      return;
+    }
+
+    // Try to show AdSense
+    await this.loadAdSense();
+
     const slotId = PathfindrConfig.adsense?.slots?.banner;
     if (this.adsenseLoaded && slotId && !slotId.startsWith('YOUR_')) {
-      // Check if ad already initialized
-      if (!banner.querySelector('.adsbygoogle')) {
-        banner.innerHTML = `
-          <ins class="adsbygoogle"
-               style="display:block; height:90px; max-height:90px;"
-               data-ad-client="${PathfindrConfig.adsense.publisherId}"
-               data-ad-slot="${slotId}"
-               data-ad-format="horizontal"></ins>
-        `;
-        try {
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
+      console.log('[Ads] Showing AdSense banner (rotation)');
+      // Clear previous content and create fresh ad slot
+      banner.innerHTML = `
+        <ins class="adsbygoogle"
+             style="display:block; height:90px; max-height:90px;"
+             data-ad-client="${PathfindrConfig.adsense.publisherId}"
+             data-ad-slot="${slotId}"
+             data-ad-format="horizontal"></ins>
+      `;
+      try {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
 
-          // Check if ad loaded after a delay, show fallback if not
-          setTimeout(() => {
-            this.checkAdLoadedOrFallback(banner);
-          }, 2000);
-        } catch (e) {
-          console.warn('[Ads] AdSense push failed:', e);
-          this.showBannerFallback(banner);
-        }
+        // Check if ad loaded after a delay, show fallback if not
+        setTimeout(() => {
+          this.checkAdLoadedOrFallback(banner);
+        }, 2000);
+      } catch (e) {
+        console.warn('[Ads] AdSense push failed:', e);
+        this.showBannerFallback(banner);
       }
     } else {
-      // Show placeholder when AdSense not configured
+      // AdSense not configured, show Go Pro
       this.showBannerFallback(banner);
     }
   },
