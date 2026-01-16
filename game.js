@@ -5003,16 +5003,90 @@ function initMap() {
     GameState.optimalLayer = L.layerGroup().addTo(GameState.map);
     GameState.userPathLayer = L.layerGroup().addTo(GameState.map);
 
-    GameState.map.on('move', () => {
-        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
-        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
-        updateMarkerPositions();
-        redrawUserPath();
-        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
-        if (GameState.vizState.active) renderVisualization();
+    // Track mouse position for zoom origin
+    let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    document.addEventListener('mousemove', (e) => {
+        mousePos = { x: e.clientX, y: e.clientY };
     });
+
+    // Zoom state
+    let isZooming = false;
+    let preZoomLevel = null;
+
+    const canvases = [
+        document.getElementById('webgl-canvas'),
+        document.getElementById('draw-canvas'),
+        document.getElementById('viz-canvas'),
+        document.getElementById('marker-container')
+    ];
+
+    GameState.map.on('move', () => {
+        ScreenCoordCache.invalidate();
+        if (!isZooming) {
+            if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
+            updateMarkerPositions();
+            redrawUserPath();
+            if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
+            if (GameState.vizState.active) renderVisualization();
+        }
+    });
+
     GameState.map.on('zoom', () => {
-        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
+        ScreenCoordCache.invalidate();
+        if (!isZooming) {
+            if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
+            updateMarkerPositions();
+            redrawUserPath();
+            if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
+            if (GameState.vizState.active) renderVisualization();
+        }
+    });
+
+    GameState.map.on('zoomstart', () => {
+        isZooming = true;
+        preZoomLevel = GameState.map.getZoom();
+
+        // Get mouse position relative to map container
+        const container = GameState.map.getContainer();
+        const rect = container.getBoundingClientRect();
+        const originX = mousePos.x - rect.left;
+        const originY = mousePos.y - rect.top;
+
+        // Set transform origin to mouse position
+        canvases.forEach(c => {
+            if (c) {
+                c.style.transformOrigin = `${originX}px ${originY}px`;
+                c.style.transition = 'transform 0.25s cubic-bezier(0, 0, 0.25, 1)';
+            }
+        });
+    });
+
+    GameState.map.on('zoomanim', (e) => {
+        if (preZoomLevel === null) return;
+
+        const scale = Math.pow(2, e.zoom - preZoomLevel);
+        canvases.forEach(c => {
+            if (c) {
+                c.style.transform = `scale(${scale})`;
+            }
+        });
+    });
+
+    GameState.map.on('zoomend', () => {
+        isZooming = false;
+        preZoomLevel = null;
+
+        // Clear transforms and redraw
+        canvases.forEach(c => {
+            if (c) {
+                c.style.transition = '';
+                c.style.transform = '';
+                c.style.transformOrigin = '';
+            }
+        });
+
+        // Now redraw at final position
+        ScreenCoordCache.invalidate();
         if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
         updateMarkerPositions();
         redrawUserPath();
