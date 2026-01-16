@@ -4970,9 +4970,6 @@ function initMap() {
     // Detect mobile for touch-specific settings
     const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
 
-    // Check if iOS Safari for specific optimizations
-    const isIOSSafari = document.body.classList.contains('ios-safari');
-
     GameState.map = L.map('map', {
         center: [CONFIG.defaultLocation.lat, CONFIG.defaultLocation.lng],
         zoom: CONFIG.defaultLocation.zoom,
@@ -4989,19 +4986,12 @@ function initMap() {
         zoomSnap: 0,
         zoomDelta: 0.5,
         wheelPxPerZoomLevel: 120,
-        // iOS Safari fix: disable animations that cause tile flickering
-        fadeAnimation: !isIOSSafari,
-        zoomAnimation: true,
     });
 
     // Store tile layer reference for toggle functionality
     // Minimal attribution without Ukraine flag
     GameState.tileLayer = L.tileLayer(CONFIG.tileUrl, {
-        attribution: '© <a href="https://openstreetmap.org">OSM</a>',
-        // iOS Safari fix: prevent tile flickering during zoom
-        updateWhenZooming: false,  // Don't update tiles mid-zoom
-        updateWhenIdle: true,      // Update when zoom completes
-        keepBuffer: 4,             // Keep more tiles in buffer
+        attribution: '© <a href="https://openstreetmap.org">OSM</a>'
     }).addTo(GameState.map);
 
     // Start with custom road view mode if enabled

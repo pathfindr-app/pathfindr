@@ -1945,6 +1945,12 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     mix-blend-mode: screen;
 }
 
+/* iOS Safari: Disable mix-blend-mode which causes tile disappearing during zoom */
+.ios-safari #map-container.custom-roads-mode .leaflet-tile-pane {
+    mix-blend-mode: normal;
+    opacity: 0.35;
+}
+
 /* Vignette overlay for map - warm purple edges */
 #map-container::after {
     content: '';
@@ -2002,30 +2008,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 /* Individual tiles get subtle processing */
 .leaflet-tile {
     image-rendering: auto;
-}
-
-/* iOS Safari fix: Prevent tile flickering during zoom */
-.leaflet-tile-pane,
-.leaflet-tile-container,
-.leaflet-tile {
-    -webkit-transform: translate3d(0, 0, 0);
-    -webkit-backface-visibility: hidden;
-    -webkit-perspective: 1000;
-}
-
-/* iOS Safari: Keep tiles visible during zoom animation */
-.leaflet-zoom-anim .leaflet-tile-pane {
-    -webkit-transform: translate3d(0, 0, 0) !important;
-}
-
-/* iOS Safari: Prevent tile layer from disappearing during pinch */
-.ios-safari .leaflet-tile-pane {
-    will-change: transform, opacity;
-}
-
-.ios-safari .leaflet-tile {
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
 }
 
 /* Zoom Controls */
