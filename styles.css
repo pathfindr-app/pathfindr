@@ -6,6 +6,34 @@
 /* Google Fonts - Warm Retro Display */
 @import url('https://fonts.googleapis.com/css2?family=Righteous&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
+/* =============================================================================
+   MOBILE BROWSER COMPATIBILITY
+   Handle bottom address bars (Safari iOS, Chrome Android) and dynamic viewport
+   ============================================================================= */
+
+/* Dynamic viewport height - accounts for browser UI */
+:root {
+    --vh: 1vh; /* Updated by JS for accurate mobile viewport */
+    --bottom-bar-offset: 0px; /* Extra padding for bottom address bars */
+}
+
+/* When mobile browser with bottom bar is detected */
+.mobile-bottom-bar {
+    --bottom-bar-offset: 20px;
+}
+
+/* iOS Safari specifically */
+.ios-safari {
+    --bottom-bar-offset: 25px;
+}
+
+/* Use dvh where supported, fallback to vh */
+@supports (height: 100dvh) {
+    :root {
+        --vh: 1dvh;
+    }
+}
+
 /* CSS Variables - Warm Synthwave Palette */
 :root {
     /* Core Colors - Deep purple-navy with warmth */
@@ -3637,7 +3665,7 @@ body.fullscreen-mode .fullscreen-btn {
     #results-panel {
         width: 100%;
         border-radius: 20px 20px 0 0;
-        padding: 0.75rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+        padding: 0.75rem 1rem calc(0.6rem + var(--bottom-bar-offset, 0px) + env(safe-area-inset-bottom, 0px));
     }
 
     /* Reorder: put Next Round button right after score on mobile */

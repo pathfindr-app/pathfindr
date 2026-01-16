@@ -4846,10 +4846,76 @@ const GameState = {
 };
 
 // =============================================================================
+// MOBILE BROWSER DETECTION
+// =============================================================================
+
+/**
+ * Detect mobile browsers with bottom address bars and apply appropriate CSS classes
+ * Also sets up dynamic viewport height for accurate mobile sizing
+ */
+function initMobileBrowserDetection() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+
+    // Detect iOS Safari (not Chrome or other browsers on iOS)
+    const isIOSSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS/.test(ua);
+
+    // Detect Android
+    const isAndroid = /Android/.test(ua);
+
+    // Detect mobile (general)
+    const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+    // Detect if likely has bottom address bar
+    // iOS Safari and some Android Chrome versions put address bar at bottom
+    const hasBottomBar = isIOSSafari || (isAndroid && /Chrome/i.test(ua) && window.innerHeight < window.screen.height * 0.85);
+
+    // Apply classes
+    if (isMobile) {
+        document.body.classList.add('mobile-browser');
+    }
+
+    if (hasBottomBar) {
+        document.body.classList.add('mobile-bottom-bar');
+    }
+
+    if (isIOSSafari) {
+        document.body.classList.add('ios-safari');
+    }
+
+    // Set up dynamic viewport height
+    // This gives us an accurate vh unit that accounts for browser UI
+    const setVh = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setVh, 100); // Delay to let orientation change complete
+    });
+
+    // Log detection results for debugging
+    console.log('[Mobile] Detection:', {
+        isMobile,
+        isIOS,
+        isIOSSafari,
+        isAndroid,
+        hasBottomBar,
+        viewportHeight: window.innerHeight,
+        screenHeight: window.screen.height
+    });
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    initMobileBrowserDetection();  // Detect mobile browser type first
     initMap();
     initCanvases();
     AmbientViz.init();  // Initialize glow sprites
