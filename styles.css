@@ -2004,6 +2004,30 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     image-rendering: auto;
 }
 
+/* iOS Safari fix: Prevent tile flickering during zoom */
+.leaflet-tile-pane,
+.leaflet-tile-container,
+.leaflet-tile {
+    -webkit-transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    -webkit-perspective: 1000;
+}
+
+/* iOS Safari: Keep tiles visible during zoom animation */
+.leaflet-zoom-anim .leaflet-tile-pane {
+    -webkit-transform: translate3d(0, 0, 0) !important;
+}
+
+/* iOS Safari: Prevent tile layer from disappearing during pinch */
+.ios-safari .leaflet-tile-pane {
+    will-change: transform, opacity;
+}
+
+.ios-safari .leaflet-tile {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
 /* Zoom Controls */
 .leaflet-control-zoom {
     border: none !important;
