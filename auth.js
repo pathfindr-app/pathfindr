@@ -521,33 +521,8 @@ const PathfindrAuth = {
     }
   },
 
-  /**
-   * Update user's purchase status
-   * @param {boolean} purchased
-   */
-  async setPurchased(purchased = true) {
-    if (!this.client || !this.currentUser) return;
-
-    try {
-      await this.client
-        .from('users')
-        .update({
-          has_purchased: purchased,
-          purchased_at: new Date().toISOString(),
-        })
-        .eq('id', this.currentUser.id);
-
-      this.currentProfile.has_purchased = purchased;
-      window.pathfindrUser.has_purchased = purchased;
-
-      // Remove ads immediately
-      if (purchased && typeof PathfindrAds !== 'undefined') {
-        PathfindrAds.removeAllAds();
-      }
-    } catch (error) {
-      console.error('[Auth] Failed to update purchase status:', error);
-    }
-  },
+  // NOTE: setPurchased removed for security - has_purchased is ONLY set by Stripe webhook
+  // To update premium status, call refreshProfile() which fetches server-side state
 
   /**
    * Get current user's username
@@ -567,14 +542,9 @@ const PathfindrAuth = {
 
   /**
    * Check if user has purchased ad-free / premium
-   * Also checks for dev override in localStorage
    * @returns {boolean}
    */
   hasPurchased() {
-    // Check for dev override first
-    if (localStorage.getItem('pathfindr_premium_override') === 'true') {
-      return true;
-    }
     return this.currentProfile?.has_purchased === true;
   },
 
@@ -618,24 +588,6 @@ const PathfindrAuth = {
     } catch (error) {
       console.error('[Auth] Error refreshing profile:', error);
     }
-  },
-
-  /**
-   * Enable premium features locally (for development/testing)
-   * Run in console: PathfindrAuth.enablePremiumOverride()
-   */
-  enablePremiumOverride() {
-    localStorage.setItem('pathfindr_premium_override', 'true');
-    console.log('[Auth] Premium override ENABLED. Refresh the page to access premium features.');
-    console.log('[Auth] To disable: PathfindrAuth.disablePremiumOverride()');
-  },
-
-  /**
-   * Disable premium override
-   */
-  disablePremiumOverride() {
-    localStorage.removeItem('pathfindr_premium_override');
-    console.log('[Auth] Premium override DISABLED.');
   },
 
   /**

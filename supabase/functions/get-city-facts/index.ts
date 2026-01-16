@@ -5,12 +5,74 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// CORS: Restrict to your domain in production
-// Set ALLOWED_ORIGIN env var in Supabase dashboard for production
-const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') || '*'
-const corsHeaders = {
-  'Access-Control-Allow-Origin': allowedOrigin,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// =============================================================================
+// RATE LIMITING - Protect against API abuse
+// =============================================================================
+
+// In-memory rate limit store (resets on cold start, but prevents sustained abuse)
+const rateLimitStore = new Map<string, number[]>()
+
+const RATE_LIMIT = {
+  maxRequests: 30,      // Max requests per window
+  windowMs: 60 * 1000,  // 1 minute window
+}
+
+function isRateLimited(clientId: string): boolean {
+  const now = Date.now()
+  const windowStart = now - RATE_LIMIT.windowMs
+
+  // Get existing timestamps for this client
+  let timestamps = rateLimitStore.get(clientId) || []
+
+  // Remove timestamps outside the window
+  timestamps = timestamps.filter(ts => ts > windowStart)
+
+  // Check if over limit
+  if (timestamps.length >= RATE_LIMIT.maxRequests) {
+    return true
+  }
+
+  // Add current timestamp
+  timestamps.push(now)
+  rateLimitStore.set(clientId, timestamps)
+
+  // Cleanup old entries periodically (every 100 requests)
+  if (Math.random() < 0.01) {
+    for (const [key, times] of rateLimitStore.entries()) {
+      const filtered = times.filter(ts => ts > windowStart)
+      if (filtered.length === 0) {
+        rateLimitStore.delete(key)
+      } else {
+        rateLimitStore.set(key, filtered)
+      }
+    }
+  }
+
+  return false
+}
+
+function getClientId(req: Request): string {
+  // Try to get real IP from various headers (Cloudflare, etc.)
+  const cfIp = req.headers.get('cf-connecting-ip')
+  const xForwardedFor = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  const xRealIp = req.headers.get('x-real-ip')
+
+  return cfIp || xForwardedFor || xRealIp || 'unknown'
+}
+
+// Allowed origins for CORS - production only
+const ALLOWED_ORIGINS = [
+  'https://pathfindr.world',
+  'https://www.pathfindr.world',
+  'https://pathfindralpha.vercel.app',
+]
+
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 interface CityFactsRequest {
@@ -31,9 +93,22 @@ interface WikipediaResponse {
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Rate limiting check
+  const clientId = getClientId(req)
+  if (isRateLimited(clientId)) {
+    console.log(`Rate limited: ${clientId}`)
+    return new Response(
+      JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   }
 
   try {

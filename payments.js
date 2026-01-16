@@ -252,8 +252,11 @@ const PathfindrPayments = {
     const platform = PathfindrConfig.platform;
 
     if (platform === 'web') {
-      // Check Supabase for web purchases
-      return window.pathfindrUser?.has_purchased === true;
+      // Check via PathfindrAuth (source of truth, prevents console tampering)
+      if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased) {
+        return PathfindrAuth.hasPurchased();
+      }
+      return false;
     }
 
     if (!this.Purchases) {
@@ -278,8 +281,10 @@ const PathfindrPayments = {
     const platform = PathfindrConfig.platform;
 
     if (platform === 'web') {
-      // Web purchases are tied to account, not device
-      const hasPurchased = window.pathfindrUser?.has_purchased === true;
+      // Web purchases are tied to account - check via PathfindrAuth
+      const hasPurchased = typeof PathfindrAuth !== 'undefined' &&
+                           PathfindrAuth.hasPurchased &&
+                           PathfindrAuth.hasPurchased();
       return { success: true, isPremium: hasPurchased };
     }
 
@@ -311,27 +316,35 @@ const PathfindrPayments = {
    * Updates user record and removes ads
    */
   async handlePurchaseSuccess() {
-    // Update Supabase user record (for cross-platform sync)
-    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.setPurchased) {
-      await PathfindrAuth.setPurchased(true);
+    // Refresh profile from server to get webhook-updated purchase status
+    // NOTE: has_purchased is ONLY set by Stripe webhook for security
+    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.refreshProfile) {
+      console.log('[Payments] Refreshing profile to get purchase status...');
+      await PathfindrAuth.refreshProfile();
+
+      // Give webhook a moment to process if not yet done
+      if (!PathfindrAuth.hasPurchased()) {
+        console.log('[Payments] Waiting for webhook to process...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await PathfindrAuth.refreshProfile();
+      }
     }
 
-    // Update local state
-    if (window.pathfindrUser) {
-      window.pathfindrUser.has_purchased = true;
-    }
+    // Remove ads if now premium
+    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased && PathfindrAuth.hasPurchased()) {
+      if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
+        await PathfindrAds.removeAllAds();
+      }
 
-    // Remove ads immediately
-    if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
-      await PathfindrAds.removeAllAds();
-    }
+      // Update Pro user status in UI
+      if (typeof updateProUserStatus === 'function') {
+        updateProUserStatus();
+      }
 
-    // Update Pro user status in UI
-    if (typeof updateProUserStatus === 'function') {
-      updateProUserStatus();
+      console.log('[Payments] Purchase verified - premium unlocked');
+    } else {
+      console.log('[Payments] Purchase pending verification - refresh page if not unlocked');
     }
-
-    console.log('[Payments] Purchase successful - premium unlocked');
   },
 
   /**

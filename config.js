@@ -136,11 +136,15 @@ PathfindrConfig.platform = (() => {
 })();
 
 // Helper to check if user has purchased ad-free
+// Uses PathfindrAuth as source of truth to prevent console tampering
 PathfindrConfig.isAdFree = () => {
   // Admins are always ad-free
   if (PathfindrConfig.isAdmin()) return true;
-  // This will be set by auth.js when user data loads
-  return window.pathfindrUser?.has_purchased === true;
+  // Check via PathfindrAuth (uses internal currentProfile, not window object)
+  if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased) {
+    return PathfindrAuth.hasPurchased();
+  }
+  return false;
 };
 
 // Helper to check if current user is an admin
