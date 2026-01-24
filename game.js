@@ -269,22 +269,23 @@ const CONFIG = {
         flickerIntensity: 0.15,     // line flicker amount
         arcFrequency: 0.02,         // chance of arc spark per frame
         wobbleAmount: 1.5,          // pixel wobble from noise
-        idleIntensity: 0.5,         // brightness of idle/persistent paths (lowered for softer look)
+        idleIntensity: 0.65,        // brightness of idle/persistent paths (bumped for better visibility)
         activeIntensity: 1.0,       // brightness of active round
+        visualizerIdleIntensity: 0.8, // Higher idle intensity for Visualizer mode
     },
 
     // Living Network - keeps visualization alive after pathfinding completes
     livingNetwork: {
-        breatheSpeed: 0.4,          // Speed of global breathing pulse (cycles/sec)
-        breatheMin: 0.7,            // Minimum brightness during breath (BUMPED from 0.5)
+        breatheSpeed: 0.3,          // Slower breathing for more dramatic effect
+        breatheMin: 0.75,           // Higher minimum - paths never get too dim
         breatheMax: 1.0,            // Maximum brightness during breath
-        rippleInterval: 3000,       // ms between ripple waves
-        rippleSpeed: 0.15,          // How fast ripples spread (0-1 per frame)
-        rippleDuration: 1500,       // How long a ripple lasts (ms)
-        powerPulseSpeed: 0.008,     // Speed of energy pulses along optimal path
-        powerPulseCount: 12,        // Number of energy pulses per optimal path
-        powerGlowIntensity: 1.5,    // How bright the optimal path glows as power source
-        sparkChance: 0.015,         // Chance per frame of spark from optimal path
+        rippleInterval: 2000,       // More frequent ripple waves
+        rippleSpeed: 0.12,          // Slightly slower ripple spread
+        rippleDuration: 2000,       // Longer lasting ripples
+        powerPulseSpeed: 0.006,     // Slower, more visible energy pulses
+        powerPulseCount: 16,        // More energy pulses along paths
+        powerGlowIntensity: 1.8,    // Brighter optimal path glow
+        sparkChance: 0.025,         // More frequent sparks
     },
 
     maxScore: 1000,
@@ -4181,16 +4182,18 @@ const VisualizerHistory = {
             } else if (path.state === 'settling') {
                 const elapsed = now - path.settleStartTime;
                 const settleProgress = Math.min(1, elapsed / 1000);
-                path.intensity = 1.0 - (settleProgress * (1 - CONFIG.electricity.idleIntensity));
+                // Use higher idle intensity for Visualizer mode for better persistence
+                const targetIdle = CONFIG.electricity.visualizerIdleIntensity || CONFIG.electricity.idleIntensity;
+                path.intensity = 1.0 - (settleProgress * (1 - targetIdle));
 
                 if (settleProgress >= 1) {
                     path.state = 'idle';
-                    path.intensity = CONFIG.electricity.idleIntensity;
+                    path.intensity = targetIdle;
                 }
             }
 
-            // Spawn occasional sparks (ASMR: less frequent for calmer feel)
-            if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance * 0.3 && this.sparks.length < 10) {
+            // Spawn occasional sparks - increased for more visual interest
+            if (path.state === 'idle' && Math.random() < CONFIG.livingNetwork.sparkChance * 0.5 && this.sparks.length < 15) {
                 this.spawnSpark(path);
             }
 
@@ -7945,7 +7948,12 @@ async function showPremiumRequired(modeName) {
                 </svg>
             </div>
             <h2>Unlock ${modeName} Mode</h2>
-            <p>Go Pro to unlock Explorer and Visualizer modes, plus remove all ads forever.</p>
+            <div class="premium-features-list">
+                <div class="premium-feature"><span class="feature-check">✓</span> Ad-free experience</div>
+                <div class="premium-feature"><span class="feature-check">✓</span> Explorer & Visualizer modes</div>
+                <div class="premium-feature"><span class="feature-check">✓</span> Search any location in Classic</div>
+                <div class="premium-feature"><span class="feature-check">✓</span> One-time payment</div>
+            </div>
             <div class="premium-price">$2 <span>one-time purchase</span></div>
             <div class="premium-prompt-buttons">
                 <button id="premium-buy-btn" class="btn btn-primary">Go Pro</button>
@@ -7991,12 +7999,24 @@ async function showPremiumRequired(modeName) {
             .premium-prompt-content h2 {
                 font-family: var(--font-display);
                 color: var(--text-bright);
-                margin: 1rem 0 0.5rem;
+                margin: 1rem 0 1rem;
             }
-            .premium-prompt-content p {
+            .premium-features-list {
+                text-align: left;
+                margin: 0 auto 1.25rem;
+                max-width: 260px;
+            }
+            .premium-feature {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.35rem 0;
                 color: var(--text-dim);
                 font-size: 0.9rem;
-                margin-bottom: 1rem;
+            }
+            .premium-feature .feature-check {
+                color: var(--neon-cyan);
+                font-weight: bold;
             }
             .premium-price {
                 font-size: 1.5rem;
