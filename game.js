@@ -3379,7 +3379,10 @@ const AmbientViz = {
                 if (edge) {
                     const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
                     const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
-                    screenEdges.push({ from, to });
+                    // Skip edges with NaN/Infinity coordinates
+                    if (isFinite(from.x) && isFinite(from.y) && isFinite(to.x) && isFinite(to.y)) {
+                        screenEdges.push({ from, to });
+                    }
                 }
             }
 
@@ -3392,7 +3395,10 @@ const AmbientViz = {
             if (round.optimalPath.length > 1) {
                 const optimalPoints = round.optimalPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
-                    if (pos) return GameState.map.project([pos.lng, pos.lat]);
+                    if (pos) {
+                        const p = GameState.map.project([pos.lng, pos.lat]);
+                        if (isFinite(p.x) && isFinite(p.y)) return p;
+                    }
                     return null;
                 }).filter(p => p !== null);
 
@@ -3411,7 +3417,10 @@ const AmbientViz = {
             if (round.userPath.length > 1) {
                 const userPoints = round.userPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
-                    if (pos) return GameState.map.project([pos.lng, pos.lat]);
+                    if (pos) {
+                        const p = GameState.map.project([pos.lng, pos.lat]);
+                        if (isFinite(p.x) && isFinite(p.y)) return p;
+                    }
                     return null;
                 }).filter(p => p !== null);
 
@@ -3435,10 +3444,24 @@ const AmbientViz = {
         // Get breathing multiplier for living network effect
         const breathe = historyObj.getBreathingMultiplier();
 
-        // Check if map moved (invalidates all caches)
+        // Check if map moved (invalidates all caches) - include pitch/bearing for 3D
         const mapCenter = GameState.map.getCenter();
         const mapZoom = GameState.map.getZoom();
-        const mapState = `${mapCenter.lat.toFixed(6)},${mapCenter.lng.toFixed(6)},${mapZoom}`;
+        const mapPitch = GameState.map.getPitch ? GameState.map.getPitch() : 0;
+        const mapBearing = GameState.map.getBearing ? GameState.map.getBearing() : 0;
+        const mapState = `${mapCenter.lat.toFixed(6)},${mapCenter.lng.toFixed(6)},${mapZoom},${mapPitch.toFixed(1)},${mapBearing.toFixed(1)}`;
+
+        // Tight viewport clipping for 3D pitch - prevents horizon artifacts
+        const canvas = GameState.vizCanvas || GameState.drawCanvas;
+        const vw = canvas ? canvas.width : window.innerWidth;
+        const vh = canvas ? canvas.height : window.innerHeight;
+        const padding = 100;  // Tight clipping
+        const minX = -padding, maxX = vw + padding, minY = -padding, maxY = vh + padding;
+
+        const isInBounds = (p) => {
+            if (!isFinite(p.x) || !isFinite(p.y)) return false;
+            return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+        };
 
         for (const path of paths) {
             // OPTIMIZATION: Use cached screen coordinates if map hasn't moved
@@ -3450,24 +3473,33 @@ const AmbientViz = {
                     if (edge) {
                         const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
                         const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
-                        path.screenEdgesCache.push({ from, to });
+                        // Skip edges outside viewport (3D pitch clipping)
+                        if (isInBounds(from) || isInBounds(to)) {
+                            path.screenEdgesCache.push({ from, to });
+                        }
                     }
                 }
 
-                // Cache optimal path points
+                // Cache optimal path points (only filter NaN/Infinity - keep all finite points)
                 if (path.optimalPath.length > 1) {
                     path.optimalPointsCache = path.optimalPath.map(nodeId => {
                         const pos = GameState.nodes.get(nodeId);
-                        if (pos) return GameState.map.project([pos.lng, pos.lat]);
+                        if (pos) {
+                            const p = GameState.map.project([pos.lng, pos.lat]);
+                            if (isFinite(p.x) && isFinite(p.y)) return p;
+                        }
                         return null;
                     }).filter(p => p !== null);
                 }
 
-                // Cache user path points (Explorer mode)
+                // Cache user path points (Explorer mode) - only filter NaN/Infinity
                 if (path.userPath && path.userPath.length > 1) {
                     path.userPointsCache = path.userPath.map(nodeId => {
                         const pos = GameState.nodes.get(nodeId);
-                        if (pos) return GameState.map.project([pos.lng, pos.lat]);
+                        if (pos) {
+                            const p = GameState.map.project([pos.lng, pos.lat]);
+                            if (isFinite(p.x) && isFinite(p.y)) return p;
+                        }
                         return null;
                     }).filter(p => p !== null);
                 }
@@ -3530,11 +3562,22 @@ const AmbientViz = {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        // Helper to check if edge is valid (not crossing horizon)
+        const maxSegmentLength = 3000;
+        const isValidEdge = (edge) => {
+            if (!isFinite(edge.from.x) || !isFinite(edge.from.y) ||
+                !isFinite(edge.to.x) || !isFinite(edge.to.y)) return false;
+            const dx = edge.to.x - edge.from.x;
+            const dy = edge.to.y - edge.from.y;
+            return (dx * dx + dy * dy) < maxSegmentLength * maxSegmentLength;
+        };
+
         // Just 2 layers instead of 4-5
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * intensity})`;
         ctx.lineWidth = 6;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
@@ -3544,6 +3587,7 @@ const AmbientViz = {
         ctx.lineWidth = 2;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
@@ -3560,24 +3604,40 @@ const AmbientViz = {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        // Build path with segment-level clipping (skip horizon-crossing segments)
+        const maxSegmentLength = 3000;
+        const buildClippedPath = () => {
+            ctx.beginPath();
+            let pathStarted = false;
+            for (let i = 0; i < points.length - 1; i++) {
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+                if (segmentLength < maxSegmentLength) {
+                    if (!pathStarted) {
+                        ctx.moveTo(p1.x, p1.y);
+                        pathStarted = true;
+                    }
+                    ctx.lineTo(p2.x, p2.y);
+                } else {
+                    pathStarted = false;
+                }
+            }
+        };
+
         // Outer glow only
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * intensity})`;
         ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        buildClippedPath();
         ctx.stroke();
 
         // Core
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * intensity})`;
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
+        buildClippedPath();
         ctx.stroke();
 
         ctx.globalCompositeOperation = 'source-over';
@@ -3594,11 +3654,27 @@ const AmbientViz = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
-        // Build path once, stroke multiple times (more efficient)
+        // Build path with segment-level clipping (skip horizon-crossing segments)
+        const maxSegmentLength = 3000; // Skip segments longer than this (horizon artifacts)
         ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
+        let pathStarted = false;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+            if (segmentLength < maxSegmentLength) {
+                if (!pathStarted) {
+                    ctx.moveTo(p1.x, p1.y);
+                    pathStarted = true;
+                }
+                ctx.lineTo(p2.x, p2.y);
+            } else {
+                // Break in path - next valid segment starts fresh
+                pathStarted = false;
+            }
         }
 
         // ENHANCED: Wide atmospheric bloom - makes path GLOW prominently
@@ -3641,6 +3717,16 @@ const AmbientViz = {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        // Helper to check if edge is valid (not crossing horizon)
+        const maxSegmentLength = 3000;
+        const isValidEdge = (edge) => {
+            if (!isFinite(edge.from.x) || !isFinite(edge.from.y) ||
+                !isFinite(edge.to.x) || !isFinite(edge.to.y)) return false;
+            const dx = edge.to.x - edge.from.x;
+            const dy = edge.to.y - edge.from.y;
+            return (dx * dx + dy * dy) < maxSegmentLength * maxSegmentLength;
+        };
+
         // Enhanced flicker with multiple wave frequencies for organic feel
         const flicker = 0.85 + breathe * 0.15;
         const neuralPulse = 0.9 + Math.sin(time * 1.5) * 0.1 + Math.sin(time * 3.7) * 0.05;
@@ -3651,6 +3737,7 @@ const AmbientViz = {
         ctx.lineWidth = 14;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
@@ -3661,6 +3748,7 @@ const AmbientViz = {
         ctx.lineWidth = 7;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
@@ -3671,6 +3759,7 @@ const AmbientViz = {
         ctx.lineWidth = 3;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
@@ -3686,7 +3775,7 @@ const AmbientViz = {
             for (let i = 0; i < highlightCount; i++) {
                 const idx = Math.floor((pulsePhase * edges.length + i * (edges.length / highlightCount))) % edges.length;
                 const edge = edges[idx];
-                if (edge) {
+                if (edge && isValidEdge(edge)) {
                     ctx.moveTo(edge.from.x, edge.from.y);
                     ctx.lineTo(edge.to.x, edge.to.y);
                 }
@@ -3710,11 +3799,26 @@ const AmbientViz = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
-        // Build path once for efficiency
+        // Build path with segment-level clipping (skip horizon-crossing segments)
+        const maxSegmentLength = 3000;
         ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
+        let pathStarted = false;
+        for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+            if (segmentLength < maxSegmentLength) {
+                if (!pathStarted) {
+                    ctx.moveTo(p1.x, p1.y);
+                    pathStarted = true;
+                }
+                ctx.lineTo(p2.x, p2.y);
+            } else {
+                pathStarted = false;
+            }
         }
 
         // ENHANCED: Wide atmospheric bloom - the "power" aura
@@ -4540,6 +4644,16 @@ const ElectricitySystem = {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        // Helper to check if edge is valid (not crossing horizon)
+        const maxSegmentLength = 3000;
+        const isValidEdge = (edge) => {
+            if (!isFinite(edge.from.x) || !isFinite(edge.from.y) ||
+                !isFinite(edge.to.x) || !isFinite(edge.to.y)) return false;
+            const dx = edge.to.x - edge.from.x;
+            const dy = edge.to.y - edge.from.y;
+            return (dx * dx + dy * dy) < maxSegmentLength * maxSegmentLength;
+        };
+
         // Outer glow
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
@@ -4547,6 +4661,7 @@ const ElectricitySystem = {
 
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             const w1 = this.getWobble(edge.from.x, edge.from.y);
             const w2 = this.getWobble(edge.to.x, edge.to.y);
             ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
@@ -4559,6 +4674,7 @@ const ElectricitySystem = {
         ctx.lineWidth = isActive ? 6 : 4;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             const w1 = this.getWobble(edge.from.x, edge.from.y);
             const w2 = this.getWobble(edge.to.x, edge.to.y);
             ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
@@ -4571,6 +4687,7 @@ const ElectricitySystem = {
         ctx.lineWidth = isActive ? 2 : 1.5;
         ctx.beginPath();
         for (const edge of edges) {
+            if (!isValidEdge(edge)) continue;
             const w1 = this.getWobble(edge.from.x, edge.from.y);
             const w2 = this.getWobble(edge.to.x, edge.to.y);
             ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
@@ -4668,25 +4785,41 @@ const ElectricitySystem = {
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'lighter';
 
+        // Build path with segment-level clipping (skip horizon-crossing segments)
+        const maxSegmentLength = 3000;
+        const buildClippedPath = () => {
+            ctx.beginPath();
+            let pathStarted = false;
+            for (let i = 0; i < pathPoints.length - 1; i++) {
+                const p1 = pathPoints[i];
+                const p2 = pathPoints[i + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+                if (segmentLength < maxSegmentLength) {
+                    if (!pathStarted) {
+                        ctx.moveTo(p1.x, p1.y);
+                        pathStarted = true;
+                    }
+                    ctx.lineTo(p2.x, p2.y);
+                } else {
+                    pathStarted = false;
+                }
+            }
+        };
+
         // User path is THINNER than optimal - distinguishes without dashing (better perf)
         // Outer glow
         ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.15 * effectiveIntensity})`;
         ctx.lineWidth = 10;
-        ctx.beginPath();
-        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
-        for (let i = 1; i < pathPoints.length; i++) {
-            ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
-        }
+        buildClippedPath();
         ctx.stroke();
 
         // Core - slightly dimmer than optimal to visually separate
         ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.6 * effectiveIntensity})`;
         ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
-        for (let i = 1; i < pathPoints.length; i++) {
-            ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
-        }
+        buildClippedPath();
         ctx.stroke();
 
         ctx.globalCompositeOperation = 'source-over';
@@ -4722,7 +4855,7 @@ function screenToGeo(x, y) {
 // =============================================================================
 
 const ScreenCoordCache = {
-    edges: [],           // Array of {from: {x,y}, to: {x,y}} for each edge
+    edges: [],           // Array of {from: {x,y}, to: {x,y}, visible: bool} for each edge
     dirty: true,         // Needs refresh when map moves/zooms
     lastRefresh: 0,      // Timestamp of last refresh
 
@@ -4734,6 +4867,26 @@ const ScreenCoordCache = {
         }
 
         const map = GameState.map;
+        const canvas = GameState.vizCanvas || GameState.drawCanvas;
+        const width = canvas ? canvas.width : window.innerWidth;
+        const height = canvas ? canvas.height : window.innerHeight;
+
+        // Tight clipping for 3D pitch - only allow small overflow
+        // When pitched, horizon points project to extreme coordinates
+        const padding = 100;  // Just 100px overflow allowed
+        const minX = -padding;
+        const maxX = width + padding;
+        const minY = -padding;
+        const maxY = height + padding;
+
+        // Helper to check if a point is valid and in bounds
+        const isValidPoint = (p) => {
+            // Check for NaN/Infinity (can happen with extreme projections)
+            if (!isFinite(p.x) || !isFinite(p.y)) return false;
+            // Check bounds
+            return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+        };
+
         this.edges = new Array(GameState.edgeList.length);
 
         for (let i = 0; i < GameState.edgeList.length; i++) {
@@ -4741,10 +4894,16 @@ const ScreenCoordCache = {
             // MapLibre uses [lng, lat] order and project() method
             const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
             const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
+
+            // Check if edge is within viewport (handles 3D pitch clipping)
+            const fromInBounds = isValidPoint(fromScreen);
+            const toInBounds = isValidPoint(toScreen);
+
             this.edges[i] = {
                 from: { x: fromScreen.x, y: fromScreen.y },
                 to: { x: toScreen.x, y: toScreen.y },
-                edgeKey: `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`
+                edgeKey: `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`,
+                visible: fromInBounds || toInBounds  // Visible if either endpoint is in bounds
             };
         }
 
@@ -6647,12 +6806,22 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
+    // Helper to check if edge is valid (not crossing horizon - segment length check)
+    const maxSegmentLengthSq = 3000 * 3000;
+    const isValidEdge = (edge) => {
+        if (!edge.visible) return false;
+        const dx = edge.to.x - edge.from.x;
+        const dy = edge.to.y - edge.from.y;
+        return (dx * dx + dy * dy) < maxSegmentLengthSq;
+    };
+
     // Outer warm glow layer - using ambient.outer
     ctx.strokeStyle = `rgba(${ambient.outer.r}, ${ambient.outer.g}, ${ambient.outer.b}, ${0.2 * breathe})`;
     ctx.lineWidth = 6;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
         const edge = edges[i];
+        if (!isValidEdge(edge)) continue;
         ctx.moveTo(edge.from.x, edge.from.y);
         ctx.lineTo(edge.to.x, edge.to.y);
     }
@@ -6664,6 +6833,7 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
         const edge = edges[i];
+        if (!isValidEdge(edge)) continue;
         ctx.moveTo(edge.from.x, edge.from.y);
         ctx.lineTo(edge.to.x, edge.to.y);
     }
@@ -6675,6 +6845,7 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
         const edge = edges[i];
+        if (!isValidEdge(edge)) continue;
         ctx.moveTo(edge.from.x, edge.from.y);
         ctx.lineTo(edge.to.x, edge.to.y);
     }
@@ -6819,8 +6990,19 @@ function renderVisualization() {
         const edgesByHeat = { high: [], medium: [], low: [] };
         const cachedEdges = ScreenCoordCache.getEdges();
 
+        // Helper to check if edge is valid (not crossing horizon)
+        const maxSegmentLengthSq = 3000 * 3000;
+        const isValidEdge = (edge) => {
+            if (!edge.visible) return false;
+            const dx = edge.to.x - edge.from.x;
+            const dy = edge.to.y - edge.from.y;
+            return (dx * dx + dy * dy) < maxSegmentLengthSq;
+        };
+
         for (let i = 0; i < cachedEdges.length; i++) {
             const cached = cachedEdges[i];
+            if (!isValidEdge(cached)) continue;  // Skip invalid edges (viewport + length check)
+
             const heat = viz.edgeHeat.get(cached.edgeKey) || 0;
 
             if (heat < 0.03) continue;
