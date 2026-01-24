@@ -146,4 +146,37 @@ When `TESTING_MODE` is true:
 
 ---
 
+## Git Authentication (IMPORTANT!)
+
+Git push uses the `~/.netrc` file for authentication with GitHub. This file contains a Personal Access Token (PAT) for the `pathfindr-app` GitHub account.
+
+### If git push fails with "Permission denied"
+
+The token in `~/.netrc` has expired or is invalid. To fix:
+
+1. **Go to GitHub**: https://github.com/settings/personal-access-tokens
+2. **Create a new Fine-grained token**:
+   - Token name: `pathfindr-push` (or similar)
+   - Expiration: 30+ days
+   - Resource owner: `pathfindr-app`
+   - Repository access: "Only select repositories" → `pathfindr-app/pathfindr`
+   - Permissions: **Contents** → "Read and write" (this is required for push)
+3. **Copy the generated token** (starts with `github_pat_`)
+4. **Update `~/.netrc`**:
+   ```
+   machine github.com login pathfindr-app password <YOUR_NEW_TOKEN>
+   ```
+
+### Current Token Info
+- Token name: `pathfindr-push`
+- Expires: February 22, 2026
+- Permissions: Contents (read/write), Metadata (read-only)
+- Repository: pathfindr-app/pathfindr only
+
+### DO NOT
+- Do not ask the user to manually push - handle authentication issues yourself
+- Do not use SSH keys - this project uses HTTPS with PAT via `.netrc`
+
+---
+
 *This document is intended to help AI assistants understand the codebase quickly. The aesthetic is intentionally over-the-top cyberpunk - lean into the neon, the electricity, the Blade Runner vibes.*
