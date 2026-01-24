@@ -1794,10 +1794,10 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
 
         // Linear decay: heat = 1.0 - time * decaySpeed
-        // In visualizer mode: NO DECAY - explored edges stay permanently bright
-        // Other modes: SLOW decay for ASMR satisfaction
-        const decaySpeed = GameState.gameMode === 'visualizer' ? 0 : 0.12;
-        const heatFloor = GameState.gameMode === 'visualizer' ? 0.9 : 0.25;
+        // Visualizer: Very slow decay (0.03) to high floor (0.6) - edges settle gently
+        // Other modes: Faster decay to lower floor
+        const decaySpeed = GameState.gameMode === 'visualizer' ? 0.03 : 0.12;
+        const heatFloor = GameState.gameMode === 'visualizer' ? 0.6 : 0.25;
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
         gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
@@ -1842,9 +1842,9 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
 
         // Linear decay parameters (same as heat edges)
-        // In visualizer mode: NO DECAY - keep glow permanently
-        const decaySpeed = GameState.gameMode === 'visualizer' ? 0 : 0.12;
-        const heatFloor = GameState.gameMode === 'visualizer' ? 0.9 : 0.25;
+        // Visualizer: Very slow decay to high floor - glow settles gently
+        const decaySpeed = GameState.gameMode === 'visualizer' ? 0.03 : 0.12;
+        const heatFloor = GameState.gameMode === 'visualizer' ? 0.6 : 0.25;
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
         gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
@@ -3583,7 +3583,7 @@ const AmbientViz = {
         ctx.globalCompositeOperation = 'source-over';
     },
 
-    // Render optimal path with flowing electricity
+    // Render optimal path with flowing electricity - PROMINENT and eye-catching
     renderOptimalPathWithElectricity(ctx, points, color, intensity, sweep) {
         if (points.length < 2) return;
 
@@ -3601,29 +3601,29 @@ const AmbientViz = {
             ctx.lineTo(points[i].x, points[i].y);
         }
 
-        // Atmospheric bloom (widest, faintest) - SOFTENED
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.05 * effectiveIntensity})`;
-        ctx.lineWidth = 20;
+        // ENHANCED: Wide atmospheric bloom - makes path GLOW prominently
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
+        ctx.lineWidth = 32;
         ctx.stroke();
 
-        // Outer glow - SOFTENED
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.12 * effectiveIntensity})`;
-        ctx.lineWidth = 12;
+        // ENHANCED: Outer glow - brighter and wider
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.25 * effectiveIntensity})`;
+        ctx.lineWidth = 18;
         ctx.stroke();
 
-        // Mid glow - SOFTENED
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.3 * effectiveIntensity})`;
-        ctx.lineWidth = 6;
+        // ENHANCED: Mid glow - stronger presence
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
+        ctx.lineWidth = 10;
         ctx.stroke();
 
-        // Core - SOFTENED
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * effectiveIntensity})`;
-        ctx.lineWidth = 3;
+        // ENHANCED: Core - bright and solid
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
+        ctx.lineWidth = 5;
         ctx.stroke();
 
-        // Soft center highlight (not white-hot, more subtle)
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 * effectiveIntensity})`;
-        ctx.lineWidth = 1.5;
+        // ENHANCED: Hot center highlight - white-hot core
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
+        ctx.lineWidth = 2;
         ctx.stroke();
 
         // ASMR: Single elegant sweep instead of chaotic pulses
@@ -3697,7 +3697,7 @@ const AmbientViz = {
         ctx.globalCompositeOperation = 'source-over';
     },
 
-    // LIVING NETWORK: Render optimal path as continuous power source
+    // LIVING NETWORK: Render optimal path as continuous power source - PROMINENT
     renderPowerSourcePath(ctx, points, color, intensity, sweep, breathe) {
         if (points.length < 2) return;
 
@@ -3717,29 +3717,29 @@ const AmbientViz = {
             ctx.lineTo(points[i].x, points[i].y);
         }
 
-        // Wide atmospheric bloom - the "power" aura (SOFTENED)
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.06 * effectiveIntensity})`;
-        ctx.lineWidth = 20;
+        // ENHANCED: Wide atmospheric bloom - the "power" aura
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.12 * effectiveIntensity})`;
+        ctx.lineWidth = 28;
         ctx.stroke();
 
-        // Outer glow (SOFTENED)
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
-        ctx.lineWidth = 12;
+        // ENHANCED: Outer glow - visible presence
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.22 * effectiveIntensity})`;
+        ctx.lineWidth = 16;
         ctx.stroke();
 
-        // Mid glow (SOFTENED)
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.35 * effectiveIntensity})`;
-        ctx.lineWidth = 6;
+        // ENHANCED: Mid glow - stronger
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.45 * effectiveIntensity})`;
+        ctx.lineWidth = 9;
         ctx.stroke();
 
-        // Core line (SOFTENED)
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.65 * effectiveIntensity})`;
-        ctx.lineWidth = 3;
+        // ENHANCED: Core line - bright and solid
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.85 * effectiveIntensity})`;
+        ctx.lineWidth = 4;
         ctx.stroke();
 
-        // Soft center (MUCH softer than before)
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 * effectiveIntensity})`;
-        ctx.lineWidth = 1.5;
+        // ENHANCED: Hot center - white-hot core
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * effectiveIntensity})`;
+        ctx.lineWidth = 2;
         ctx.stroke();
 
         // ASMR: Render elegant sweep instead of chaotic pulses
@@ -8869,7 +8869,10 @@ async function runVisualizerLoop() {
 }
 
 async function runVisualizerAStar() {
-    // Clear previous visualization state (but not history)
+    // VISUALIZER MODE: Clear history before each run - show only ONE visualization at a time
+    VisualizerHistory.clear();
+
+    // Clear previous visualization state
     clearVisualizationState();
 
     // Enter VISUALIZING phase (enables viz rendering in GameController loop)
@@ -8882,7 +8885,7 @@ async function runVisualizerAStar() {
         // Run the epic visualization (it's async)
         await runEpicVisualization(result.explored, result.path);
 
-        // Add to persistent history for continuous visualization
+        // Add to history for living network effect
         const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
         VisualizerHistory.addPath(exploredEdgeKeys, result.path);
     }
