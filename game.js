@@ -1794,11 +1794,12 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
 
         // Linear decay: heat = 1.0 - time * decaySpeed
-        // SLOW decay for ASMR satisfaction - edges linger and "paint" the explored area
-        // decaySpeed of 0.12 means heat goes from 1.0 to floor over ~6-7 seconds
-        const decaySpeed = 0.12;
+        // In visualizer mode: NO DECAY - explored edges stay permanently bright
+        // Other modes: SLOW decay for ASMR satisfaction
+        const decaySpeed = GameState.gameMode === 'visualizer' ? 0 : 0.12;
+        const heatFloor = GameState.gameMode === 'visualizer' ? 0.9 : 0.25;
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
-        gl.uniform1f(program.uniforms.heatFloor, 0.25);  // Higher floor - explored edges stay visible
+        gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
         // Pass current visualization color to shader (mode-aware)
         const colorIndex = this.getCurrentColorIndex();
@@ -1840,10 +1841,12 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
 
-        // Linear decay parameters (same as heat edges) - SLOW for satisfaction
-        const decaySpeed = 0.12;
+        // Linear decay parameters (same as heat edges)
+        // In visualizer mode: NO DECAY - keep glow permanently
+        const decaySpeed = GameState.gameMode === 'visualizer' ? 0 : 0.12;
+        const heatFloor = GameState.gameMode === 'visualizer' ? 0.9 : 0.25;
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
-        gl.uniform1f(program.uniforms.heatFloor, 0.25);
+        gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
         // Pass current visualization color to shader (mode-aware)
         const colorIndex = this.getCurrentColorIndex();
@@ -5590,9 +5593,6 @@ function startGame() {
     GameController.startLoop();
     GameController.enterPhase(GamePhase.PLAYING);
 
-    // Enter fullscreen for immersive gameplay
-    requestVisualizerFullscreen();
-
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
 
@@ -6696,10 +6696,16 @@ function renderVisualization() {
         // Ease-out curve for smooth deceleration
         const easeOut = 1 - Math.pow(1 - settleProgress, 2);
 
-        // Heat map blends into ambient - never fully fades out
-        // Keep minimum 25% heat visibility so it blends smoothly
-        heatOpacity = 1 - (easeOut * 0.75);
-        ambientOpacity = easeOut;
+        // VISUALIZER MODE: Keep heat at full brightness permanently
+        if (GameState.gameMode === 'visualizer') {
+            heatOpacity = 1.0;
+            ambientOpacity = 0.0;
+        } else {
+            // Other modes: Heat map blends into ambient - never fully fades out
+            // Keep minimum 25% heat visibility so it blends smoothly
+            heatOpacity = 1 - (easeOut * 0.75);
+            ambientOpacity = easeOut;
+        }
     }
 
     // Decay heat values with floor - explored edges never fully fade
@@ -8683,17 +8689,14 @@ function setHUDMode(mode) {
     document.body.classList.add(`mode-${mode}`);
 
     if (mode === 'competitive') {
-        // Hide mode badge, show competitive controls
+        // Hide mode badge, show competitive controls, show fullscreen button
         if (modeSection) modeSection.classList.add('hidden');
         if (modeExitBtn) modeExitBtn.classList.add('hidden');
-        if (fullscreenBtn) fullscreenBtn.classList.add('hidden');
+        if (fullscreenBtn) fullscreenBtn.classList.remove('hidden'); // Show fullscreen for ALL modes
         competitiveControls.forEach(el => el.classList.remove('hidden'));
 
         // Set primary stat label to "Round"
         if (primaryLabel) primaryLabel.textContent = 'Round';
-
-        // Exit fullscreen mode if active
-        FullscreenMode.exit();
     } else {
         // Show mode badge, hide competitive controls
         if (modeSection) modeSection.classList.remove('hidden');
@@ -9069,9 +9072,6 @@ function startExplorerMode() {
     // Start unified animation loop and enter IDLE phase (waiting for user to place markers)
     GameController.startLoop();
     GameController.enterPhase(GamePhase.IDLE);
-
-    // Enter fullscreen for immersive gameplay
-    requestVisualizerFullscreen();
 
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
