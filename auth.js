@@ -357,6 +357,44 @@ const PathfindrAuth = {
   },
 
   /**
+   * Show the auth modal for signup or login
+   * @param {string} mode - 'signup' or 'login'
+   */
+  showAuthModal(mode = 'login') {
+    const authModal = document.getElementById('auth-modal');
+    if (!authModal) {
+      console.error('[Auth] Auth modal not found');
+      return;
+    }
+
+    // Show the modal
+    authModal.classList.remove('hidden');
+
+    // Configure for signup or login mode
+    const isSignUp = mode === 'signup';
+
+    const titleEl = document.getElementById('auth-title');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const switchText = document.getElementById('auth-switch-text');
+    const switchBtn = document.getElementById('auth-switch-btn');
+    const usernameGroup = document.getElementById('username-group');
+    const errorEl = document.getElementById('auth-error');
+
+    if (titleEl) titleEl.textContent = isSignUp ? 'Sign Up' : 'Sign In';
+    if (submitBtn) submitBtn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
+    if (switchText) switchText.textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+    if (switchBtn) switchBtn.textContent = isSignUp ? 'Sign In' : 'Sign Up';
+    if (usernameGroup) usernameGroup.style.display = isSignUp ? 'block' : 'none';
+    if (errorEl) errorEl.textContent = '';
+
+    // Update the global isSignUp state used by index.html handlers
+    // This is a bit hacky but necessary to sync with inline script
+    window._pathfindrAuthIsSignUp = isSignUp;
+
+    console.log('[Auth] Showing auth modal in', mode, 'mode');
+  },
+
+  /**
    * Show the callsign modal for new users
    */
   showCallsignModal() {

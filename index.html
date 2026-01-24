@@ -879,7 +879,12 @@
             const logoutBtn = document.getElementById('logout-btn');
             const usernameDisplay = document.getElementById('username-display');
 
-            let isSignUp = false;
+            // Use getter/setter to sync with PathfindrAuth.showAuthModal
+            let _isSignUp = false;
+            Object.defineProperty(window, '_pathfindrAuthIsSignUp', {
+                get: () => _isSignUp,
+                set: (val) => { _isSignUp = val; }
+            });
 
             // Open auth modal
             userBtn?.addEventListener('click', () => {
@@ -894,12 +899,12 @@
 
             // Switch between login/signup
             authSwitchBtn?.addEventListener('click', () => {
-                isSignUp = !isSignUp;
-                document.getElementById('auth-title').textContent = isSignUp ? 'Sign Up' : 'Sign In';
-                document.getElementById('auth-submit-btn').textContent = isSignUp ? 'Sign Up' : 'Sign In';
-                document.getElementById('auth-switch-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
-                authSwitchBtn.textContent = isSignUp ? 'Sign In' : 'Sign Up';
-                document.getElementById('username-group').style.display = isSignUp ? 'block' : 'none';
+                _isSignUp = !_isSignUp;
+                document.getElementById('auth-title').textContent = _isSignUp ? 'Sign Up' : 'Sign In';
+                document.getElementById('auth-submit-btn').textContent = _isSignUp ? 'Sign Up' : 'Sign In';
+                document.getElementById('auth-switch-text').textContent = _isSignUp ? 'Already have an account?' : "Don't have an account?";
+                authSwitchBtn.textContent = _isSignUp ? 'Sign In' : 'Sign Up';
+                document.getElementById('username-group').style.display = _isSignUp ? 'block' : 'none';
                 document.getElementById('auth-error').textContent = '';
             });
 
@@ -911,7 +916,7 @@
                 const username = document.getElementById('auth-username').value;
                 const errorEl = document.getElementById('auth-error');
 
-                if (isSignUp) {
+                if (_isSignUp) {
                     if (!username || username.length < 3) {
                         errorEl.textContent = 'Username must be at least 3 characters';
                         return;
