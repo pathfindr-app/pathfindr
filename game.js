@@ -271,7 +271,7 @@ const CONFIG = {
         wobbleAmount: 1.5,          // pixel wobble from noise
         idleIntensity: 0.65,        // brightness of idle/persistent paths (bumped for better visibility)
         activeIntensity: 1.0,       // brightness of active round
-        visualizerIdleIntensity: 0.8, // Higher idle intensity for Visualizer mode
+        visualizerIdleIntensity: 1.0, // Full intensity - explored edges NEVER fade
     },
 
     // Living Network - keeps visualization alive after pathfinding completes
@@ -5590,6 +5590,9 @@ function startGame() {
     GameController.startLoop();
     GameController.enterPhase(GamePhase.PLAYING);
 
+    // Enter fullscreen for immersive gameplay
+    requestVisualizerFullscreen();
+
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
 
@@ -9067,6 +9070,9 @@ function startExplorerMode() {
     GameController.startLoop();
     GameController.enterPhase(GamePhase.IDLE);
 
+    // Enter fullscreen for immersive gameplay
+    requestVisualizerFullscreen();
+
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
 
@@ -10785,6 +10791,7 @@ function exitToMenu() {
     }
 
     // For competitive mode, reset and show menu
+    exitVisualizerFullscreen();
     hideResults();
     hideGameOver();
     clearVisualization();
