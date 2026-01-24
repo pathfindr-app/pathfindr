@@ -6845,7 +6845,7 @@ html, body {
         padding: 4px 8px;
         background: rgba(13, 10, 20, 0.7);
         border-radius: 4px;
-        z-index: 1000;
+        z-index: 800; /* Below results-panel (900) so it gets covered */
     }
 
     #mobile-osm-attribution:active {
