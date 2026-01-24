@@ -11,7 +11,7 @@ const PathfindrConfig = {
   // Get these from: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
   // ===========================================
   supabase: {
-    url: 'https://wxlglepsypmpnupxexoc.supabase.co',
+    url: 'https://api.pathfindr.world',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4bGdsZXBzeXBtcG51cHhleG9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2ODgwMDIsImV4cCI6MjA4MzI2NDAwMn0.f_X3NWT6Gck2m4UDCqkvScJ-CwBH8oO22pELTflFxJ8',
   },
 
