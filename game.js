@@ -5187,7 +5187,7 @@ function initMap() {
                     type: 'raster',
                     tiles: [CONFIG.tileUrl.replace('{s}', 'a')], // MapLibre doesn't use {s} subdomains
                     tileSize: 256,
-                    attribution: '&copy; <a href="https://openstreetmap.org">OSM</a>'
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
                 }
             },
             layers: [{
