@@ -3633,16 +3633,19 @@ const AmbientViz = {
     renderLivingEdges(ctx, edges, color, intensity, breathe) {
         if (edges.length === 0) return;
 
+        const time = performance.now() * 0.001;
         ctx.globalCompositeOperation = 'lighter';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        // Subtle flicker synchronized with breathing
-        const flicker = 0.9 + breathe * 0.1;
+        // Enhanced flicker with multiple wave frequencies for organic feel
+        const flicker = 0.85 + breathe * 0.15;
+        const neuralPulse = 0.9 + Math.sin(time * 1.5) * 0.1 + Math.sin(time * 3.7) * 0.05;
+        const combinedPulse = flicker * neuralPulse;
 
-        // Outer atmospheric glow - pulses with breath
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.08 * intensity * flicker})`;
-        ctx.lineWidth = 10;
+        // Wide atmospheric bloom - MUCH brighter
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * intensity * combinedPulse})`;
+        ctx.lineWidth = 14;
         ctx.beginPath();
         for (const edge of edges) {
             ctx.moveTo(edge.from.x, edge.from.y);
@@ -3650,9 +3653,9 @@ const AmbientViz = {
         }
         ctx.stroke();
 
-        // Mid glow
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * intensity * flicker})`;
-        ctx.lineWidth = 5;
+        // Mid glow layer - brighter and pulses
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.35 * intensity * combinedPulse})`;
+        ctx.lineWidth = 7;
         ctx.beginPath();
         for (const edge of edges) {
             ctx.moveTo(edge.from.x, edge.from.y);
@@ -3660,15 +3663,33 @@ const AmbientViz = {
         }
         ctx.stroke();
 
-        // Core - stays relatively stable
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * intensity})`;
-        ctx.lineWidth = 2;
+        // Core - bright and stable
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * intensity})`;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         for (const edge of edges) {
             ctx.moveTo(edge.from.x, edge.from.y);
             ctx.lineTo(edge.to.x, edge.to.y);
         }
         ctx.stroke();
+
+        // Neural pulse highlights - random edges light up brighter
+        if (GameState.gameMode === 'visualizer' && edges.length > 5) {
+            const pulsePhase = (time * 2) % 1;
+            const highlightCount = Math.min(15, Math.floor(edges.length * 0.08));
+            ctx.strokeStyle = `rgba(${Math.min(255, color.r + 50)}, ${Math.min(255, color.g + 50)}, ${Math.min(255, color.b + 50)}, ${0.6 * intensity * (0.5 + pulsePhase * 0.5)})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            for (let i = 0; i < highlightCount; i++) {
+                const idx = Math.floor((pulsePhase * edges.length + i * (edges.length / highlightCount))) % edges.length;
+                const edge = edges[idx];
+                if (edge) {
+                    ctx.moveTo(edge.from.x, edge.from.y);
+                    ctx.lineTo(edge.to.x, edge.to.y);
+                }
+            }
+            ctx.stroke();
+        }
 
         ctx.globalCompositeOperation = 'source-over';
     },
@@ -4106,9 +4127,9 @@ const VisualizerHistory = {
         const theme = CONFIG.color.getThemeByIndex(this.pathIndex);
         this.pathIndex++;
 
-        // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
-        // This dramatically reduces rendering load while maintaining visual effect
-        const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
+        // Store more edges for better visual coverage (every 2nd edge)
+        // Visualizer mode benefits from denser networks for the neural effect
+        const sampledEdges = exploredEdges.filter((_, i) => i % 2 === 0);
 
         this.paths.push({
             exploredEdges: new Set(sampledEdges),
@@ -8705,9 +8726,60 @@ function updateModeStats(current, total, label = null) {
     if (totalEl) totalEl.textContent = total;
 }
 
+// =============================================================================
+// FULLSCREEN API - True immersive fullscreen for Visualizer mode
+// =============================================================================
+
+/**
+ * Request true fullscreen mode (hides browser chrome like Netflix/YouTube)
+ */
+function requestVisualizerFullscreen() {
+    const elem = document.documentElement;
+
+    // Check if fullscreen is supported and we're not already in fullscreen
+    if (document.fullscreenEnabled && !document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => {
+            console.log('[Fullscreen] Could not enter fullscreen:', err.message);
+        });
+    } else if (elem.webkitRequestFullscreen) {
+        // Safari fallback
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) {
+        // IE/Edge fallback
+        elem.msRequestFullscreen();
+    }
+}
+
+/**
+ * Exit fullscreen mode
+ */
+function exitVisualizerFullscreen() {
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+            console.log('[Fullscreen] Could not exit fullscreen:', err.message);
+        });
+    } else if (document.webkitFullscreenElement) {
+        document.webkitExitFullscreen();
+    } else if (document.msFullscreenElement) {
+        document.msExitFullscreen();
+    }
+}
+
+// Handle ESC key exiting fullscreen - also stop visualizer
+document.addEventListener('fullscreenchange', () => {
+    // If we exited fullscreen while visualizer is active, stop visualizer
+    if (!document.fullscreenElement && GameState.visualizerState?.active) {
+        // User pressed ESC to exit fullscreen - also stop visualizer mode
+        stopVisualizerMode();
+    }
+});
+
 function startVisualizerMode() {
     GameState.visualizerState.active = true;
     GameState.visualizerState.currentVisualization = 0;
+
+    // Request true fullscreen (like Netflix/YouTube)
+    requestVisualizerFullscreen();
 
     // Switch HUD to visualizer mode
     setHUDMode('visualizer');
@@ -8851,6 +8923,9 @@ async function loadNextVisualizerCity() {
 function stopVisualizerMode() {
     // Mark visualizer as inactive FIRST (stops loop callbacks)
     GameState.visualizerState.active = false;
+
+    // Exit fullscreen if we're in it
+    exitVisualizerFullscreen();
 
     // Clear any pending timeout (prevents stale callbacks)
     if (GameState.visualizerState.loopTimeout) {
