@@ -4952,10 +4952,6 @@ function initSoundListeners() {
             const muted = SoundEngine.toggleMute();
             updateMuteButton(muted);
         }
-        // Debug mode toggle
-        if (e.key === 'd' || e.key === 'D') {
-            toggleDebugMode();
-        }
         // View toggle
         if (e.key === 'v' || e.key === 'V') {
             toggleMapView();
