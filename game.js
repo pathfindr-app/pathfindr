@@ -153,9 +153,9 @@ const CONFIG = {
 
     // Segment distance limits by difficulty (in km)
     segmentDistance: {
-        hard: 0.25,    // 250 meters - most granular, requires many clicks
-        medium: 0.5,   // 500 meters - balanced gameplay
-        easy: 1.0      // 1 kilometer - allows longer segments
+        hard: 0.1,     // 100 meters - very granular, requires many precise clicks
+        medium: 0.2,   // 200 meters - challenging, thoughtful routing
+        easy: 0.5      // 500 meters - relaxed gameplay
     },
 
     // Visualization settings - ENHANCED for vibrant effects
