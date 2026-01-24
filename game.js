@@ -5200,11 +5200,12 @@ function initMap() {
         zoom: CONFIG.defaultLocation.zoom,
         maxPitch: 60,
         // Touch/interaction settings
-        dragPan: !isMobile, // Disable single-finger drag on mobile
+        dragPan: true,
         touchZoomRotate: true, // Enable pinch-to-zoom
         doubleClickZoom: !isMobile,
         dragRotate: true, // Enable rotation with right-click drag
         touchPitch: true, // Enable pitch with two-finger gesture
+        cooperativeGestures: isMobile, // Require two-finger pan on mobile
     });
 
     // Add navigation control (zoom + compass) - hidden on mobile
