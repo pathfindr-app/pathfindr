@@ -8,7 +8,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0d0a14">
     <title>pathfindr</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- MapLibre GL JS for map rendering with rotation/pitch support -->
+    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
 
     <!-- Capacitor (when running as native app) -->
@@ -847,7 +848,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
     <script src="config.js"></script>
     <script src="ads.js"></script>
     <script src="auth.js"></script>

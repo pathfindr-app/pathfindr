@@ -558,7 +558,7 @@ const MapTransition = {
 
         // Set map to target position immediately (needed for road network bounds)
         if (GameState.map) {
-            GameState.map.setView([lat, lng], zoom, { animate: false });
+            GameState.map.jumpTo({ center: [lng, lat], zoom: zoom });
         }
     },
 
@@ -1414,8 +1414,8 @@ const WebGLRenderer = {
 
         for (let i = 0; i < edges.length; i++) {
             const edge = edges[i];
-            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+            const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
+            const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
 
             // Calculate perpendicular normal
             const dx = toScreen.x - fromScreen.x;
@@ -1520,8 +1520,8 @@ const WebGLRenderer = {
 
         for (let i = 0; i < edges.length; i++) {
             const edge = edges[i];
-            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+            const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
+            const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
 
             const dx = toScreen.x - fromScreen.x;
             const dy = toScreen.y - fromScreen.y;
@@ -3129,7 +3129,7 @@ const AmbientViz = {
                 if (edge) {
                     const lat = edge.fromPos.lat + (edge.toPos.lat - edge.fromPos.lat) * particle.edgeProgress;
                     const lng = edge.fromPos.lng + (edge.toPos.lng - edge.fromPos.lng) * particle.edgeProgress;
-                    const screen = GameState.map.latLngToContainerPoint([lat, lng]);
+                    const screen = GameState.map.project([lng, lat]);
                     particle.x = screen.x;
                     particle.y = screen.y;
                 }
@@ -3226,7 +3226,7 @@ const AmbientViz = {
 
         for (let i = 0; i < this.trailPoints.length; i++) {
             const point = this.trailPoints[i];
-            const screen = GameState.map.latLngToContainerPoint([point.lat, point.lng]);
+            const screen = GameState.map.project([point.lng, point.lat]);
 
             const size = this.spriteSize * 0.4 * point.alpha;
             ctx.globalAlpha = point.alpha * 0.4;
@@ -3249,7 +3249,7 @@ const AmbientViz = {
         if (GameState.startNode) {
             const pos = GameState.nodes.get(GameState.startNode);
             if (pos) {
-                const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                const screen = GameState.map.project([pos.lng, pos.lat]);
                 const sprite = this.sprites.glowGreen;
                 const size = this.spriteSize * 1.5 * pulse;
 
@@ -3262,7 +3262,7 @@ const AmbientViz = {
         if (GameState.endNode) {
             const pos = GameState.nodes.get(GameState.endNode);
             if (pos) {
-                const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                const screen = GameState.map.project([pos.lng, pos.lat]);
                 const sprite = this.sprites.glowPink;
                 const size = this.spriteSize * 1.5 * pulse;
 
@@ -3377,8 +3377,8 @@ const AmbientViz = {
                 const edge = GameState.edgeLookup.get(edgeKey);
 
                 if (edge) {
-                    const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-                    const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+                    const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+                    const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
                     screenEdges.push({ from, to });
                 }
             }
@@ -3392,7 +3392,7 @@ const AmbientViz = {
             if (round.optimalPath.length > 1) {
                 const optimalPoints = round.optimalPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
-                    if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                    if (pos) return GameState.map.project([pos.lng, pos.lat]);
                     return null;
                 }).filter(p => p !== null);
 
@@ -3411,7 +3411,7 @@ const AmbientViz = {
             if (round.userPath.length > 1) {
                 const userPoints = round.userPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
-                    if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                    if (pos) return GameState.map.project([pos.lng, pos.lat]);
                     return null;
                 }).filter(p => p !== null);
 
@@ -3448,8 +3448,8 @@ const AmbientViz = {
                 for (const edgeKey of path.exploredEdges) {
                     const edge = GameState.edgeLookup.get(edgeKey);
                     if (edge) {
-                        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-                        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+                        const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+                        const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
                         path.screenEdgesCache.push({ from, to });
                     }
                 }
@@ -3458,7 +3458,7 @@ const AmbientViz = {
                 if (path.optimalPath.length > 1) {
                     path.optimalPointsCache = path.optimalPath.map(nodeId => {
                         const pos = GameState.nodes.get(nodeId);
-                        if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                        if (pos) return GameState.map.project([pos.lng, pos.lat]);
                         return null;
                     }).filter(p => p !== null);
                 }
@@ -3467,7 +3467,7 @@ const AmbientViz = {
                 if (path.userPath && path.userPath.length > 1) {
                     path.userPointsCache = path.userPath.map(nodeId => {
                         const pos = GameState.nodes.get(nodeId);
-                        if (pos) return GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+                        if (pos) return GameState.map.project([pos.lng, pos.lat]);
                         return null;
                     }).filter(p => p !== null);
                 }
@@ -4694,6 +4694,30 @@ const ElectricitySystem = {
 };
 
 // =============================================================================
+// MAPLIBRE COMPATIBILITY SHIM - Minimal API translation layer
+// =============================================================================
+
+/**
+ * Convert geo coordinates to screen coordinates
+ * MapLibre uses [lng, lat] order, returns {x, y}
+ */
+function geoToScreen(lat, lng) {
+    if (!GameState.map) return { x: 0, y: 0 };
+    const point = GameState.map.project([lng, lat]);
+    return { x: point.x, y: point.y };
+}
+
+/**
+ * Convert screen coordinates to geo coordinates
+ * MapLibre returns LngLat object
+ */
+function screenToGeo(x, y) {
+    if (!GameState.map) return { lat: 0, lng: 0 };
+    const lngLat = GameState.map.unproject([x, y]);
+    return { lat: lngLat.lat, lng: lngLat.lng };
+}
+
+// =============================================================================
 // SCREEN COORDINATE CACHE - Avoid recalculating every frame
 // =============================================================================
 
@@ -4714,8 +4738,9 @@ const ScreenCoordCache = {
 
         for (let i = 0; i < GameState.edgeList.length; i++) {
             const edge = GameState.edgeList[i];
-            const fromScreen = map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-            const toScreen = map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+            // MapLibre uses [lng, lat] order and project() method
+            const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
+            const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
             this.edges[i] = {
                 from: { x: fromScreen.x, y: fromScreen.y },
                 to: { x: toScreen.x, y: toScreen.y },
@@ -4747,7 +4772,7 @@ const ScreenCoordCache = {
 
 const GameState = {
     map: null,
-    tileLayer: null,        // Reference to Leaflet tile layer for toggle
+    tileLayerId: null,      // Reference to MapLibre tile layer ID for toggle
     showCustomRoads: true,  // Toggle state for custom road view
     drawCanvas: null,
     drawCtx: null,
@@ -4993,55 +5018,73 @@ function initMap() {
     // Detect mobile for touch-specific settings
     const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window);
 
-    GameState.map = L.map('map', {
-        center: [CONFIG.defaultLocation.lat, CONFIG.defaultLocation.lng],
+    // MapLibre GL JS initialization
+    GameState.map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            version: 8,
+            sources: {
+                'osm': {
+                    type: 'raster',
+                    tiles: [CONFIG.tileUrl.replace('{s}', 'a')], // MapLibre doesn't use {s} subdomains
+                    tileSize: 256,
+                    attribution: '&copy; <a href="https://openstreetmap.org">OSM</a>'
+                }
+            },
+            layers: [{
+                id: 'osm-tiles',
+                type: 'raster',
+                source: 'osm'
+            }]
+        },
+        center: [CONFIG.defaultLocation.lng, CONFIG.defaultLocation.lat], // MapLibre uses [lng, lat]
         zoom: CONFIG.defaultLocation.zoom,
-        zoomControl: !isMobile, // Hide zoom controls on mobile
-        scrollWheelZoom: true,
-        doubleClickZoom: !isMobile, // Disable double-tap zoom on mobile
-        // Mobile: disable single-finger drag, use two-finger gestures only
-        dragging: !isMobile,
-        // Two-finger pinch zoom (also enables two-finger pan)
-        touchZoom: true,
-        // Disable tap-to-click (we handle our own taps)
-        tap: !isMobile,
-        // Smooth zooming - disable snap to allow any zoom level
-        zoomSnap: 0,
-        zoomDelta: 0.5,
-        wheelPxPerZoomLevel: 120,
+        maxPitch: 60,
+        // Touch/interaction settings
+        dragPan: !isMobile, // Disable single-finger drag on mobile
+        touchZoomRotate: true, // Enable pinch-to-zoom
+        doubleClickZoom: !isMobile,
+        dragRotate: true, // Enable rotation with right-click drag
+        touchPitch: true, // Enable pitch with two-finger gesture
     });
 
-    // Store tile layer reference for toggle functionality
-    // Minimal attribution without Ukraine flag
-    GameState.tileLayer = L.tileLayer(CONFIG.tileUrl, {
-        attribution: '© <a href="https://openstreetmap.org">OSM</a>'
-    }).addTo(GameState.map);
+    // Add navigation control (zoom + compass) - hidden on mobile
+    if (!isMobile) {
+        GameState.map.addControl(new maplibregl.NavigationControl({
+            visualizePitch: true,
+            showCompass: true
+        }), 'top-right');
+    }
+
+    // Store reference for toggle functionality (MapLibre uses style layers)
+    GameState.tileLayerId = 'osm-tiles';
 
     // Start with custom road view mode if enabled
     if (GameState.showCustomRoads) {
         document.getElementById('map-container').classList.add('custom-roads-mode');
     }
 
-    GameState.exploredLayer = L.layerGroup().addTo(GameState.map);
-    GameState.optimalLayer = L.layerGroup().addTo(GameState.map);
-    GameState.userPathLayer = L.layerGroup().addTo(GameState.map);
+    // Layer groups not needed in MapLibre - we use canvas overlays instead
+    // These are kept for compatibility but are unused
+    GameState.exploredLayer = null;
+    GameState.optimalLayer = null;
+    GameState.userPathLayer = null;
 
-    GameState.map.on('move', () => {
+    // Unified map change handler
+    function onMapChange() {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
         if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
         updateMarkerPositions();
         redrawUserPath();
         if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
         if (GameState.vizState.active) renderVisualization();
-    });
-    GameState.map.on('zoom', () => {
-        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
-        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
-        updateMarkerPositions();
-        redrawUserPath();
-        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
-        if (GameState.vizState.active) renderVisualization();
-    });
+    }
+
+    // MapLibre events - includes pitch and rotate
+    GameState.map.on('move', onMapChange);
+    GameState.map.on('zoom', onMapChange);
+    GameState.map.on('pitch', onMapChange);
+    GameState.map.on('rotate', onMapChange);
 }
 
 function initCanvases() {
@@ -5348,14 +5391,14 @@ function updateMobileDistance(distance) {
 
 /**
  * Setup improved touch handling for mobile
- * Uses Leaflet's native click handler for path drawing,
+ * Uses MapLibre's native click handler for path drawing,
  * allowing two-finger gestures (pan/zoom) to work natively.
  */
 function setupMobileTouchHandling() {
     const canvas = GameState.drawCanvas;
     if (!canvas) return;
 
-    // Make canvas non-interactive - let touches pass through to Leaflet
+    // Make canvas non-interactive - let touches pass through to MapLibre
     canvas.style.pointerEvents = 'none';
 
     // Remove any old touch listeners from canvas
@@ -5363,7 +5406,7 @@ function setupMobileTouchHandling() {
     canvas.removeEventListener('touchmove', handleTouchMove);
     canvas.removeEventListener('touchend', stopDrawing);
 
-    // Use Leaflet's click event for path drawing
+    // Use MapLibre's click event for path drawing
     // This fires for taps but allows two-finger gestures to work
     if (!GameState.mobileClickHandlerAdded) {
         GameState.map.on('click', (e) => {
@@ -5372,13 +5415,12 @@ function setupMobileTouchHandling() {
             if (GameState.vizState.active) return;
             if (GameState.gameMode !== 'competitive') return;
 
-            // Convert Leaflet click to our format
-            const containerPoint = GameState.map.latLngToContainerPoint(e.latlng);
+            // MapLibre click event provides e.point (screen coords) directly
             const rect = canvas.getBoundingClientRect();
 
             handlePathClick({
-                clientX: rect.left + containerPoint.x,
-                clientY: rect.top + containerPoint.y
+                clientX: rect.left + e.point.x,
+                clientY: rect.top + e.point.y
             });
 
             // Light haptic feedback on mobile
@@ -5779,13 +5821,14 @@ function selectRandomEndpoints() {
     const startPos = GameState.nodes.get(GameState.startNode);
     const endPos = GameState.nodes.get(GameState.endNode);
 
-    const bounds = L.latLngBounds(
-        [startPos.lat, startPos.lng],
-        [endPos.lat, endPos.lng]
-    );
+    // MapLibre fitBounds expects [[west, south], [east, north]] = [[minLng, minLat], [maxLng, maxLat]]
+    const bounds = [
+        [Math.min(startPos.lng, endPos.lng), Math.min(startPos.lat, endPos.lat)],
+        [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
+    ];
 
     GameState.map.fitBounds(bounds, {
-        padding: [80, 80],
+        padding: 80,
         maxZoom: 16
     });
 
@@ -5802,13 +5845,14 @@ function centerOnRoute() {
 
     if (!startPos || !endPos) return;
 
-    const bounds = L.latLngBounds(
-        [startPos.lat, startPos.lng],
-        [endPos.lat, endPos.lng]
-    );
+    // MapLibre fitBounds expects [[west, south], [east, north]] = [[minLng, minLat], [maxLng, maxLat]]
+    const bounds = [
+        [Math.min(startPos.lng, endPos.lng), Math.min(startPos.lat, endPos.lat)],
+        [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
+    ];
 
     GameState.map.fitBounds(bounds, {
-        padding: [80, 80],
+        padding: 80,
         maxZoom: 16
     });
 }
@@ -5825,7 +5869,7 @@ function placeMarkers() {
         GameState.endMarkerEl = null;
     }
 
-    // Clear legacy Leaflet markers if present
+    // Clear legacy markers if present
     if (GameState.startMarker) {
         GameState.map.removeLayer(GameState.startMarker);
         GameState.startMarker = null;
@@ -5858,8 +5902,8 @@ function placeMarkers() {
     GameState.endMarkerEl = endMarker;
 
     // Store lat/lng for position updates
-    GameState.startMarkerLatLng = L.latLng(startPos.lat, startPos.lng);
-    GameState.endMarkerLatLng = L.latLng(endPos.lat, endPos.lng);
+    GameState.startMarkerLatLng = { lat: startPos.lat, lng: startPos.lng };
+    GameState.endMarkerLatLng = { lat: endPos.lat, lng: endPos.lng };
 
     // Position markers initially
     updateMarkerPositions();
@@ -5873,13 +5917,14 @@ function updateMarkerPositions() {
     if (!GameState.map) return;
 
     // Marker is 28px, so offset by 14 to center
+    // MapLibre project() takes [lng, lat] and returns {x, y}
     if (GameState.startMarkerEl && GameState.startMarkerLatLng) {
-        const startPt = GameState.map.latLngToContainerPoint(GameState.startMarkerLatLng);
+        const startPt = GameState.map.project([GameState.startMarkerLatLng.lng, GameState.startMarkerLatLng.lat]);
         GameState.startMarkerEl.style.transform = `translate(${startPt.x - 14}px, ${startPt.y - 14}px)`;
     }
 
     if (GameState.endMarkerEl && GameState.endMarkerLatLng) {
-        const endPt = GameState.map.latLngToContainerPoint(GameState.endMarkerLatLng);
+        const endPt = GameState.map.project([GameState.endMarkerLatLng.lng, GameState.endMarkerLatLng.lat]);
         GameState.endMarkerEl.style.transform = `translate(${endPt.x - 14}px, ${endPt.y - 14}px)`;
     }
 }
@@ -5979,9 +6024,11 @@ function handleTouchMove(e) {
 
 function getLatLngFromEvent(e) {
     const rect = GameState.drawCanvas.getBoundingClientRect();
-    const containerPoint = L.point(e.clientX - rect.left, e.clientY - rect.top);
-    const latLng = GameState.map.containerPointToLatLng(containerPoint);
-    return { lat: latLng.lat, lng: latLng.lng };
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    // MapLibre unproject() takes [x, y] and returns LngLat object
+    const lngLat = GameState.map.unproject([x, y]);
+    return { lat: lngLat.lat, lng: lngLat.lng };
 }
 
 function redrawUserPath() {
@@ -5995,7 +6042,7 @@ function redrawUserPath() {
         const nodeId = GameState.userPathNodes[i];
         const pos = GameState.nodes.get(nodeId);
         if (!pos) continue;
-        points.push(GameState.map.latLngToContainerPoint([pos.lat, pos.lng]));
+        points.push(GameState.map.project([pos.lng, pos.lat]));
     }
 
     if (points.length < 2) return;
@@ -6307,14 +6354,8 @@ async function submitRoute() {
     // === HERO ANIMATION: User path "locks in" with dramatic effect ===
     await playUserPathLockInAnimation();
 
-    // Use consistent warm orange for user path polyline
-    const uc = CONFIG.color.getUserPathColor();
-    L.polyline(userLatLngs, {
-        color: `rgb(${uc.r}, ${uc.g}, ${uc.b})`,
-        weight: 4,
-        opacity: 0.7
-    }).addTo(GameState.userPathLayer);
-
+    // User path is rendered via canvas overlays
+    // Clear the draw canvas before A* visualization
     GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
 
     // Brief anticipation pause before A* begins
@@ -6346,7 +6387,7 @@ async function playUserPathLockInAnimation() {
         const nodeId = GameState.userPathNodes[i];
         const pos = GameState.nodes.get(nodeId);
         if (!pos) continue;
-        points.push(GameState.map.latLngToContainerPoint([pos.lat, pos.lng]));
+        points.push(GameState.map.project([pos.lng, pos.lat]));
     }
 
     if (points.length < 2) return;
@@ -6918,7 +6959,7 @@ function renderVisualization() {
             const pos = GameState.nodes.get(nodeId);
             if (!pos) continue;
 
-            const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+            const screen = GameState.map.project([pos.lng, pos.lat]);
             const size = spriteSize * heat * 0.8;
             const spriteToUse = heat > 0.9 ? AmbientViz.sprites.glowWhite :
                                AmbientViz.sprites.glowCyan;
@@ -7016,7 +7057,7 @@ function drawOptimalPath(ctx) {
     for (let i = 0; i <= drawTo; i++) {
         const pos = GameState.nodes.get(path[i]);
         if (!pos) continue;
-        points.push(GameState.map.latLngToContainerPoint([pos.lat, pos.lng]));
+        points.push(GameState.map.project([pos.lng, pos.lat]));
     }
 
     if (points.length < 2) return;
@@ -7136,7 +7177,7 @@ function drawParticles(ctx) {
     const spriteSize = AmbientViz.spriteSize;
 
     for (const p of GameState.vizState.particles) {
-        const screen = GameState.map.latLngToContainerPoint([p.lat, p.lng]);
+        const screen = GameState.map.project([p.lng, p.lat]);
 
         // Pick sprite based on particle type
         let sprite;
@@ -7187,9 +7228,10 @@ function clearVisualization() {
 
     clearVisualizationState();
 
-    GameState.exploredLayer.clearLayers();
-    GameState.optimalLayer.clearLayers();
-    GameState.userPathLayer.clearLayers();
+    // Clear visualization canvas
+    if (GameState.vizCtx) {
+        GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
+    }
 
     // Redraw road network if custom view is enabled
     if (GameState.showCustomRoads) {
@@ -7379,8 +7421,8 @@ function renderTraceAnimation(ctx) {
     // Draw completed segments (full glow)
     for (let i = 0; i < completedSegments && i < totalSegments; i++) {
         const seg = trace.segments[i];
-        const from = GameState.map.latLngToContainerPoint([seg.fromLat, seg.fromLng]);
-        const to = GameState.map.latLngToContainerPoint([seg.toLat, seg.toLng]);
+        const from = GameState.map.project([seg.fromLng, seg.fromLat]);
+        const to = GameState.map.project([seg.toLng, seg.toLat]);
 
         // Glow - using exploration color
         ctx.strokeStyle = `rgba(${tc.r}, ${tc.g}, ${tc.b}, 0.4)`;
@@ -7402,8 +7444,8 @@ function renderTraceAnimation(ctx) {
     // Draw current segment (partial, with bright leading edge)
     if (completedSegments < totalSegments) {
         const seg = trace.segments[completedSegments];
-        const from = GameState.map.latLngToContainerPoint([seg.fromLat, seg.fromLng]);
-        const to = GameState.map.latLngToContainerPoint([seg.toLat, seg.toLng]);
+        const from = GameState.map.project([seg.fromLng, seg.fromLat]);
+        const to = GameState.map.project([seg.toLng, seg.toLat]);
 
         // Interpolate position
         const currentX = from.x + (to.x - from.x) * currentSegmentProgress;
@@ -7507,8 +7549,9 @@ function resetUserPath() {
     GameState.userPathNodes = [];
     GameState.userDrawnPoints = [];  // Reset raw drawn points
     GameState.userDistance = 0;
-    GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
-    GameState.userPathLayer.clearLayers();
+    if (GameState.drawCtx) {
+        GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+    }
 
     // Clear electricity animation state
     GameState.userPathElectricity.pulses = [];
@@ -7834,7 +7877,7 @@ async function searchLocation() {
         const lng = parseFloat(result.lon);
         const name = result.display_name.split(',').slice(0, 2).join(', ');
 
-        GameState.map.setView([lat, lng], 15);
+        GameState.map.jumpTo({ center: [lng, lat], zoom: 15 });
         clearVisualization();
         clearUserPath();
         if (GameState.startMarker) GameState.map.removeLayer(GameState.startMarker);
@@ -8440,7 +8483,7 @@ function initCustomCursor() {
         #map,
         #pathCanvas,
         #roadCanvas,
-        .leaflet-container {
+        .maplibregl-map {
             cursor: none !important;
         }
 
@@ -8576,7 +8619,7 @@ function initCustomCursor() {
         const isOverGameArea = gameAreas.some(id => {
             const el = document.getElementById(id);
             return el && (el === target || el.contains(target));
-        }) || target.closest('.leaflet-container');
+        }) || target.closest('.maplibregl-map');
 
         if (isOverGameArea && !cursorVisible) {
             cursor.classList.add('visible');
@@ -8807,7 +8850,7 @@ function startVisualizerMode() {
     document.getElementById('loading-overlay').classList.remove('hidden');
     document.getElementById('loading-text').textContent = 'Loading visualizer...';
 
-    GameState.map.setView([city.lat, city.lng], city.zoom || 15);
+    GameState.map.jumpTo({ center: [city.lng, city.lat], zoom: city.zoom || 15 });
     loadRoadNetwork(city).then(() => {
         // Start unified animation loop (replaces AmbientViz.start())
         GameController.startLoop();
@@ -8925,7 +8968,7 @@ async function loadNextVisualizerCity() {
     document.getElementById('loading-text').textContent = `Loading ${city.name}...`;
 
     // Pan to new city and load road network
-    GameState.map.setView([city.lat, city.lng], city.zoom || 15);
+    GameState.map.jumpTo({ center: [city.lng, city.lat], zoom: city.zoom || 15 });
     await loadRoadNetwork(city);
 }
 
@@ -8968,7 +9011,7 @@ function stopVisualizerMode() {
     clearVisualization();
     VisualizerHistory.clear();
 
-    // Remove markers (both Leaflet and DOM-based)
+    // Remove markers (DOM-based)
     if (GameState.startMarker) {
         GameState.map.removeLayer(GameState.startMarker);
         GameState.startMarker = null;
@@ -9123,7 +9166,8 @@ function setExplorerPlacingMode(mode) {
 function handleExplorerMapClick(e) {
     if (GameState.gameMode !== 'explorer') return;
 
-    const { lat, lng } = e.latlng;
+    // MapLibre uses e.lngLat instead of e.latlng
+    const { lat, lng } = e.lngLat;
     const nearestNode = findNearestNode(lat, lng);
 
     if (nearestNode === null) return;
@@ -9252,7 +9296,7 @@ function placeExplorerMarker(type, nodeId, nodePos) {
         if (GameState.startMarkerEl) {
             GameState.startMarkerEl.remove();
         }
-        // Also remove Leaflet marker if exists
+        // Also remove legacy marker reference if exists
         if (GameState.startMarker) {
             GameState.map.removeLayer(GameState.startMarker);
             GameState.startMarker = null;
@@ -9268,14 +9312,14 @@ function placeExplorerMarker(type, nodeId, nodePos) {
         markerContainer.appendChild(marker);
 
         GameState.startMarkerEl = marker;
-        GameState.startMarkerLatLng = L.latLng(nodePos.lat, nodePos.lng);
+        GameState.startMarkerLatLng = { lat: nodePos.lat, lng: nodePos.lng };
 
     } else {
         // Remove old end marker (DOM element)
         if (GameState.endMarkerEl) {
             GameState.endMarkerEl.remove();
         }
-        // Also remove Leaflet marker if exists
+        // Also remove legacy marker reference if exists
         if (GameState.endMarker) {
             GameState.map.removeLayer(GameState.endMarker);
             GameState.endMarker = null;
@@ -9291,7 +9335,7 @@ function placeExplorerMarker(type, nodeId, nodePos) {
         markerContainer.appendChild(marker);
 
         GameState.endMarkerEl = marker;
-        GameState.endMarkerLatLng = L.latLng(nodePos.lat, nodePos.lng);
+        GameState.endMarkerLatLng = { lat: nodePos.lat, lng: nodePos.lng };
     }
 
     // Update marker positions on screen
@@ -9457,7 +9501,7 @@ function resetExplorer() {
         GameState.endMarkerLatLng = null;
     }
 
-    // Also clear Leaflet markers if they exist (legacy cleanup)
+    // Also clear legacy marker references if they exist
     if (GameState.startMarker) {
         GameState.map.removeLayer(GameState.startMarker);
         GameState.startMarker = null;
@@ -9656,7 +9700,7 @@ async function transitionToNextCity() {
 
     // Move map to new city
     GameState.currentCity = nextCity;
-    GameState.map.setView([nextCity.lat, nextCity.lng], nextCity.zoom || 15);
+    GameState.map.jumpTo({ center: [nextCity.lng, nextCity.lat], zoom: nextCity.zoom || 15 });
     updateLocationDisplay(nextCity.name);
 
     // Update HUD with new city number
@@ -10319,8 +10363,8 @@ function drawRoadNetwork(ctx) {
     // Build visible edges array first
     const visibleEdges = [];
     for (const edge of GameState.edgeList) {
-        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+        const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+        const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
 
         // Skip edges completely off-screen
         if (from.x < -100 && to.x < -100) continue;
@@ -10387,8 +10431,8 @@ function drawRoadNetworkScanning(ctx, time, pulsePhase) {
     // Build visible edges array (BATCHED - no per-edge calculations)
     const visibleEdges = [];
     for (const edge of GameState.edgeList) {
-        const from = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-        const to = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+        const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+        const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
 
         // Skip edges completely off-screen
         if (from.x < -100 && to.x < -100) continue;
@@ -10661,8 +10705,8 @@ function drawGraphOverlay() {
     ctx.lineWidth = 1;
 
     for (const edge of GameState.edgeList) {
-        const fromScreen = GameState.map.latLngToContainerPoint([edge.fromPos.lat, edge.fromPos.lng]);
-        const toScreen = GameState.map.latLngToContainerPoint([edge.toPos.lat, edge.toPos.lng]);
+        const fromScreen = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+        const toScreen = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
 
         // Check if edge is on screen
         if (fromScreen.x < -50 || fromScreen.x > width + 50 ||
@@ -10678,7 +10722,7 @@ function drawGraphOverlay() {
     const largestNodes = GameState.debug.largestComponentNodes || new Set();
 
     for (const [nodeId, pos] of GameState.nodes) {
-        const screen = GameState.map.latLngToContainerPoint([pos.lat, pos.lng]);
+        const screen = GameState.map.project([pos.lng, pos.lat]);
 
         if (screen.x < -10 || screen.x > width + 10 ||
             screen.y < -10 || screen.y > height + 10) continue;
@@ -10702,8 +10746,8 @@ function drawGraphOverlay() {
             const toPos = GameState.nodes.get(detail.to);
             if (!fromPos || !toPos) continue;
 
-            const fromScreen = GameState.map.latLngToContainerPoint([fromPos.lat, fromPos.lng]);
-            const toScreen = GameState.map.latLngToContainerPoint([toPos.lat, toPos.lng]);
+            const fromScreen = GameState.map.project([fromPos.lng, fromPos.lat]);
+            const toScreen = GameState.map.project([toPos.lng, toPos.lat]);
 
             ctx.beginPath();
             ctx.moveTo(fromScreen.x, fromScreen.y);

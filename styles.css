@@ -1934,7 +1934,8 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     background: var(--void) !important;
 }
 
-#map-container.custom-roads-mode .leaflet-tile-pane {
+/* MapLibre canvas filter in custom roads mode */
+#map-container.custom-roads-mode .maplibregl-canvas {
     opacity: 0.45;
     filter:
         saturate(0.08)
@@ -1968,22 +1969,24 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 }
 
 /* =============================================================================
-   LEAFLET CUSTOMIZATION - Warm Synthwave Style
+   MAPLIBRE GL JS CUSTOMIZATION - Warm Synthwave Style
    ============================================================================= */
 
-.leaflet-container {
+.maplibregl-map {
     background: var(--void);
     font-family: var(--font-mono);
+    cursor: none !important;
 }
 
-/* Ensure markers appear above canvases and vignette */
-.leaflet-marker-pane,
-.leaflet-shadow-pane {
-    z-index: 700 !important;
+/* Hide cursor on all MapLibre interactive elements */
+.maplibregl-canvas,
+.maplibregl-canvas-container,
+.maplibregl-interactive {
+    cursor: none !important;
 }
 
 /* Warm processed map tiles - visible texture with synthwave treatment */
-.leaflet-tile-pane {
+.maplibregl-canvas {
     filter:
         saturate(0.12)
         brightness(0.45)
@@ -1994,77 +1997,62 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     mix-blend-mode: screen;
 }
 
-/* Add a color overlay effect via the tile container */
-.leaflet-tile-container {
-    position: relative;
-}
-
-/* Individual tiles get subtle processing */
-.leaflet-tile {
-    image-rendering: auto;
-}
-
-/* Zoom Controls */
-.leaflet-control-zoom {
+/* Navigation Controls (zoom + compass) */
+.maplibregl-ctrl-group {
     border: none !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 107, 157, 0.05) !important;
     overflow: hidden;
     border-radius: var(--radius-md) !important;
+    background: var(--surface) !important;
 }
 
-.leaflet-control-zoom a {
+.maplibregl-ctrl-group button {
     background: var(--surface) !important;
     color: var(--text-primary) !important;
     border: none !important;
     border-bottom: 1px solid var(--elevated) !important;
     width: 32px !important;
     height: 32px !important;
-    line-height: 32px !important;
-    font-family: var(--font-mono) !important;
     transition: var(--transition-fast);
 }
 
-.leaflet-control-zoom a:last-child {
+.maplibregl-ctrl-group button:last-child {
     border-bottom: none !important;
 }
 
-.leaflet-control-zoom a:hover {
+.maplibregl-ctrl-group button:hover {
     background: var(--elevated) !important;
-    color: var(--neon-pink) !important;
 }
 
-/* Attribution - Minimal, hide Ukraine flag/heart from Leaflet prefix */
-.leaflet-control-attribution {
+.maplibregl-ctrl-group button:hover .maplibregl-ctrl-icon {
+    filter: brightness(1.5) hue-rotate(330deg);
+}
+
+/* Compass icon */
+.maplibregl-ctrl-compass .maplibregl-ctrl-icon {
+    filter: brightness(0.9);
+}
+
+/* Attribution - Minimal */
+.maplibregl-ctrl-attrib {
     background: rgba(10, 14, 18, 0.8) !important;
     color: var(--text-muted) !important;
     font-size: 0.6rem !important;
     padding: 2px 6px !important;
 }
 
-.leaflet-control-attribution a {
+.maplibregl-ctrl-attrib a {
     color: var(--text-dim) !important;
 }
 
-/* Hide Leaflet prefix (includes Ukraine flag/heart) */
-.leaflet-control-attribution .leaflet-attribution-flag,
-.leaflet-control-attribution svg {
-    display: none !important;
-}
-
-/* Hide separator and any text before our attribution */
-.leaflet-control-attribution span[aria-hidden="true"] {
+/* Hide MapLibre logo if present */
+.maplibregl-ctrl-logo {
     display: none !important;
 }
 
 /* =============================================================================
    MARKERS
    ============================================================================= */
-
-/* Override Leaflet default div icon styles */
-.leaflet-div-icon {
-    background: transparent;
-    border: none;
-}
 
 /* Marker core - small and subtle */
 #marker-container .custom-marker {
@@ -5986,9 +5974,9 @@ html, body {
    MOBILE HUD - Compact Top Bar (Everything at top, map fully visible)
    ============================================================================= */
 
-/* Hide Leaflet zoom controls on mobile */
+/* Hide MapLibre navigation controls on mobile */
 @media (max-width: 768px) {
-    .leaflet-control-zoom {
+    .maplibregl-ctrl-group {
         display: none !important;
     }
 }
