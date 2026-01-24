@@ -827,15 +827,73 @@ const PathfindrPayments = {
     const wantsPurchase = localStorage.getItem('pathfindr_purchase_after_auth');
     if (!wantsPurchase) return false;
 
-    console.log('[Payments] User authenticated, proceeding with purchase...');
+    console.log('[Payments] User authenticated, showing Stripe confirmation...');
     localStorage.removeItem('pathfindr_purchase_after_auth');
 
     // Small delay to let auth UI close
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Now proceed with purchase
-    await this.purchasePremium();
+    // Show confirmation dialog before proceeding to Stripe
+    const shouldProceed = await this.showStripeConfirmationDialog();
+    if (shouldProceed) {
+      await this.purchasePremium();
+    }
     return true;
+  },
+
+  /**
+   * Show a confirmation dialog before redirecting to Stripe
+   */
+  showStripeConfirmationDialog() {
+    return new Promise((resolve) => {
+      // Create modal overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay stripe-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="overlay-content stripe-confirm-modal">
+          <div class="stripe-confirm-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <h2>Account Created!</h2>
+          <p class="stripe-confirm-subtitle">Continue to Stripe to complete your Pro purchase</p>
+          <div class="stripe-confirm-details">
+            <div class="stripe-confirm-item">
+              <span class="stripe-confirm-label">Pathfindr Pro</span>
+              <span class="stripe-confirm-price">$2.00</span>
+            </div>
+            <div class="stripe-confirm-features">
+              <div>Ad-free experience</div>
+              <div>Explorer & Visualizer modes</div>
+              <div>One-time payment</div>
+            </div>
+          </div>
+          <div class="stripe-confirm-buttons">
+            <button class="btn btn-primary btn-glow stripe-confirm-continue">
+              <span>Continue to Payment</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;margin-left:8px;">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button class="btn btn-secondary stripe-confirm-cancel">Maybe Later</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      // Handle button clicks
+      overlay.querySelector('.stripe-confirm-continue').addEventListener('click', () => {
+        overlay.remove();
+        resolve(true);
+      });
+
+      overlay.querySelector('.stripe-confirm-cancel').addEventListener('click', () => {
+        overlay.remove();
+        resolve(false);
+      });
+    });
   },
 };
 

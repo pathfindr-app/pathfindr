@@ -7624,7 +7624,7 @@ function calculateAndShowScore() {
     const nextBtn = document.getElementById('next-round-btn');
     if (nextBtn) {
         if (GameState.currentRound >= CONFIG.totalRounds) {
-            nextBtn.innerHTML = `<span>See Final Score</span>
+            nextBtn.innerHTML = `<span>Next City</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>`;
