@@ -278,12 +278,46 @@ const PathfindrAds = {
   async loadAdSense() {
     if (this.adsenseLoaded) return;
 
+    // Check if AdSense already loaded (from index.html script tag)
+    if (window.adsbygoogle !== undefined) {
+      this.adsenseLoaded = true;
+      console.log('[Ads] AdSense already loaded');
+      return;
+    }
+
     const publisherId = PathfindrConfig.adsense?.publisherId;
     if (!publisherId || publisherId.startsWith('YOUR_')) {
       console.log('[Ads] AdSense not configured');
       return;
     }
 
+    // Check if script tag already exists in DOM
+    const existingScript = document.querySelector('script[src*="adsbygoogle.js"]');
+    if (existingScript) {
+      // Script exists but hasn't loaded yet - wait for it
+      return new Promise((resolve) => {
+        const checkLoaded = setInterval(() => {
+          if (window.adsbygoogle !== undefined) {
+            clearInterval(checkLoaded);
+            this.adsenseLoaded = true;
+            console.log('[Ads] AdSense loaded (waited)');
+            resolve();
+          }
+        }, 100);
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(checkLoaded);
+          if (window.adsbygoogle !== undefined) {
+            this.adsenseLoaded = true;
+          } else {
+            console.warn('[Ads] AdSense load timeout');
+          }
+          resolve();
+        }, 5000);
+      });
+    }
+
+    // No script exists, add it dynamically
     return new Promise((resolve) => {
       const script = document.createElement('script');
       script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${publisherId}`;
@@ -303,7 +337,7 @@ const PathfindrAds = {
   },
 
   /**
-   * Show web banner ad - rotates between Go Pro promo and AdSense
+   * Show web banner ad - tries AdSense first, falls back to Go Pro if not filled
    */
   async showWebBanner() {
     const banner = document.getElementById('adsense-banner');
@@ -313,23 +347,12 @@ const PathfindrAds = {
     banner.style.display = 'block';
     document.body.classList.add('ad-visible');
 
-    // Rotate between Go Pro (index 0) and AdSense (index 1, 2, 3...)
-    // Show Go Pro every 3rd impression
-    const showGoPro = this.bannerRotationIndex % 3 === 0;
-    this.bannerRotationIndex++;
-
-    if (showGoPro) {
-      console.log('[Ads] Showing Go Pro banner (rotation)');
-      this.showBannerFallback(banner);
-      return;
-    }
-
-    // Try to show AdSense
+    // Always try AdSense first
     await this.loadAdSense();
 
     const slotId = PathfindrConfig.adsense?.slots?.banner;
     if (this.adsenseLoaded && slotId && !slotId.startsWith('YOUR_')) {
-      console.log('[Ads] Showing AdSense banner (rotation)');
+      console.log('[Ads] Showing AdSense banner');
       // Clear previous content and create fresh ad slot
       banner.innerHTML = `
         <ins class="adsbygoogle"
@@ -350,7 +373,8 @@ const PathfindrAds = {
         this.showBannerFallback(banner);
       }
     } else {
-      // AdSense not configured, show Go Pro
+      // AdSense not configured or not loaded, show Go Pro
+      console.log('[Ads] AdSense not available, showing Go Pro banner');
       this.showBannerFallback(banner);
     }
   },
@@ -566,8 +590,7 @@ const PathfindrAds = {
 
   /**
    * Show web interstitial (overlay ad)
-   * Note: AdSense doesn't have true interstitials like AdMob,
-   * so this uses a full-page ad unit in a modal
+   * Tries to show AdSense in a modal, falls back to Go Pro if not filled
    */
   async showWebInterstitial() {
     // Don't show if user is ad-free
@@ -575,10 +598,183 @@ const PathfindrAds = {
       return false;
     }
 
-    // For now, use the placeholder ad
-    // True AdSense interstitials require specific implementation
+    // Try AdSense interstitial first
+    await this.loadAdSense();
+
+    const slotId = PathfindrConfig.adsense?.slots?.banner; // Use banner slot for now
+    if (this.adsenseLoaded && slotId && !slotId.startsWith('YOUR_')) {
+      const adShown = await this.showAdSenseInterstitial(slotId);
+      if (adShown) return true;
+    }
+
+    // Fallback to Go Pro placeholder
     await this.showPlaceholderAd();
     return true;
+  },
+
+  /**
+   * Show AdSense ad in an interstitial modal
+   * @returns {Promise<boolean>} true if ad was shown and filled
+   */
+  showAdSenseInterstitial(slotId) {
+    return new Promise((resolve) => {
+      // Create overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'adsense-interstitial-overlay';
+      overlay.innerHTML = `
+        <div class="adsense-interstitial-backdrop"></div>
+        <div class="adsense-interstitial-card">
+          <div class="adsense-interstitial-ad-container">
+            <ins class="adsbygoogle"
+                 style="display:block; width:300px; height:250px;"
+                 data-ad-client="${PathfindrConfig.adsense.publisherId}"
+                 data-ad-slot="${slotId}"
+                 data-ad-format="rectangle"></ins>
+          </div>
+          <div class="adsense-interstitial-skip-section">
+            <span class="adsense-interstitial-timer"><span id="adsense-ad-countdown">5</span>s</span>
+            <button id="close-adsense-interstitial" class="adsense-interstitial-skip" disabled>Continue</button>
+          </div>
+        </div>
+      `;
+
+      // Add styles if not present
+      if (!document.getElementById('adsense-interstitial-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'adsense-interstitial-styles';
+        styles.textContent = `
+          #adsense-interstitial-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: adsenseAdFadeIn 0.3s ease;
+          }
+
+          @keyframes adsenseAdFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+
+          .adsense-interstitial-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(13, 10, 20, 0.9);
+          }
+
+          .adsense-interstitial-card {
+            position: relative;
+            background: linear-gradient(165deg, rgba(25, 20, 40, 0.98), rgba(15, 12, 28, 0.99));
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(65, 217, 217, 0.15) inset;
+            border: 1px solid rgba(65, 217, 217, 0.1);
+          }
+
+          .adsense-interstitial-ad-container {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            min-width: 300px;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .adsense-interstitial-skip-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 16px;
+          }
+
+          .adsense-interstitial-timer {
+            font-size: 13px;
+            color: rgba(254, 248, 244, 0.4);
+            font-variant-numeric: tabular-nums;
+          }
+
+          .adsense-interstitial-skip {
+            background: transparent;
+            border: 1px solid rgba(254, 248, 244, 0.2);
+            color: rgba(254, 248, 244, 0.4);
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: not-allowed;
+            transition: all 0.3s ease;
+          }
+
+          .adsense-interstitial-skip:not(:disabled) {
+            border-color: rgba(65, 217, 217, 0.5);
+            color: #41d9d9;
+            cursor: pointer;
+          }
+
+          .adsense-interstitial-skip:not(:disabled):hover {
+            background: rgba(65, 217, 217, 0.1);
+          }
+        `;
+        document.head.appendChild(styles);
+      }
+
+      document.body.appendChild(overlay);
+
+      // Push the ad
+      try {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      } catch (e) {
+        console.warn('[Ads] AdSense interstitial push failed:', e);
+        overlay.remove();
+        resolve(false);
+        return;
+      }
+
+      // Check if ad filled after delay
+      setTimeout(() => {
+        const adElement = overlay.querySelector('.adsbygoogle');
+        const hasIframe = adElement?.querySelector('iframe');
+        const isFilled = adElement?.dataset.adStatus === 'filled';
+        const isUnfilled = adElement?.dataset.adStatus === 'unfilled';
+
+        if (isUnfilled || (!hasIframe && !isFilled)) {
+          console.log('[Ads] AdSense interstitial did not fill');
+          overlay.remove();
+          resolve(false);
+          return;
+        }
+
+        console.log('[Ads] AdSense interstitial filled');
+
+        // Countdown timer
+        let countdown = 5;
+        const countdownEl = document.getElementById('adsense-ad-countdown');
+        const closeBtn = document.getElementById('close-adsense-interstitial');
+
+        const timer = setInterval(() => {
+          countdown--;
+          if (countdownEl) countdownEl.textContent = countdown;
+
+          if (countdown <= 0) {
+            clearInterval(timer);
+            if (closeBtn) {
+              closeBtn.disabled = false;
+            }
+          }
+        }, 1000);
+
+        // Close handler
+        closeBtn?.addEventListener('click', () => {
+          if (closeBtn.disabled) return;
+          overlay.remove();
+          resolve(true);
+        });
+      }, 2000);
+    });
   },
 
   // ===========================================
@@ -1074,9 +1270,9 @@ const PathfindrAds = {
 
   /**
    * Show inline interstitial ad inside the results panel
-   * Appears above the Next Round button after a delay
+   * Tries AdSense first, falls back to Go Pro banner
    */
-  showInlineInterstitial() {
+  async showInlineInterstitial() {
     // Don't show if user is ad-free
     if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
       console.log('[Ads] User is ad-free, skipping inline interstitial');
@@ -1091,10 +1287,30 @@ const PathfindrAds = {
     const existing = document.getElementById('inline-interstitial');
     if (existing) existing.remove();
 
+    // Try AdSense first
+    await this.loadAdSense();
+    const slotId = PathfindrConfig.adsense?.slots?.banner;
+    const useAdSense = this.adsenseLoaded && slotId && !slotId.startsWith('YOUR_');
+
     // Create inline interstitial
     const interstitial = document.createElement('div');
     interstitial.id = 'inline-interstitial';
-    interstitial.innerHTML = `
+
+    if (useAdSense) {
+      // AdSense version
+      interstitial.innerHTML = `
+        <div class="inline-ad-adsense-container">
+          <ins class="adsbygoogle"
+               style="display:block; height:90px;"
+               data-ad-client="${PathfindrConfig.adsense.publisherId}"
+               data-ad-slot="${slotId}"
+               data-ad-format="horizontal"></ins>
+        </div>
+        <button class="inline-ad-close-adsense" id="inline-ad-close">×</button>
+      `;
+    } else {
+      // Go Pro fallback version
+      interstitial.innerHTML = `
       <div class="inline-ad-map-bg"></div>
       <div class="inline-ad-content">
         <div class="inline-ad-left">
@@ -1116,6 +1332,7 @@ const PathfindrAds = {
         </div>
       </div>
     `;
+    }
 
     // Add styles if not present
     if (!document.getElementById('inline-interstitial-styles')) {
@@ -1289,6 +1506,36 @@ const PathfindrAds = {
         .inline-ad-close:not(:disabled) .inline-ad-timer {
           display: none;
         }
+
+        /* AdSense version styles */
+        .inline-ad-adsense-container {
+          background: #fff;
+          border-radius: 14px;
+          overflow: hidden;
+          min-height: 90px;
+        }
+
+        .inline-ad-close-adsense {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          width: 24px;
+          height: 24px;
+          background: rgba(0, 0, 0, 0.6);
+          border: none;
+          border-radius: 50%;
+          color: #fff;
+          font-size: 16px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 5;
+        }
+
+        .inline-ad-close-adsense:hover {
+          background: rgba(0, 0, 0, 0.8);
+        }
       `;
       document.head.appendChild(styles);
     }
@@ -1297,10 +1544,66 @@ const PathfindrAds = {
     wrapper.style.position = 'relative';
     wrapper.appendChild(interstitial);
 
-    // Ad stays covering the button until user dismisses it
-    // No automatic reveal - user must click X to access Next Round
+    // If using AdSense, push the ad and set up close handler
+    if (useAdSense) {
+      try {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+        console.log('[Ads] Showing AdSense inline interstitial');
+      } catch (e) {
+        console.warn('[Ads] AdSense inline push failed:', e);
+      }
 
-    // Countdown timer
+      // Close handler for AdSense version
+      const closeBtn = document.getElementById('inline-ad-close');
+      closeBtn?.addEventListener('click', () => {
+        interstitial.remove();
+      });
+
+      // Check if ad filled after delay, show Go Pro fallback if not
+      setTimeout(() => {
+        const adElement = interstitial.querySelector('.adsbygoogle');
+        const hasIframe = adElement?.querySelector('iframe');
+        const isFilled = adElement?.dataset.adStatus === 'filled';
+        const isUnfilled = adElement?.dataset.adStatus === 'unfilled';
+
+        if (isUnfilled || (!hasIframe && !isFilled)) {
+          console.log('[Ads] AdSense inline did not fill, showing Go Pro fallback');
+          // Replace with Go Pro version
+          interstitial.innerHTML = `
+            <div class="inline-ad-map-bg"></div>
+            <div class="inline-ad-content">
+              <div class="inline-ad-left">
+                <div class="inline-ad-icon">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                </div>
+                <div class="inline-ad-text">
+                  <span class="inline-ad-title">Go Pro</span>
+                  <span class="inline-ad-subtitle">Remove ads · $2</span>
+                </div>
+              </div>
+              <div class="inline-ad-right">
+                <button class="inline-ad-cta" id="inline-ad-cta">Unlock</button>
+                <button class="inline-ad-close" id="inline-ad-close">×</button>
+              </div>
+            </div>
+          `;
+          // Re-attach handlers for fallback
+          document.getElementById('inline-ad-close')?.addEventListener('click', () => interstitial.remove());
+          document.getElementById('inline-ad-cta')?.addEventListener('click', async () => {
+            interstitial.remove();
+            if (typeof PathfindrPayments !== 'undefined') {
+              await PathfindrPayments.showPurchasePrompt();
+            }
+          });
+        }
+      }, 2000);
+
+      return;
+    }
+
+    // Go Pro version: countdown timer
     let countdown = 3;
     const countdownEl = document.getElementById('inline-ad-countdown');
     const closeBtn = document.getElementById('inline-ad-close');
@@ -1333,7 +1636,7 @@ const PathfindrAds = {
       }
     });
 
-    console.log('[Ads] Showing inline interstitial');
+    console.log('[Ads] Showing Go Pro inline interstitial');
   },
 
   /**
