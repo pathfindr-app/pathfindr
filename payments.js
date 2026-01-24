@@ -866,6 +866,7 @@ const PathfindrPayments = {
             <div class="stripe-confirm-features">
               <div>Ad-free experience</div>
               <div>Explorer & Visualizer modes</div>
+              <div>Search any location in Classic mode</div>
               <div>One-time payment</div>
             </div>
           </div>
