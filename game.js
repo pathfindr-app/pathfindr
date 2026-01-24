@@ -3008,6 +3008,7 @@ const AmbientViz = {
             glowPurple: { r: 184, g: 41, b: 221 },
             glowGreen: { r: 57, g: 255, b: 20 },
             glowWhite: { r: 255, g: 255, b: 255 },
+            glowOrange: { r: 255, g: 140, b: 50 },  // For click radius indicator
         };
 
         for (const [name, color] of Object.entries(colors)) {
@@ -3255,6 +3256,12 @@ const AmbientViz = {
 
                 ctx.globalAlpha = 0.3 * slowPulse;
                 ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
+
+                // Show click radius around start marker when user hasn't started drawing yet
+                if (GameController.phase === GamePhase.PLAYING &&
+                    GameState.userPathNodes.length <= 1) {
+                    this.renderStartClickRadius(ctx, screen, pos, slowPulse);
+                }
             }
         }
 
@@ -3270,6 +3277,58 @@ const AmbientViz = {
                 ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
             }
         }
+    },
+
+    // Render click radius indicator around start marker
+    renderStartClickRadius(ctx, screen, pos, slowPulse) {
+        const time = performance.now() * 0.001;
+
+        // Get the max click distance for current difficulty
+        const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+
+        // Convert km to pixels - account for latitude distortion
+        const latRadians = pos.lat * Math.PI / 180;
+        const kmPerDegreeLng = 111 * Math.cos(latRadians);
+        const offset = maxDistance / kmPerDegreeLng;
+        const refScreen = GameState.map.project([pos.lng + offset, pos.lat]);
+        const pixelRadius = Math.abs(refScreen.x - screen.x);
+
+        const pulse = 0.6 + 0.4 * Math.sin(time * 2.5);
+
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+
+        // Soft radial gradient fill showing clickable area
+        const gradient = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, pixelRadius);
+        gradient.addColorStop(0, `rgba(60, 255, 80, ${0.02 * slowPulse})`);
+        gradient.addColorStop(0.7, `rgba(50, 255, 70, ${0.05 * slowPulse})`);
+        gradient.addColorStop(0.9, `rgba(40, 255, 60, ${0.1 * pulse})`);
+        gradient.addColorStop(1, 'rgba(30, 255, 50, 0)');
+
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, pixelRadius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Outer ring - animated dashed circle (more visible)
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, pixelRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(80, 255, 120, ${0.35 * slowPulse})`;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([10, 8]);
+        ctx.lineDashOffset = -time * 40; // Animated dash
+        ctx.stroke();
+
+        // Inner glow ring
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, pixelRadius * 0.92, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(100, 255, 140, ${0.15 * pulse})`;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+        ctx.restore();
     },
 
     // Start ambient loop
@@ -5849,6 +5908,9 @@ async function nextRound() {
         selectRandomEndpoints();
         enableDrawing();
 
+        // Re-enter PLAYING phase for new round (critical for click radius indicator)
+        GameController.enterPhase(GamePhase.PLAYING);
+
         // Analytics: Track round start for rounds 2-5
         if (typeof PathfindrAnalytics !== 'undefined') {
             PathfindrAnalytics.trackRoundStart(GameState.currentRound, GameState.currentCity?.name || 'Unknown');
@@ -6231,6 +6293,22 @@ function redrawUserPath() {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
+    // === DARK OUTLINE ===
+    // Draw a dark outline FIRST (underneath everything) to make path pop against round history
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Outer dark edge - creates separation from background paths
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth = 10;
+    drawWobblyPath(ctx, wobblePoints);
+    ctx.stroke();
+
+    // Inner dark edge - sharper contrast
+    ctx.strokeStyle = 'rgba(20, 10, 30, 0.85)';
+    ctx.lineWidth = 6;
+    drawWobblyPath(ctx, wobblePoints);
+    ctx.stroke();
+
     // Use lighter composite for glow
     ctx.globalCompositeOperation = 'lighter';
 
@@ -6274,6 +6352,81 @@ function redrawUserPath() {
 
     // Energy pulses traveling along the path
     renderUserPathPulses(ctx, points, time, uc);
+
+    // Click radius indicator - only show during active drawing phase
+    if (GameController.phase === GamePhase.PLAYING && points.length >= 1) {
+        renderClickRadiusIndicator(ctx, time);
+    }
+}
+
+// Render click radius indicator around last path node
+function renderClickRadiusIndicator(ctx, time) {
+    const lastNodeId = GameState.userPathNodes[GameState.userPathNodes.length - 1];
+    if (!lastNodeId) return;
+
+    const lastPos = GameState.nodes.get(lastNodeId);
+    if (!lastPos) return;
+
+    // Check if we're at the end node (path complete) - don't show indicator
+    if (lastNodeId === GameState.endNode) return;
+
+    const screen = GameState.map.project([lastPos.lng, lastPos.lat]);
+
+    // Get the max click distance for current difficulty
+    const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+
+    // Convert km to pixels at current zoom level
+    // Account for latitude distortion (longitude degrees are shorter at higher latitudes)
+    const latRadians = lastPos.lat * Math.PI / 180;
+    const kmPerDegreeLng = 111 * Math.cos(latRadians);
+    const offset = maxDistance / kmPerDegreeLng;
+    const refScreen = GameState.map.project([lastPos.lng + offset, lastPos.lat]);
+    const pixelRadius = Math.abs(refScreen.x - screen.x);
+
+    // Pulsing animation
+    const pulse = 0.6 + 0.4 * Math.sin(time * 2.5);
+    const slowPulse = 0.7 + 0.3 * Math.sin(time * 1.2);
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Soft radial gradient fill showing clickable area
+    const gradient = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, pixelRadius);
+    gradient.addColorStop(0, `rgba(255, 180, 80, ${0.03 * slowPulse})`);
+    gradient.addColorStop(0.7, `rgba(255, 150, 50, ${0.06 * slowPulse})`);
+    gradient.addColorStop(0.9, `rgba(255, 120, 30, ${0.12 * pulse})`);
+    gradient.addColorStop(1, 'rgba(255, 100, 20, 0)');
+
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, pixelRadius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Outer ring - animated dashed circle (more visible)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, pixelRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 180, 80, ${0.35 * slowPulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([10, 8]);
+    ctx.lineDashOffset = -time * 40; // Animated dash
+    ctx.stroke();
+    ctx.restore();
+
+    // Inner glow ring
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, pixelRadius * 0.92, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 200, 100, ${0.15 * pulse})`;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    // Glow sprite at the last point for "you are here" indicator
+    if (AmbientViz.sprites && AmbientViz.sprites.glowOrange) {
+        const sprite = AmbientViz.sprites.glowOrange;
+        const size = 50 * pulse;
+        ctx.globalAlpha = 0.4 * slowPulse;
+        ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
+        ctx.globalAlpha = 1;
+    }
 }
 
 // Helper to draw a slightly wobbly path (human feel)
