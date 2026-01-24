@@ -2050,6 +2050,11 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     display: none !important;
 }
 
+/* Hide cooperative gestures overlay (two-finger pan message) */
+.maplibregl-cooperative-gesture-screen {
+    display: none !important;
+}
+
 /* =============================================================================
    MARKERS
    ============================================================================= */
