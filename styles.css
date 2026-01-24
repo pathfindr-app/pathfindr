@@ -6822,3 +6822,38 @@ html, body {
         font-size: 0.95rem;
     }
 }
+
+/* =============================================================================
+   MOBILE OSM ATTRIBUTION
+   ============================================================================= */
+
+/* Hidden on desktop */
+#mobile-osm-attribution {
+    display: none;
+}
+
+/* Visible on mobile */
+@media (max-width: 768px) {
+    #mobile-osm-attribution {
+        display: block;
+        position: fixed;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        right: 10px;
+        font-size: 0.65rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-decoration: none;
+        padding: 4px 8px;
+        background: rgba(13, 10, 20, 0.7);
+        border-radius: 4px;
+        z-index: 1000;
+    }
+
+    #mobile-osm-attribution:active {
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Hide MapLibre's built-in attribution on mobile (we have our own) */
+    .maplibregl-ctrl-attrib {
+        display: none !important;
+    }
+}
