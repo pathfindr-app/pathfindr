@@ -7457,6 +7457,18 @@ function addPointToUserPath(lat, lng) {
     // Use micro A* to find the path along roads
     const microPath = findShortestPathBetween(lastNode, targetNode);
 
+    // Check actual routed distance (prevents highway detours)
+    if (microPath.length > 1 && GameState.gameMode !== 'explorer') {
+        const routedDistance = calculateNodePathDistance(microPath);
+        const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+        const maxRouteDistance = maxDistance * 3; // Allow 3x click distance for actual route
+
+        if (routedDistance > maxRouteDistance) {
+            showDistanceRejectionFeedback();
+            return false;
+        }
+    }
+
     if (microPath.length === 0) {
         // No path found - fall back to direct add (shouldn't happen often)
         GameState.userPathNodes.push(targetNode);
