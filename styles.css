@@ -4361,6 +4361,30 @@ body.has-ad-banner #gameplay-hud {
     max-width: 400px;
     width: 90%;
     padding: 2.5rem 2rem;
+    position: relative;
+}
+
+.callsign-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.callsign-close-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    border-color: rgba(255, 107, 107, 0.3);
+    color: #ff6b6b;
 }
 
 .callsign-header {
@@ -4726,6 +4750,39 @@ body.has-ad-banner #gameplay-hud {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.callsign-value-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.callsign-edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.callsign-edit-btn:hover {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+}
+
+.callsign-edit-btn svg {
+    width: 12px;
+    height: 12px;
 }
 
 .status-badge {

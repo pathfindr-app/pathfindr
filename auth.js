@@ -395,9 +395,10 @@ const PathfindrAuth = {
   },
 
   /**
-   * Show the callsign modal for new users
+   * Show the callsign modal for new users or editing
+   * @param {boolean} isEditing - Whether this is editing an existing callsign
    */
-  showCallsignModal() {
+  showCallsignModal(isEditing = false) {
     const modal = document.getElementById('callsign-modal');
     if (!modal) {
       console.error('[Auth] Callsign modal not found');
@@ -411,51 +412,97 @@ const PathfindrAuth = {
     const input = document.getElementById('callsign-input');
     const errorEl = document.getElementById('callsign-error');
     const submitBtn = document.getElementById('callsign-submit');
+    const subtitle = modal.querySelector('.callsign-subtitle');
+    const closeBtn = modal.querySelector('.callsign-close-btn');
 
     if (!form || !input) return;
 
-    // Focus input
-    setTimeout(() => input.focus(), 100);
+    // Update UI based on mode
+    if (isEditing) {
+      if (subtitle) subtitle.textContent = 'Change your callsign';
+      if (submitBtn) submitBtn.querySelector('span').textContent = 'Save Changes';
+      input.value = this.getUsername() || '';
+      // Show close button for editing mode
+      if (closeBtn) closeBtn.style.display = 'flex';
+    } else {
+      if (subtitle) subtitle.textContent = 'Choose your callsign';
+      if (submitBtn) submitBtn.querySelector('span').textContent = 'Confirm Callsign';
+      input.value = '';
+      // Hide close button for new users
+      if (closeBtn) closeBtn.style.display = 'none';
+    }
+
+    // Clear any previous errors
+    if (errorEl) errorEl.textContent = '';
+
+    // Focus input and select text if editing
+    setTimeout(() => {
+      input.focus();
+      if (isEditing) input.select();
+    }, 100);
+
+    // Store original callsign for comparison
+    const originalCallsign = isEditing ? this.getUsername() : null;
+
+    // Remove old event listeners by cloning
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+
+    // Get new references
+    const newInput = newForm.querySelector('#callsign-input');
+    const newErrorEl = newForm.querySelector('#callsign-error');
+    const newSubmitBtn = newForm.querySelector('#callsign-submit');
+
+    // Restore input value after clone
+    if (isEditing && originalCallsign) {
+      newInput.value = originalCallsign;
+    }
 
     // Real-time validation
-    input.addEventListener('input', () => {
-      const value = input.value.trim();
+    newInput.addEventListener('input', () => {
+      const value = newInput.value.trim();
       const validation = this.validateCallsign(value);
 
-      if (errorEl) {
-        errorEl.textContent = validation.error || '';
+      if (newErrorEl) {
+        newErrorEl.textContent = validation.error || '';
       }
 
-      if (submitBtn) {
-        submitBtn.disabled = !validation.valid;
+      if (newSubmitBtn) {
+        newSubmitBtn.disabled = !validation.valid;
       }
     });
 
     // Form submission
-    form.addEventListener('submit', async (e) => {
+    newForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const callsign = input.value.trim();
+      const callsign = newInput.value.trim();
       const validation = this.validateCallsign(callsign);
 
       if (!validation.valid) {
-        if (errorEl) errorEl.textContent = validation.error;
+        if (newErrorEl) newErrorEl.textContent = validation.error;
+        return;
+      }
+
+      // If editing and callsign unchanged, just close
+      if (isEditing && callsign.toLowerCase() === originalCallsign?.toLowerCase()) {
+        modal.classList.add('hidden');
         return;
       }
 
       // Disable form while submitting
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.querySelector('span').textContent = 'Saving...';
+      if (newSubmitBtn) {
+        newSubmitBtn.disabled = true;
+        newSubmitBtn.querySelector('span').textContent = 'Saving...';
       }
 
-      // Check if callsign is available
+      // Check if callsign is available (skip if same as current)
       const available = await this.isCallsignAvailable(callsign);
       if (!available) {
-        if (errorEl) errorEl.textContent = 'Callsign already taken';
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.querySelector('span').textContent = 'Confirm Callsign';
+        if (newErrorEl) newErrorEl.textContent = 'Callsign already taken';
+        if (newSubmitBtn) {
+          newSubmitBtn.disabled = false;
+          newSubmitBtn.querySelector('span').textContent = isEditing ? 'Save Changes' : 'Confirm Callsign';
         }
         return;
       }
@@ -467,14 +514,25 @@ const PathfindrAuth = {
         this.needsCallsign = false;
         modal.classList.add('hidden');
         console.log('[Auth] Callsign set:', callsign);
+
+        // Update UI elements that show the callsign
+        const profileUsername = document.getElementById('profile-username');
+        const usernameDisplay = document.getElementById('username-display');
+        if (profileUsername) profileUsername.textContent = callsign;
+        if (usernameDisplay) usernameDisplay.textContent = callsign;
       } else {
-        if (errorEl) errorEl.textContent = result.error || 'Failed to save callsign';
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.querySelector('span').textContent = 'Confirm Callsign';
+        if (newErrorEl) newErrorEl.textContent = result.error || 'Failed to save callsign';
+        if (newSubmitBtn) {
+          newSubmitBtn.disabled = false;
+          newSubmitBtn.querySelector('span').textContent = isEditing ? 'Save Changes' : 'Confirm Callsign';
         }
       }
     });
+
+    // Set up close button handler for editing mode
+    if (closeBtn && isEditing) {
+      closeBtn.onclick = () => modal.classList.add('hidden');
+    }
   },
 
   /**
