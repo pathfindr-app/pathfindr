@@ -5195,6 +5195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initLocationSelector();
     initVisualizerUI();
     initExplorerUI();
+    initChallengeCreationUI();  // Admin challenge creation
     initInlineLocationSearch();  // Click-to-search on location display
     initCustomCursor();  // Custom cursor for web version
     // Show mode selector first
@@ -5629,10 +5630,10 @@ function setupMobileTouchHandling() {
     // This fires for taps but allows two-finger gestures to work
     if (!GameState.mobileClickHandlerAdded) {
         GameState.map.on('click', (e) => {
-            // Only handle during competitive game mode
+            // Only handle during competitive or challenge game mode
             if (!GameState.gameStarted || !GameState.canDraw) return;
             if (GameState.vizState.active) return;
-            if (GameState.gameMode !== 'competitive') return;
+            if (GameState.gameMode !== 'competitive' && GameState.gameMode !== 'challenge') return;
 
             // MapLibre click event provides e.point (screen coords) directly
             const rect = canvas.getBoundingClientRect();
@@ -5728,6 +5729,8 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
             startExplorerMode();
         } else if (GameState.gameMode === 'visualizer') {
             // Visualizer handles its own flow
+        } else if (GameState.gameMode === 'challenge') {
+            // Challenge handles its own flow in beginChallengeGame
         } else {
             // Competitive mode - show instructions
             showInstructions();
@@ -7593,6 +7596,12 @@ function addPointToUserPath(lat, lng) {
     // Avoid duplicate consecutive nodes
     if (targetNode === lastNode) return false;
 
+    // Start challenge timer on first actual click (not the initial start node)
+    if (GameState.gameMode === 'challenge' && GameState.challengeState && !GameState.challengeState.startTime) {
+        GameState.challengeState.startTime = Date.now();
+        console.log('[Challenge] Timer started');
+    }
+
     // Check max segment distance (prevents clicking directly on endpoint)
     if (GameState.gameMode !== 'explorer') {
         const lastPos = GameState.nodes.get(lastNode);
@@ -7995,6 +8004,24 @@ function calculateAndShowScore() {
         if (typeof CityLeaderboard !== 'undefined') {
             CityLeaderboard.submitScore(locationName, efficiency);
         }
+
+        // Submit challenge entry if in challenge mode
+        if (GameState.gameMode === 'challenge' && GameState.challengeState?.activeChallenge) {
+            submitChallengeEntry(efficiency, {
+                userPath: userPathCoords,
+                optimalPath: optimalPathCoords,
+                userDistance: userDistance,
+                optimalDistance: optimalDistance,
+            }).then(result => {
+                if (result) {
+                    console.log('[Challenge] Entry submitted, rank:', result.new_rank);
+                    // Show challenge-specific results
+                    showChallengeResults(efficiency, result.new_rank);
+                }
+            }).catch(err => {
+                console.warn('[Challenge] Entry submission failed:', err);
+            });
+        }
     }
 
     // Analytics: Track round completion
@@ -8280,6 +8307,59 @@ function hideLoading() {
     if (cityEl) cityEl.textContent = '';
 }
 
+/**
+ * Show a toast notification
+ */
+function showToast(message, duration = 3000) {
+    // Remove existing toast
+    const existing = document.querySelector('.toast-notification');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(13, 10, 20, 0.95);
+        border: 1px solid var(--neon-cyan);
+        color: var(--text-bright);
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 0.85rem;
+        z-index: 10000;
+        animation: toast-in 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(65, 217, 217, 0.2);
+    `;
+
+    // Add animation keyframes if not exists
+    if (!document.getElementById('toast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'toast-styles';
+        style.textContent = `
+            @keyframes toast-in {
+                from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+                to { opacity: 1; transform: translateX(-50%) translateY(0); }
+            }
+            @keyframes toast-out {
+                from { opacity: 1; transform: translateX(-50%) translateY(0); }
+                to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'toast-out 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
 // =============================================================================
 // MODE SELECTOR
 // =============================================================================
@@ -8326,6 +8406,9 @@ function showModeSelector() {
     document.getElementById('loading-overlay').classList.add('hidden');
     document.getElementById('mode-selector').classList.remove('hidden');
     SoundEngine.uiTransition();
+
+    // Fetch and display active challenge info
+    updateChallengeButton();
 }
 
 function hideModeSelector() {
@@ -8543,6 +8626,17 @@ function selectGameMode(mode) {
             }
             return;
         }
+    }
+
+    // Challenge mode requires login
+    if (mode === 'challenge') {
+        if (!PathfindrAuth.isLoggedIn()) {
+            PathfindrAuth.showAuthModal('login');
+            return;
+        }
+        // Show challenge list (multi-challenge UI)
+        showChallengeList();
+        return;
     }
 
     GameState.gameMode = mode;
@@ -9552,6 +9646,9 @@ function showExplorerContextMenu(x, y, lat, lng) {
         actionsSection.style.display = hasBoth ? 'flex' : 'none';
     }
 
+    // Update admin save challenge button visibility
+    updateAdminChallengeButton();
+
     // Position menu at tap location
     // CSS transform handles centering and positioning above the point
     const viewportWidth = window.innerWidth;
@@ -9623,6 +9720,9 @@ function handleContextMenuAction(action) {
             break;
         case 'exit':
             stopExplorerMode();
+            break;
+        case 'savechallenge':
+            showChallengeCreationModal();
             break;
     }
 }
@@ -9912,6 +10012,961 @@ function stopExplorerMode() {
     // Return to mode selector
     GameState.gameMode = 'competitive';
     showModeSelector();
+}
+
+// =============================================================================
+// DAILY/WEEKLY CHALLENGE SYSTEM
+// =============================================================================
+
+// Challenge state stored in GameState
+GameState.challengeState = {
+    activeChallenge: null,      // Currently selected challenge
+    activeChallenges: [],       // All active challenges (for hourly system)
+    userEntries: new Map(),     // Map<challengeId, entry> for user's completed challenges
+    userEntry: null,            // Legacy: current challenge entry
+    startTime: null,
+    leaderboard: [],
+};
+
+/**
+ * Fetch active challenges and update the mode selector button
+ */
+async function updateChallengeButton() {
+    const btn = document.getElementById('daily-challenge-btn');
+    const badge = document.getElementById('challenge-badge');
+    const desc = document.getElementById('challenge-desc');
+
+    if (!btn || !badge || !desc) return;
+
+    // Wait for auth to be ready (max 3 seconds)
+    let attempts = 0;
+    while (!PathfindrAuth.client && attempts < 30) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+    }
+
+    if (!PathfindrAuth.client) {
+        console.warn('[Challenge] Auth client not ready after timeout');
+        desc.textContent = 'Login to play';
+        return;
+    }
+
+    try {
+        // Fetch all active challenges (hourly and daily)
+        const challenges = await fetchActiveChallenges();
+
+        if (!challenges || challenges.length === 0) {
+            // No active challenges
+            btn.classList.add('no-challenge');
+            badge.textContent = 'NONE';
+            desc.textContent = 'No active challenges';
+            GameState.challengeState.activeChallenges = [];
+            return;
+        }
+
+        GameState.challengeState.activeChallenges = challenges;
+        btn.classList.remove('no-challenge');
+
+        // Calculate stats for button display
+        const totalParticipants = challenges.reduce((sum, c) => sum + (c.participant_count || 0), 0);
+
+        // Set badge to show count of active challenges
+        badge.textContent = `${challenges.length} ACTIVE`;
+
+        // Check completion status if logged in
+        if (PathfindrAuth.isLoggedIn()) {
+            const challengeIds = challenges.map(c => c.id);
+            const entries = await fetchUserChallengeEntries(challengeIds);
+
+            // Store in map for quick lookup
+            GameState.challengeState.userEntries = new Map(
+                entries.map(e => [e.challenge_id, e])
+            );
+
+            const completedCount = entries.length;
+            const unplayedCount = challenges.length - completedCount;
+
+            if (unplayedCount > 0) {
+                btn.classList.remove('completed');
+                desc.textContent = `${unplayedCount} new · ${totalParticipants} total players`;
+            } else {
+                btn.classList.add('completed');
+                desc.textContent = `All ${completedCount} completed · View results`;
+            }
+        } else {
+            btn.classList.remove('completed');
+            desc.textContent = `${challenges.length} challenges · ${totalParticipants} players`;
+        }
+
+    } catch (error) {
+        console.error('[Challenge] Failed to fetch active challenges:', error);
+        btn.classList.add('no-challenge');
+        badge.textContent = 'ERROR';
+        desc.textContent = 'Failed to load';
+    }
+}
+
+/**
+ * Fetch active challenge from database (legacy - single challenge)
+ */
+async function fetchActiveChallenge(type = 'daily') {
+    if (!PathfindrAuth.client) {
+        console.log('[Challenge] No Supabase client');
+        return null;
+    }
+
+    try {
+        const { data, error } = await PathfindrAuth.client
+            .rpc('get_active_challenge', { p_type: type });
+
+        if (error) {
+            console.error('[Challenge] RPC error:', error);
+            return null;
+        }
+
+        return data && data.length > 0 ? data[0] : null;
+    } catch (error) {
+        console.error('[Challenge] Fetch error:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch all active challenges (hourly system)
+ */
+async function fetchActiveChallenges(limit = 50) {
+    if (!PathfindrAuth.client) {
+        console.log('[Challenge] No Supabase client');
+        return [];
+    }
+
+    try {
+        // Try to fetch hourly challenges first
+        let { data, error } = await PathfindrAuth.client
+            .rpc('get_active_challenges', { p_type: 'hourly', p_limit: limit });
+
+        // If no hourly challenges or RPC doesn't exist, fall back to daily
+        if (error || !data || data.length === 0) {
+            // Try daily challenges
+            const dailyResult = await PathfindrAuth.client
+                .rpc('get_active_challenge', { p_type: 'daily' });
+
+            if (!dailyResult.error && dailyResult.data && dailyResult.data.length > 0) {
+                return dailyResult.data;
+            }
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('[Challenge] Fetch active challenges error:', error);
+        return [];
+    }
+}
+
+/**
+ * Fetch user's entries for multiple challenges
+ */
+async function fetchUserChallengeEntries(challengeIds) {
+    if (!PathfindrAuth.client || !PathfindrAuth.currentUser || !challengeIds.length) {
+        return [];
+    }
+
+    try {
+        // Try using the new RPC function
+        const { data, error } = await PathfindrAuth.client
+            .rpc('get_user_challenge_entries', {
+                p_user_id: PathfindrAuth.currentUser.id,
+                p_challenge_ids: challengeIds
+            });
+
+        if (!error && data) {
+            return data;
+        }
+
+        // Fallback: Query directly
+        const { data: fallbackData, error: fallbackError } = await PathfindrAuth.client
+            .from('challenge_entries')
+            .select('challenge_id, efficiency, duration_ms, submitted_at')
+            .eq('user_id', PathfindrAuth.currentUser.id)
+            .in('challenge_id', challengeIds);
+
+        if (fallbackError) {
+            console.error('[Challenge] Entries fetch error:', fallbackError);
+            return [];
+        }
+
+        return fallbackData || [];
+    } catch (error) {
+        console.error('[Challenge] Fetch user entries error:', error);
+        return [];
+    }
+}
+
+/**
+ * Check if user has already completed a challenge
+ */
+async function fetchUserChallengeEntry(challengeId) {
+    if (!PathfindrAuth.client || !PathfindrAuth.currentUser) {
+        return null;
+    }
+
+    try {
+        const { data, error } = await PathfindrAuth.client
+            .from('challenge_entries')
+            .select('*')
+            .eq('challenge_id', challengeId)
+            .eq('user_id', PathfindrAuth.currentUser.id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') {
+            console.error('[Challenge] Entry fetch error:', error);
+        }
+
+        return data || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Show the multi-challenge list modal
+ */
+async function showChallengeList() {
+    const challenges = GameState.challengeState.activeChallenges;
+    const userEntries = GameState.challengeState.userEntries;
+
+    // If no challenges cached, refetch
+    if (!challenges || challenges.length === 0) {
+        showToast('No active challenges available');
+        return;
+    }
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'challenge-list-overlay';
+    overlay.className = 'overlay';
+
+    // Calculate time remaining helper
+    const getTimeRemaining = (activeUntil) => {
+        const now = new Date();
+        const end = new Date(activeUntil);
+        const diffMs = end - now;
+
+        if (diffMs <= 0) return 'Expired';
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 24) {
+            const days = Math.floor(hours / 24);
+            return `${days}d ${hours % 24}h left`;
+        }
+        return hours > 0 ? `${hours}h ${minutes}m left` : `${minutes}m left`;
+    };
+
+    // Render challenge cards
+    const renderChallengeCards = () => {
+        return challenges.map((challenge, index) => {
+            const entry = userEntries.get(challenge.id);
+            const isCompleted = !!entry;
+            const timeRemaining = getTimeRemaining(challenge.active_until);
+
+            return `
+                <div class="challenge-card ${isCompleted ? 'completed' : ''}" data-challenge-index="${index}">
+                    <div class="challenge-card-header">
+                        <span class="challenge-card-city">${challenge.city_name}</span>
+                        <span class="challenge-card-time">${timeRemaining}</span>
+                    </div>
+                    <div class="challenge-card-info">
+                        <span class="challenge-card-difficulty ${challenge.difficulty || 'medium'}">${(challenge.difficulty || 'medium').charAt(0).toUpperCase() + (challenge.difficulty || 'medium').slice(1)}</span>
+                        <span class="challenge-card-players">${challenge.participant_count || 0} players</span>
+                        ${challenge.top_score ? `<span class="challenge-card-top">Top: ${challenge.top_score}%</span>` : ''}
+                    </div>
+                    ${isCompleted ? `
+                        <div class="challenge-card-result">
+                            <span class="challenge-card-score">Your score: ${entry.efficiency}%</span>
+                            <button class="btn btn-sm btn-secondary view-result-btn" data-challenge-id="${challenge.id}">View Results</button>
+                        </div>
+                    ` : `
+                        <button class="btn btn-sm btn-primary play-challenge-btn" data-challenge-index="${index}">Play</button>
+                    `}
+                </div>
+            `;
+        }).join('');
+    };
+
+    // Count stats
+    const completedCount = Array.from(userEntries.values()).length;
+    const unplayedCount = challenges.length - completedCount;
+
+    overlay.innerHTML = `
+        <div class="overlay-content challenge-list-modal">
+            <button class="modal-close" id="challenge-list-close">&times;</button>
+            <h2>Hourly Challenges</h2>
+            <p class="challenge-list-subtitle">${unplayedCount} new challenge${unplayedCount !== 1 ? 's' : ''} · ${completedCount} completed</p>
+
+            <div class="challenge-list-container">
+                ${renderChallengeCards()}
+            </div>
+
+            <div class="challenge-list-footer">
+                <button class="btn btn-secondary" id="view-alltime-btn">View All-Time Rankings</button>
+                <button class="btn btn-secondary" id="challenge-list-back">Back to Menu</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Event handlers
+    document.getElementById('challenge-list-close').addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    document.getElementById('challenge-list-back').addEventListener('click', () => {
+        overlay.remove();
+        showModeSelector();
+    });
+
+    document.getElementById('view-alltime-btn').addEventListener('click', () => {
+        overlay.remove();
+        // Show all-time leaderboard (use first challenge ID for reference)
+        showChallengeLeaderboard(challenges[0]?.id);
+    });
+
+    // Play buttons
+    overlay.querySelectorAll('.play-challenge-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const index = parseInt(btn.dataset.challengeIndex);
+            const challenge = challenges[index];
+            if (challenge) {
+                overlay.remove();
+                // Set as active challenge and show info screen
+                GameState.challengeState.activeChallenge = challenge;
+                showChallengeInfoScreen(challenge);
+            }
+        });
+    });
+
+    // View result buttons
+    overlay.querySelectorAll('.view-result-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const challengeId = btn.dataset.challengeId;
+            overlay.remove();
+            showChallengeLeaderboard(challengeId);
+        });
+    });
+}
+
+/**
+ * Fetch challenge leaderboard
+ */
+async function fetchChallengeLeaderboard(challengeId, limit = 20) {
+    if (!PathfindrAuth.client) return [];
+
+    try {
+        const { data, error } = await PathfindrAuth.client
+            .rpc('get_challenge_leaderboard', {
+                p_challenge_id: challengeId,
+                p_limit: limit
+            });
+
+        if (error) {
+            console.error('[Challenge] Leaderboard error:', error);
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('[Challenge] Leaderboard fetch error:', error);
+        return [];
+    }
+}
+
+/**
+ * Start challenge mode - show pre-game info screen
+ */
+async function startChallengeMode() {
+    const challenge = GameState.challengeState.activeChallenge;
+
+    if (!challenge) {
+        showToast('No active challenge available');
+        return;
+    }
+
+    // Check if already completed
+    if (GameState.challengeState.userEntry) {
+        // Show results/leaderboard instead
+        showChallengeLeaderboard(challenge.id);
+        return;
+    }
+
+    // Hide mode selector
+    hideModeSelector();
+
+    // Show challenge info screen
+    showChallengeInfoScreen(challenge);
+}
+
+/**
+ * Show pre-challenge info screen
+ */
+async function showChallengeInfoScreen(challenge) {
+    // Fetch leaderboard preview
+    const leaderboard = await fetchChallengeLeaderboard(challenge.id, 3);
+
+    // Create info overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'challenge-info-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+        <div class="overlay-content challenge-info-panel">
+            <div class="challenge-info-header">
+                <div class="challenge-info-badge">${challenge.challenge_type.toUpperCase()} CHALLENGE</div>
+                <div class="challenge-info-city">${challenge.city_name}</div>
+                <div class="challenge-info-difficulty">${challenge.difficulty || 'Medium'} difficulty</div>
+            </div>
+
+            <div class="challenge-info-stats">
+                <div class="challenge-stat">
+                    <div class="challenge-stat-value">${challenge.participant_count || 0}</div>
+                    <div class="challenge-stat-label">Players</div>
+                </div>
+                <div class="challenge-stat">
+                    <div class="challenge-stat-value">${challenge.top_score ? challenge.top_score + '%' : '-'}</div>
+                    <div class="challenge-stat-label">Top Score</div>
+                </div>
+            </div>
+
+            ${leaderboard.length > 0 ? `
+                <div class="challenge-info-leaderboard">
+                    <div class="challenge-leaderboard-title">Top Players</div>
+                    <div class="challenge-leaderboard-preview">
+                        ${leaderboard.map((entry, i) => `
+                            <div class="leaderboard-preview-row">
+                                <span class="leaderboard-rank ${['gold', 'silver', 'bronze'][i] || ''}">#${entry.rank}</span>
+                                <span class="leaderboard-name">${entry.username}</span>
+                                <span class="leaderboard-score">${entry.efficiency}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <div class="challenge-info-warning">
+                You only get ONE attempt!
+            </div>
+
+            <button id="start-challenge-btn" class="btn btn-primary btn-glow">Start Challenge</button>
+            <button id="cancel-challenge-btn" class="btn btn-secondary" style="margin-top: 0.5rem;">Back</button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Event handlers
+    document.getElementById('start-challenge-btn').addEventListener('click', () => {
+        overlay.remove();
+        beginChallengeGame(challenge);
+    });
+
+    document.getElementById('cancel-challenge-btn').addEventListener('click', () => {
+        overlay.remove();
+        showModeSelector();
+    });
+}
+
+/**
+ * Begin the actual challenge game
+ */
+async function beginChallengeGame(challenge) {
+    GameState.gameMode = 'challenge';
+    GameState.challengeState.startTime = null; // Will set on first click
+
+    // Set difficulty from challenge
+    if (challenge.difficulty) {
+        setDifficulty(challenge.difficulty);
+    }
+
+    // Show loading
+    showLoading(`Loading ${challenge.city_name}...`);
+
+    // Set up the map location
+    const location = {
+        lat: parseFloat(challenge.center_lat),
+        lng: parseFloat(challenge.center_lng),
+        zoom: challenge.zoom_level || 16,
+        name: challenge.city_name
+    };
+
+    GameState.currentCity = location;
+
+    // Initialize or move map
+    if (!GameState.map) {
+        await initMap(location.lat, location.lng, location.zoom);
+    } else {
+        GameState.map.setCenter([location.lng, location.lat]);
+        GameState.map.setZoom(location.zoom);
+    }
+
+    // Load road network
+    try {
+        await loadRoadNetwork(location);
+
+        // Find nearest nodes to challenge start/end coordinates
+        const startNode = findNearestNode(
+            parseFloat(challenge.start_lat),
+            parseFloat(challenge.start_lng)
+        );
+        const endNode = findNearestNode(
+            parseFloat(challenge.end_lat),
+            parseFloat(challenge.end_lng)
+        );
+
+        if (!startNode || !endNode) {
+            throw new Error('Could not find start/end nodes');
+        }
+
+        GameState.startNode = startNode;
+        GameState.endNode = endNode;
+
+        // Create markers
+        placeMarkers();
+
+        // Hide loading
+        hideLoading();
+
+        // Start the game
+        GameState.gameStarted = true;
+        GameState.currentRound = 1;
+
+        // Initialize user path
+        GameState.userPathNodes = [GameState.startNode];
+        GameState.userDrawnPoints = [];
+        GameState.userDistance = 0;
+
+        const startPos = GameState.nodes.get(GameState.startNode);
+        if (startPos) {
+            GameState.userDrawnPoints.push({ lat: startPos.lat, lng: startPos.lng });
+        }
+
+        // Enable drawing
+        enableDrawing();
+
+        // Start game controller loop
+        GameController.startLoop();
+        GameController.enterPhase(GamePhase.PLAYING);
+
+        // Start ambient visualization
+        AmbientViz.start();
+
+        // Update HUD
+        setHUDMode('competitive');
+
+        console.log('[Challenge] Game started');
+
+    } catch (error) {
+        console.error('[Challenge] Failed to start:', error);
+        hideLoading();
+        showToast('Failed to load challenge');
+        showModeSelector();
+    }
+}
+
+/**
+ * Submit challenge entry
+ */
+async function submitChallengeEntry(efficiency, pathData) {
+    const challenge = GameState.challengeState.activeChallenge;
+    if (!challenge || !PathfindrAuth.currentUser) return null;
+
+    // Calculate duration
+    const duration = GameState.challengeState.startTime
+        ? Date.now() - GameState.challengeState.startTime
+        : 0;
+
+    try {
+        const { data, error } = await PathfindrAuth.client
+            .rpc('submit_challenge_entry', {
+                p_challenge_id: challenge.id,
+                p_user_id: PathfindrAuth.currentUser.id,
+                p_username: PathfindrAuth.getUsername() || 'Anonymous',
+                p_efficiency: efficiency,
+                p_path_data: pathData,
+                p_duration_ms: duration
+            });
+
+        if (error) {
+            console.error('[Challenge] Submit error:', error);
+            return null;
+        }
+
+        return data && data.length > 0 ? data[0] : null;
+    } catch (error) {
+        console.error('[Challenge] Submit exception:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch all-time challenge leaderboard
+ */
+async function fetchAllTimeLeaderboard(limit = 50) {
+    if (!PathfindrAuth.client) return [];
+
+    try {
+        const { data, error } = await PathfindrAuth.client.rpc('get_alltime_challenge_leaderboard', {
+            p_limit: limit
+        });
+
+        if (error) {
+            console.error('[Challenge] All-time leaderboard error:', error);
+            return [];
+        }
+
+        return data || [];
+    } catch (error) {
+        console.error('[Challenge] All-time leaderboard exception:', error);
+        return [];
+    }
+}
+
+/**
+ * Show challenge leaderboard modal with tabs for Today and All-Time
+ */
+async function showChallengeLeaderboard(challengeId) {
+    const [todayLeaderboard, allTimeLeaderboard] = await Promise.all([
+        fetchChallengeLeaderboard(challengeId, 50),
+        fetchAllTimeLeaderboard(50)
+    ]);
+
+    const modal = document.createElement('div');
+    modal.id = 'challenge-leaderboard-overlay';
+    modal.className = 'overlay';
+
+    const currentUserId = PathfindrAuth.currentUser?.id;
+
+    const renderTodayList = () => {
+        return todayLeaderboard.length === 0
+            ? '<p style="color: var(--text-dim); text-align: center;">No entries yet</p>'
+            : todayLeaderboard.map(entry => `
+                <div class="leaderboard-row ${entry.user_id === currentUserId ? 'current-user' : ''}">
+                    <span class="rank ${entry.rank <= 3 ? 'top-3' : ''}">#${entry.rank}</span>
+                    <span class="username">${entry.username}</span>
+                    <span class="efficiency">${entry.efficiency}%</span>
+                    <span class="time">${formatDuration(entry.duration_ms)}</span>
+                </div>
+            `).join('');
+    };
+
+    const renderAllTimeList = () => {
+        return allTimeLeaderboard.length === 0
+            ? '<p style="color: var(--text-dim); text-align: center;">Complete 3+ challenges to qualify</p>'
+            : allTimeLeaderboard.map(entry => `
+                <div class="leaderboard-row ${entry.user_id === currentUserId ? 'current-user' : ''}">
+                    <span class="rank ${entry.rank <= 3 ? 'top-3' : ''}">#${entry.rank}</span>
+                    <span class="username">${entry.username}</span>
+                    <span class="efficiency">${entry.avg_efficiency}%</span>
+                    <span class="challenges-count">${entry.challenges_completed} played</span>
+                </div>
+            `).join('');
+    };
+
+    modal.innerHTML = `
+        <div class="overlay-content challenge-leaderboard-modal">
+            <button class="modal-close" id="leaderboard-close">&times;</button>
+            <h2>Challenge Leaderboard</h2>
+
+            <div class="leaderboard-tabs">
+                <button class="leaderboard-tab active" data-tab="today">Today</button>
+                <button class="leaderboard-tab" data-tab="alltime">All-Time</button>
+            </div>
+
+            <div class="leaderboard-list" id="leaderboard-today">
+                ${renderTodayList()}
+            </div>
+
+            <div class="leaderboard-list hidden" id="leaderboard-alltime">
+                ${renderAllTimeList()}
+            </div>
+
+            <button class="btn btn-secondary" id="leaderboard-back" style="margin-top: 1rem;">Back to Menu</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Tab switching
+    modal.querySelectorAll('.leaderboard-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            modal.querySelectorAll('.leaderboard-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            const tabName = tab.dataset.tab;
+            document.getElementById('leaderboard-today').classList.toggle('hidden', tabName !== 'today');
+            document.getElementById('leaderboard-alltime').classList.toggle('hidden', tabName !== 'alltime');
+        });
+    });
+
+    document.getElementById('leaderboard-close').addEventListener('click', () => modal.remove());
+    document.getElementById('leaderboard-back').addEventListener('click', () => {
+        modal.remove();
+        showModeSelector();
+    });
+}
+
+/**
+ * Format duration in ms to human readable
+ */
+function formatDuration(ms) {
+    if (!ms) return '-';
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return minutes > 0 ? `${minutes}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
+}
+
+/**
+ * Show challenge results after completion
+ */
+async function showChallengeResults(efficiency, rank) {
+    const challenge = GameState.challengeState.activeChallenge;
+    if (!challenge) return;
+
+    // Fetch updated leaderboard to get total count
+    const leaderboard = await fetchChallengeLeaderboard(challenge.id, 100);
+    const totalParticipants = leaderboard.length;
+
+    // Calculate time taken
+    const timeTaken = GameState.challengeState.startTime
+        ? formatDuration(Date.now() - GameState.challengeState.startTime)
+        : '-';
+
+    // Create results overlay (replaces normal results)
+    const overlay = document.createElement('div');
+    overlay.id = 'challenge-results-overlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+        <div class="overlay-content challenge-results-panel">
+            <div class="challenge-info-badge">${challenge.challenge_type.toUpperCase()} CHALLENGE</div>
+            <h2>${challenge.city_name}</h2>
+
+            <div class="challenge-results-rank">#${rank}</div>
+            <div class="challenge-results-rank-label">out of ${totalParticipants} player${totalParticipants !== 1 ? 's' : ''}</div>
+
+            <div class="challenge-info-stats">
+                <div class="challenge-stat">
+                    <div class="challenge-stat-value">${efficiency.toFixed(1)}%</div>
+                    <div class="challenge-stat-label">Efficiency</div>
+                </div>
+                <div class="challenge-stat">
+                    <div class="challenge-stat-value">${timeTaken}</div>
+                    <div class="challenge-stat-label">Time</div>
+                </div>
+            </div>
+
+            <p class="challenge-results-message">${
+                rank === 1 ? "You're in first place!" :
+                rank <= 3 ? "You made the podium!" :
+                rank <= 10 ? "Great job! Top 10 finish!" :
+                "Challenge complete!"
+            }</p>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                <button class="btn btn-primary" id="view-leaderboard-btn">View Leaderboard</button>
+                <button class="btn btn-secondary" id="back-to-menu-btn">Back to Menu</button>
+            </div>
+        </div>
+    `;
+
+    // Hide normal results panel
+    const resultsPanel = document.getElementById('results-panel');
+    if (resultsPanel) resultsPanel.classList.remove('visible');
+
+    document.body.appendChild(overlay);
+
+    document.getElementById('view-leaderboard-btn').addEventListener('click', () => {
+        overlay.remove();
+        showChallengeLeaderboard(challenge.id);
+    });
+
+    document.getElementById('back-to-menu-btn').addEventListener('click', () => {
+        overlay.remove();
+        exitChallengeMode();
+    });
+}
+
+/**
+ * Exit challenge mode and return to menu
+ */
+function exitChallengeMode() {
+    // Reset game state
+    GameState.gameMode = 'competitive';
+    GameState.gameStarted = false;
+    GameState.challengeState.startTime = null;
+
+    // Clear visualization
+    clearVisualization();
+    clearUserPath();
+
+    // Hide results
+    const resultsPanel = document.getElementById('results-panel');
+    if (resultsPanel) resultsPanel.classList.remove('visible');
+
+    // Show mode selector
+    showModeSelector();
+}
+
+// =============================================================================
+// ADMIN: CHALLENGE CREATION
+// =============================================================================
+
+/**
+ * Update admin button visibility in Explorer context menu
+ */
+function updateAdminChallengeButton() {
+    const btn = document.getElementById('save-challenge-btn');
+    if (!btn) return;
+
+    // Only show for admin users with both markers set
+    const isAdmin = PathfindrAuth.isAdmin();
+    const hasMarkers = GameState.explorerState?.customStart && GameState.explorerState?.customEnd;
+
+    btn.style.display = (isAdmin && hasMarkers) ? 'flex' : 'none';
+}
+
+/**
+ * Show challenge creation modal (admin only)
+ */
+function showChallengeCreationModal() {
+    if (!PathfindrAuth.isAdmin()) {
+        console.warn('[Challenge] Non-admin tried to create challenge');
+        return;
+    }
+
+    const modal = document.getElementById('challenge-modal');
+    if (!modal) return;
+
+    // Set default dates
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    document.getElementById('challenge-start-date').value = today.toISOString().split('T')[0];
+    document.getElementById('challenge-end-date').value = tomorrow.toISOString().split('T')[0];
+
+    // Set preview values
+    const cityName = GameState.currentCity?.name || 'Unknown';
+    const zoom = GameState.map?.getZoom() || 16;
+
+    document.getElementById('challenge-preview-city').textContent = cityName;
+    document.getElementById('challenge-preview-zoom').textContent = Math.round(zoom);
+
+    // Clear any previous errors
+    document.getElementById('challenge-error').textContent = '';
+
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Handle challenge creation form submission
+ */
+async function handleChallengeCreation(e) {
+    e.preventDefault();
+
+    if (!PathfindrAuth.isAdmin()) return;
+
+    const errorEl = document.getElementById('challenge-error');
+    const submitBtn = document.getElementById('challenge-submit');
+
+    // Get form values
+    const challengeType = document.getElementById('challenge-type').value;
+    const difficulty = document.getElementById('challenge-difficulty').value;
+    const title = document.getElementById('challenge-title').value.trim() || null;
+
+    const startDate = document.getElementById('challenge-start-date').value;
+    const startTime = document.getElementById('challenge-start-time').value;
+    const endDate = document.getElementById('challenge-end-date').value;
+    const endTime = document.getElementById('challenge-end-time').value;
+
+    // Build timestamps
+    const activeFrom = new Date(`${startDate}T${startTime}:00Z`).toISOString();
+    const activeUntil = new Date(`${endDate}T${endTime}:00Z`).toISOString();
+
+    // Get map center and zoom
+    const center = GameState.map.getCenter();
+    const zoom = Math.round(GameState.map.getZoom());
+
+    // Get start/end node positions
+    const startNodePos = GameState.nodes.get(GameState.explorerState.customStart);
+    const endNodePos = GameState.nodes.get(GameState.explorerState.customEnd);
+
+    if (!startNodePos || !endNodePos) {
+        errorEl.textContent = 'Invalid start/end markers';
+        return;
+    }
+
+    // Disable button
+    submitBtn.disabled = true;
+    submitBtn.querySelector('span').textContent = 'Creating...';
+
+    try {
+        const { data, error } = await PathfindrAuth.client
+            .from('challenges')
+            .insert({
+                challenge_type: challengeType,
+                title: title,
+                city_name: GameState.currentCity?.name || 'Unknown',
+                center_lat: center.lat,
+                center_lng: center.lng,
+                zoom_level: zoom,
+                start_lat: startNodePos.lat,
+                start_lng: startNodePos.lng,
+                end_lat: endNodePos.lat,
+                end_lng: endNodePos.lng,
+                difficulty: difficulty,
+                active_from: activeFrom,
+                active_until: activeUntil,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        // Success - close modal and show confirmation
+        document.getElementById('challenge-modal').classList.add('hidden');
+        showToast(`Challenge created: ${challengeType}`);
+        console.log('[Admin] Challenge created:', data);
+
+    } catch (error) {
+        console.error('[Admin] Challenge creation failed:', error);
+        errorEl.textContent = error.message || 'Failed to create challenge';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.querySelector('span').textContent = 'Create Challenge';
+    }
+}
+
+/**
+ * Initialize challenge creation UI
+ */
+function initChallengeCreationUI() {
+    // Modal close button
+    const closeBtn = document.getElementById('challenge-modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            document.getElementById('challenge-modal').classList.add('hidden');
+        });
+    }
+
+    // Form submission
+    const form = document.getElementById('challenge-form');
+    if (form) {
+        form.addEventListener('submit', handleChallengeCreation);
+    }
 }
 
 // =============================================================================

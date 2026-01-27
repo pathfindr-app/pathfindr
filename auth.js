@@ -5,6 +5,39 @@
  * Provides: signup, login, logout, session persistence, profile data
  */
 
+// =============================================================================
+// LOCAL DEV MODE
+// =============================================================================
+// Set to true to bypass OAuth and simulate being logged in.
+// Database operations still work normally - only auth is mocked.
+// IMPORTANT: Set to false before committing/deploying!
+
+const DEV_MODE = {
+  enabled: false,  // SET TO FALSE BEFORE DEPLOYING!
+
+  // Mock user - simulates being logged in as this user
+  // Using a generated UUID for local testing. To use your real user ID:
+  // Go to Supabase Dashboard → Authentication → Users → Copy your UUID
+  mockUser: {
+    id: 'e9b29cef-50c6-4134-afaa-d7c203a1b4ca',
+    email: 'pathfindr.game@gmail.com',
+    user_metadata: {
+      full_name: 'Dev Admin',
+      avatar_url: null,
+    }
+  },
+
+  // Mock profile - simulates user profile data
+  mockProfile: {
+    id: 'e9b29cef-50c6-4134-afaa-d7c203a1b4ca',
+    callsign: 'DevAdmin',
+    has_purchased: true,  // Set to true to test premium features
+    games_played: 100,
+    total_score: 50000,
+    best_efficiency: 98.5,
+  }
+};
+
 const PathfindrAuth = {
   client: null,
   currentUser: null,
@@ -37,6 +70,19 @@ const PathfindrAuth = {
         PathfindrConfig.supabase.url,
         PathfindrConfig.supabase.anonKey
       );
+
+      // DEV MODE: Skip OAuth, use mock user
+      if (DEV_MODE.enabled) {
+        console.log('[Auth] 🔧 DEV MODE ENABLED - Using mock user');
+        this.currentUser = DEV_MODE.mockUser;
+        this.currentProfile = DEV_MODE.mockProfile;
+        window.pathfindrUser = DEV_MODE.mockProfile;
+        this.initialized = true;
+
+        // Still notify listeners so UI updates
+        this.listeners.forEach(cb => cb('SIGNED_IN', { user: DEV_MODE.mockUser }));
+        return;
+      }
 
       // Listen for auth state changes
       this.client.auth.onAuthStateChange((event, session) => {
@@ -642,6 +688,14 @@ const PathfindrAuth = {
    */
   hasPurchased() {
     return this.currentProfile?.has_purchased === true;
+  },
+
+  /**
+   * Check if current user is an admin
+   * @returns {boolean}
+   */
+  isAdmin() {
+    return this.currentUser?.email === 'pathfindr.game@gmail.com';
   },
 
   /**
