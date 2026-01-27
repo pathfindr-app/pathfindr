@@ -10490,6 +10490,9 @@ async function beginChallengeGame(challenge) {
         setDifficulty(challenge.difficulty);
     }
 
+    // IMPORTANT: Hide the mode selector to show the map
+    hideModeSelector();
+
     // Show loading
     showLoading(`Loading ${challenge.city_name}...`, false, {
         lat: parseFloat(challenge.center_lat),
@@ -10513,9 +10516,8 @@ async function beginChallengeGame(challenge) {
         initMap();
     }
 
-    // Move map to challenge location
-    GameState.map.setCenter([location.lng, location.lat]);
-    GameState.map.setZoom(location.zoom);
+    // Move map to challenge location and wait for it to settle
+    GameState.map.jumpTo({ center: [location.lng, location.lat], zoom: location.zoom });
 
     // Load road network
     try {
@@ -10557,7 +10559,14 @@ async function beginChallengeGame(challenge) {
         // Update HUD for challenge mode
         setHUDMode('visualizer');
 
-        console.log('[Challenge] Starting auto-play visualization');
+        // Update location display
+        const locationEl = document.getElementById('current-location');
+        if (locationEl) locationEl.textContent = challenge.city_name;
+
+        console.log('[Challenge] Map ready, starting auto-play visualization');
+
+        // Brief delay to let the map render before starting visualization
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // AUTO-PLAY: Run A* visualization automatically (like visualizer mode)
         await runChallengeVisualization(challenge);
