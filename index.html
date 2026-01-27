@@ -253,7 +253,8 @@
                         <h2>Select Mode</h2>
                         <p class="mode-subtitle">How do you want to play?</p>
                         <div class="mode-options">
-                            <button class="mode-btn mode-challenge" data-mode="challenge">
+                            <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
+                                <span id="challenge-badge" class="challenge-badge">HOURLY</span>
                                 <div class="mode-bg"></div>
                                 <div class="mode-content">
                                     <div class="mode-icon">
@@ -264,7 +265,7 @@
                                         </svg>
                                     </div>
                                     <span class="mode-title">Hourly Challenge</span>
-                                    <span class="mode-desc">Compete globally · New challenge every hour</span>
+                                    <span id="challenge-desc" class="mode-desc">Compete globally · New challenge every hour</span>
                                 </div>
                             </button>
                             <button class="mode-btn mode-classic" data-mode="competitive">
