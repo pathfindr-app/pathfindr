@@ -7371,6 +7371,110 @@ html, body {
     50% { opacity: 0.6; }
 }
 
+/* Challenge Complete Panel */
+.challenge-complete-panel {
+    background: linear-gradient(145deg, var(--surface), var(--deep));
+    border: 1px solid rgba(255, 42, 109, 0.3);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    max-width: 420px;
+    text-align: center;
+}
+
+.challenge-complete-header {
+    margin-bottom: 1.5rem;
+}
+
+.challenge-complete-badge {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    background: linear-gradient(135deg, rgba(255, 42, 109, 0.2), rgba(180, 41, 221, 0.2));
+    border: 1px solid rgba(255, 42, 109, 0.4);
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #ff2a6d;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+}
+
+.challenge-complete-city {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--text-bright);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.challenge-complete-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+}
+
+.challenge-stat.large .challenge-stat-value {
+    font-size: 2rem;
+    color: var(--neon-cyan);
+}
+
+.challenge-rank-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: rgba(255, 42, 109, 0.1);
+    border: 1px solid rgba(255, 42, 109, 0.2);
+    border-radius: var(--radius-md);
+}
+
+.challenge-rank-display .rank-number {
+    font-family: var(--font-display);
+    font-size: 2.5rem;
+    color: #ff2a6d;
+    text-shadow: 0 0 30px rgba(255, 42, 109, 0.4);
+}
+
+.challenge-rank-display .rank-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.challenge-leaderboard-preview {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+}
+
+.challenge-leaderboard-preview .leaderboard-title {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.75rem;
+}
+
+.challenge-complete-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.challenge-complete-actions .btn {
+    width: 100%;
+}
+
 /* Mobile adjustments for challenge UI */
 @media (max-width: 768px) {
     .challenge-modal {
