@@ -93,66 +93,12 @@ function generateStartEnd(centerLat: number, centerLng: number): {
 }
 
 /**
- * Get random city from database or fallback pool
+ * Get random city from curated pool
+ * Using hardcoded pools to ensure reliable Overpass API coverage
+ * These are major cities with well-mapped road networks
  */
-async function getRandomCity(supabase: ReturnType<typeof createClient>, useGlobal: boolean): Promise<City> {
-  try {
-    // Try to get from cities table
-    const minPopulation = useGlobal ? 100000 : 50000
-    const countryFilter = useGlobal ? undefined : 'US'
-
-    let query = supabase
-      .from('cities')
-      .select('name, lat, lng, region, country')
-
-    if (countryFilter) {
-      query = query.eq('country_code', countryFilter)
-    }
-
-    query = query.gte('population', minPopulation)
-
-    // Get count for random offset
-    const { count: totalCount } = await supabase
-      .from('cities')
-      .select('*', { count: 'exact', head: true })
-      .match(countryFilter ? { country_code: countryFilter } : {})
-      .gte('population', minPopulation)
-
-    if (totalCount && totalCount > 0) {
-      const offset = Math.floor(Math.random() * totalCount)
-
-      let cityQuery = supabase
-        .from('cities')
-        .select('name, lat, lng, region, country')
-
-      if (countryFilter) {
-        cityQuery = cityQuery.eq('country_code', countryFilter)
-      }
-
-      cityQuery = cityQuery.gte('population', minPopulation)
-
-      const { data, error } = await cityQuery
-        .range(offset, offset)
-        .single()
-
-      if (!error && data) {
-        // Format name with region for US cities
-        const cityName = countryFilter === 'US' && data.region
-          ? `${data.name}, ${data.region}`
-          : `${data.name}, ${data.country || ''}`
-
-        return {
-          name: cityName.trim().replace(/, $/, ''),
-          lat: data.lat,
-          lng: data.lng,
-        }
-      }
-    }
-  } catch (e) {
-    console.log('Database query failed, using fallback:', e)
-  }
-
-  // Fallback to hardcoded cities
+function getRandomCity(useGlobal: boolean): City {
+  // Use only curated cities for reliable Overpass API coverage
   const pool = useGlobal ? GLOBAL_CITIES : US_CITIES
   return pool[Math.floor(Math.random() * pool.length)]
 }
@@ -187,8 +133,8 @@ serve(async (req) => {
     const hour = new Date().getUTCHours()
     const useGlobal = hour % 3 === 0
 
-    // Get random city
-    const city = await getRandomCity(supabase, useGlobal)
+    // Get random city from curated pool (reliable Overpass coverage)
+    const city = getRandomCity(useGlobal)
     console.log(`Selected city: ${city.name} (${useGlobal ? 'Global' : 'US'})`)
 
     // Generate start/end coordinates
