@@ -7,7 +7,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
 }
 
 // City pools for variety (fallback if database query fails)
@@ -165,10 +165,11 @@ serve(async (req) => {
 
   try {
     // Verify cron secret for authentication
-    const authHeader = req.headers.get('Authorization')
+    // Check X-Cron-Secret header (since Authorization is used by Supabase JWT)
+    const cronSecretHeader = req.headers.get('X-Cron-Secret')
     const cronSecret = Deno.env.get('CRON_SECRET')
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (cronSecret && cronSecretHeader !== cronSecret) {
       console.log('Unauthorized request - invalid or missing CRON_SECRET')
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
