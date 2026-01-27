@@ -10482,6 +10482,7 @@ async function showChallengeInfoScreen(challenge) {
  */
 async function beginChallengeGame(challenge) {
     GameState.gameMode = 'challenge';
+    GameState.challengeState.activeChallenge = challenge;
     GameState.challengeState.startTime = Date.now();
 
     // Set difficulty from challenge
