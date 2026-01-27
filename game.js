@@ -10700,7 +10700,7 @@ async function showChallengeComplete(challenge, optimalDistance) {
     document.getElementById('challenge-menu-btn').addEventListener('click', () => {
         overlay.remove();
         clearVisualization();
-        resetToMenu();
+        showModeSelector();
     });
 }
 
