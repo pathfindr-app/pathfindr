@@ -1064,6 +1064,7 @@ const WebGLRenderer = {
 
         // Fragment shader for heat-mapped exploration - uses ROUND COLOR with FRONTIER GLOW
         // v_heat now contains explorationTime (negative = not explored, positive = time when explored)
+        // ENHANCED: Demoscene-level plasma/electric effects on frontier
         heatFragment: `
             precision mediump float;
 
@@ -1078,45 +1079,89 @@ const WebGLRenderer = {
             varying float v_heat;  // Actually explorationTime (or -1 if never explored)
             varying vec2 v_position;
 
+            // Fast pseudo-random for electric shimmer
+            float hash11(float p) {
+                return fract(sin(p * 127.1) * 43758.5453);
+            }
+
             void main() {
                 // v_heat < 0 means never explored
                 if (v_heat < 0.0) discard;
 
-                // Linear decay - MUCH faster than pow()
-                // heat goes from 1.0 to floor over ~2 seconds
+                // Linear decay
                 float timeSinceExplored = u_time - v_heat;
                 float heat = max(u_heatFloor, 1.0 - timeSinceExplored * u_decaySpeed);
 
                 if (heat < 0.02) discard;
 
-                // === ASMR SATISFACTION: Smooth wavefront with lingering glow ===
+                // === DEMOSCENE ENERGY FLOW ===
+                // Position along edge for wave effects
+                float edgePos = v_position.x * 0.008 + v_position.y * 0.008;
 
-                // Frontier detection - very recent edges (< 0.5s old)
-                float frontierStrength = smoothstep(0.5, 0.95, heat);
+                // Frontier detection (recent edges)
+                float frontierStrength = smoothstep(0.4, 0.95, heat);
 
-                // Subtle global breathing for "alive" feel (slow, calming)
-                float breathe = 0.95 + u_flicker * 0.05;
+                // === PERSISTENT ENERGY FLOW (always active on explored edges) ===
+                // Slow traveling wave - gives "energy flowing through network" feel
+                float flowWave = sin(edgePos * 3.0 - u_time * 2.0) * 0.5 + 0.5;
+                flowWave *= sin(edgePos * 1.5 + u_time * 1.3) * 0.3 + 0.7;
 
-                // Base brightness - explored edges maintain gentle visibility
-                // Higher base for persistence, frontier gets dramatic boost
-                float baseBrightness = 0.3 + heat * 0.4;
+                // Subtle shimmer on ALL explored edges (not just frontier)
+                float baseShimmer = hash11(edgePos + floor(u_time * 8.0) * 0.1) * 0.15;
 
-                // Frontier gets MUCH brighter - this is the satisfying wavefront
-                float frontierBoost = 1.0 + frontierStrength * 2.5;
+                // === FRONTIER-SPECIFIC EFFECTS (more intense) ===
+                float electricNoise = 0.0;
+                float plasmaGlow = 0.0;
 
-                // Gentle pulse only on frontier (not chaotic)
-                float frontierPulse = 1.0 + frontierStrength * u_frontierPulse * 0.15;
+                if (frontierStrength > 0.05) {
+                    // Fast electric flicker
+                    electricNoise = hash11(edgePos + u_time * 25.0) * 0.4;
+                    electricNoise += hash11(edgePos * 2.3 - u_time * 18.0) * 0.3;
 
-                float brightness = baseBrightness * frontierBoost * frontierPulse * breathe;
+                    // Intense plasma pulse on frontier
+                    float plasma = sin(edgePos * 6.0 - u_time * 10.0) * 0.5 + 0.5;
+                    plasma *= sin(edgePos * 4.0 + u_time * 7.0) * 0.5 + 0.5;
+                    plasmaGlow = plasma * frontierStrength;
+                }
 
+                // Organic breathing
+                float breathe = 0.9 + u_flicker * 0.1;
+
+                // === BRIGHTNESS CALCULATION ===
+                // Base: all explored edges glow with flowing energy
+                float baseBrightness = 0.4 + heat * 0.3 + flowWave * 0.2 + baseShimmer;
+
+                // Frontier boost: dramatic increase for wavefront
+                float frontierBoost = 1.0 + frontierStrength * 4.0 + electricNoise * frontierStrength * 3.0;
+
+                // Pulse
+                float pulse = 1.0 + frontierStrength * u_frontierPulse * 0.3 + plasmaGlow * 0.5;
+
+                float brightness = baseBrightness * frontierBoost * pulse * breathe;
+
+                // === COLOR ===
                 vec3 color = u_roundColor * brightness;
 
-                // Subtle white bloom on frontier only (not harsh)
-                float bloom = frontierStrength * 0.25;
-                color = mix(color, vec3(1.0), bloom);
+                // Hot white core on frontier
+                color = mix(color, vec3(1.0), frontierStrength * frontierStrength * 0.5);
 
-                // Alpha: explored edges stay visible, frontier is brightest
-                float alpha = (0.4 + heat * 0.4) * (0.7 + frontierStrength * 0.4);
+                // Energy flow creates subtle color shift
+                vec3 flowColor = vec3(
+                    u_roundColor.r + flowWave * 0.1,
+                    u_roundColor.g + flowWave * 0.15,
+                    u_roundColor.b - flowWave * 0.05
+                );
+                color = mix(color, flowColor * brightness, 0.3);
+
+                // Chromatic aberration on frontier
+                if (frontierStrength > 0.3) {
+                    color.r += electricNoise * 0.2;
+                    color.b += plasmaGlow * 0.15;
+                }
+
+                // Alpha
+                float alpha = (0.5 + heat * 0.35) * (0.8 + frontierStrength * 0.3);
+                alpha += plasmaGlow * 0.15 + flowWave * heat * 0.1;
 
                 gl_FragColor = vec4(color * alpha, alpha);
             }
@@ -1124,6 +1169,7 @@ const WebGLRenderer = {
 
         // Fragment shader for glow effect - uses ROUND COLOR
         // v_heat now contains explorationTime (negative = not explored)
+        // ENHANCED: Atmospheric bloom with subtle energy ripples
         glowFragment: `
             precision mediump float;
 
@@ -1140,20 +1186,36 @@ const WebGLRenderer = {
             void main() {
                 if (v_heat < 0.0) discard;
 
-                // Linear decay - MUCH faster than pow()
+                // Linear decay
                 float timeSinceExplored = u_time - v_heat;
                 float heat = max(u_heatFloor, 1.0 - timeSinceExplored * u_decaySpeed);
 
                 if (heat < 0.02) discard;
 
-                // Use pre-computed pulse (CPU-side sin calculations)
+                // Frontier detection
+                float frontierStrength = smoothstep(0.5, 0.95, heat);
+
+                // Use pre-computed pulse + local variation for depth
                 float pulse = u_glowPulse;
+                float localPulse = sin(v_position.x * 0.02 + v_position.y * 0.015 + u_time * 2.0) * 0.1 + 0.95;
+                pulse *= localPulse;
 
-                // Use round color - just vary brightness by heat
-                vec3 color = u_roundColor * (0.4 + heat * 0.6);
+                // Base color with heat modulation
+                vec3 color = u_roundColor * (0.5 + heat * 0.5);
 
-                // Glow intensity
-                float glow = heat * 0.35 * pulse;
+                // Frontier gets atmospheric bloom enhancement
+                if (frontierStrength > 0.1) {
+                    // Soft energy ripple
+                    float ripple = sin(v_position.x * 0.03 - u_time * 4.0) * 0.5 + 0.5;
+                    ripple *= sin(v_position.y * 0.025 + u_time * 3.0) * 0.5 + 0.5;
+
+                    // Add warm/cool variation for depth
+                    color += vec3(0.15, 0.05, -0.05) * ripple * frontierStrength;
+                }
+
+                // Glow intensity - brighter on frontier
+                float glow = heat * 0.4 * pulse;
+                glow += frontierStrength * 0.15;
 
                 gl_FragColor = vec4(color * glow, glow);
             }
@@ -6205,6 +6267,7 @@ function handlePathClick(e) {
     if (addPointToUserPath(point.lat, point.lng)) {
         redrawUserPath();
         // Audio and visual feedback
+        SoundEngine.init();   // Initialize audio from user gesture (required for challenge mode)
         SoundEngine.click();
         GameState.drawCanvas.classList.add('click-feedback');
         setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
