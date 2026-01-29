@@ -6181,6 +6181,12 @@ function handlePathClick(e) {
     if (!GameState.gameStarted || !GameState.canDraw) return;
     if (GameState.vizState.active) return; // Don't allow clicks during A* visualization
 
+    // Start challenge timer on first click (for fair timing)
+    if (GameState.gameMode === 'challenge' && !GameState.challengeState.startTime) {
+        GameState.challengeState.startTime = Date.now();
+        console.log('[Challenge] Timer started on first click');
+    }
+
     // Initialize path from start node on first click
     if (GameState.userPathNodes.length === 0) {
         GameState.userPathNodes.push(GameState.startNode);
@@ -6259,6 +6265,12 @@ function getLatLngFromEvent(e) {
 function redrawUserPath() {
     const ctx = GameState.drawCtx;
     ctx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+
+    // Always render click radius indicator during PLAYING phase, even with just start node
+    if (GameController.phase === GamePhase.PLAYING && GameState.userPathNodes.length >= 1) {
+        const time = performance.now() * 0.001;
+        renderClickRadiusIndicator(ctx, time);
+    }
 
     if (GameState.userPathNodes.length < 2) return;
 
@@ -10026,6 +10038,9 @@ GameState.challengeState = {
     userEntry: null,            // Legacy: current challenge entry
     startTime: null,
     leaderboard: [],
+    optimalPath: null,          // A* result for scoring
+    optimalDistance: null,      // Distance for efficiency calc
+    preloadCache: new Map(),    // Map<challengeId, {city, data, timestamp}> for preloaded road networks
 };
 
 /**
@@ -10089,6 +10104,9 @@ async function updateChallengeButton() {
             if (unplayedCount > 0) {
                 btn.classList.remove('completed');
                 desc.textContent = `${unplayedCount} new · ${totalParticipants} total players`;
+
+                // Preload top uncompleted challenges in background
+                preloadTopChallenges(3);
             } else {
                 btn.classList.add('completed');
                 desc.textContent = `All ${completedCount} completed · View results`;
@@ -10233,6 +10251,9 @@ async function fetchUserChallengeEntry(challengeId) {
  * Show the multi-challenge list modal
  */
 async function showChallengeList() {
+    // Clear any stale activeChallenge reference (SSOT)
+    GameState.challengeState.activeChallenge = null;
+
     const challenges = GameState.challengeState.activeChallenges;
     const userEntries = GameState.challengeState.userEntries;
 
@@ -10413,6 +10434,9 @@ async function startChallengeMode() {
  * Show pre-challenge info screen
  */
 async function showChallengeInfoScreen(challenge) {
+    // Start preloading this challenge's road network while user reads info
+    preloadChallengeCity(challenge);
+
     // Fetch leaderboard preview
     const leaderboard = await fetchChallengeLeaderboard(challenge.id, 3);
 
@@ -10483,12 +10507,11 @@ async function showChallengeInfoScreen(challenge) {
 async function beginChallengeGame(challenge) {
     GameState.gameMode = 'challenge';
     GameState.challengeState.activeChallenge = challenge;
-    GameState.challengeState.startTime = Date.now();
+    // Don't set startTime yet - set it on first user click for fair timing
+    GameState.challengeState.startTime = null;
 
-    // Set difficulty from challenge
-    if (challenge.difficulty) {
-        setDifficulty(challenge.difficulty);
-    }
+    // Set difficulty - use medium for better UX (hard's 100m radius is too restrictive)
+    setDifficulty('medium');
 
     // IMPORTANT: Hide the mode selector to show the map
     hideModeSelector();
@@ -10519,9 +10542,20 @@ async function beginChallengeGame(challenge) {
     // Move map to challenge location and wait for it to settle
     GameState.map.jumpTo({ center: [location.lng, location.lat], zoom: location.zoom });
 
+    // Check if we have preloaded data for this challenge
+    const preloadedData = GameState.challengeState.preloadCache?.get(challenge.id);
+
     // Load road network
     try {
-        await loadRoadNetwork(location);
+        if (preloadedData) {
+            console.log('[Challenge] Using preloaded data for', challenge.city_name);
+            // Use preloaded road network data directly
+            processRoadData(preloadedData.data);
+            // Invalidate screen coord cache since we're on a new map area
+            ScreenCoordCache.invalidate();
+        } else {
+            await loadRoadNetwork(location);
+        }
 
         // Find nearest nodes to challenge start/end coordinates
         const startNode = findNearestNode(
@@ -10550,26 +10584,33 @@ async function beginChallengeGame(challenge) {
         GameState.gameStarted = true;
         GameState.currentRound = 1;
 
+        // Initialize user path at start node (like competitive mode)
+        GameState.userPathNodes = [GameState.startNode];
+        GameState.userDistance = 0;
+
         // Start game controller loop
         GameController.startLoop();
 
         // Start ambient visualization
         AmbientViz.start();
 
-        // Update HUD for challenge mode
-        setHUDMode('visualizer');
+        // Update HUD for challenge mode (use competitive layout)
+        setHUDMode('competitive');
 
         // Update location display
         const locationEl = document.getElementById('current-location');
         if (locationEl) locationEl.textContent = challenge.city_name;
 
-        console.log('[Challenge] Map ready, starting auto-play visualization');
+        // Enter PLAYING phase so user can draw
+        GameController.enterPhase(GamePhase.PLAYING);
 
-        // Brief delay to let the map render before starting visualization
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Enable drawing so user can click to create path
+        enableDrawing();
 
-        // AUTO-PLAY: Run A* visualization automatically (like visualizer mode)
-        await runChallengeVisualization(challenge);
+        // Draw initial click radius indicator around start node
+        redrawUserPath();
+
+        console.log('[Challenge] Map ready, waiting for user to draw path');
 
     } catch (error) {
         console.error('[Challenge] Failed to start:', error);
@@ -10577,140 +10618,6 @@ async function beginChallengeGame(challenge) {
         showToast(error.message || 'Failed to load challenge. Try another one.');
         showModeSelector();
     }
-}
-
-/**
- * Run A* visualization for challenge mode (auto-play)
- */
-async function runChallengeVisualization(challenge) {
-    // Clear previous visualization state
-    clearVisualizationState();
-
-    // Enter VISUALIZING phase
-    GameController.enterPhase(GamePhase.VISUALIZING);
-
-    // Run A* algorithm
-    const result = runAStar(GameState.startNode, GameState.endNode);
-
-    if (result.path.length > 0) {
-        // Run the epic visualization
-        await runEpicVisualization(result.explored, result.path);
-
-        // Calculate optimal distance
-        const optimalDistance = result.path.reduce((sum, nodeId, i) => {
-            if (i === 0) return 0;
-            const prevNode = GameState.nodes.get(result.path[i - 1]);
-            const currNode = GameState.nodes.get(nodeId);
-            if (prevNode && currNode) {
-                return sum + haversineDistance(prevNode.lat, prevNode.lng, currNode.lat, currNode.lng);
-            }
-            return sum;
-        }, 0);
-
-        // Store result for submission
-        GameState.challengeState.optimalPath = result.path;
-        GameState.challengeState.optimalDistance = optimalDistance;
-
-        // Brief pause to admire the visualization
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Show challenge completion
-        showChallengeComplete(challenge, optimalDistance);
-    } else {
-        throw new Error('Could not find a route between the points');
-    }
-}
-
-/**
- * Show challenge completion screen
- */
-async function showChallengeComplete(challenge, optimalDistance) {
-    const duration = Date.now() - GameState.challengeState.startTime;
-
-    // For auto-play mode, efficiency is 100% (optimal path)
-    const efficiency = 100.0;
-
-    // Submit the entry
-    const entry = await submitChallengeEntry(efficiency, {
-        path: GameState.challengeState.optimalPath,
-        distance: optimalDistance,
-        duration: duration
-    });
-
-    // Get updated leaderboard
-    const leaderboard = await fetchChallengeLeaderboard(challenge.id, 10);
-
-    // Find user's rank
-    let userRank = null;
-    if (entry && PathfindrAuth.currentUser) {
-        const userEntry = leaderboard.find(e => e.user_id === PathfindrAuth.currentUser.id);
-        userRank = userEntry?.rank || leaderboard.length + 1;
-    }
-
-    // Create completion overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'challenge-complete-overlay';
-    overlay.className = 'overlay';
-    overlay.innerHTML = `
-        <div class="overlay-content challenge-complete-panel">
-            <div class="challenge-complete-header">
-                <div class="challenge-complete-badge">CHALLENGE COMPLETE</div>
-                <div class="challenge-complete-city">${challenge.city_name}</div>
-            </div>
-
-            <div class="challenge-complete-stats">
-                <div class="challenge-stat large">
-                    <div class="challenge-stat-value">${(optimalDistance / 1000).toFixed(2)}km</div>
-                    <div class="challenge-stat-label">Optimal Route</div>
-                </div>
-                <div class="challenge-stat">
-                    <div class="challenge-stat-value">${(duration / 1000).toFixed(1)}s</div>
-                    <div class="challenge-stat-label">Time</div>
-                </div>
-            </div>
-
-            ${userRank ? `
-                <div class="challenge-rank-display">
-                    <span class="rank-number">#${userRank}</span>
-                    <span class="rank-label">Your Rank</span>
-                </div>
-            ` : ''}
-
-            ${leaderboard.length > 0 ? `
-                <div class="challenge-leaderboard-preview">
-                    <div class="leaderboard-title">Leaderboard</div>
-                    ${leaderboard.slice(0, 5).map((entry, i) => `
-                        <div class="leaderboard-row ${entry.user_id === PathfindrAuth.currentUser?.id ? 'current-user' : ''}">
-                            <span class="leaderboard-rank">#${entry.rank}</span>
-                            <span class="leaderboard-name">${entry.username}</span>
-                            <span class="leaderboard-score">${entry.efficiency}%</span>
-                        </div>
-                    `).join('')}
-                </div>
-            ` : ''}
-
-            <div class="challenge-complete-actions">
-                <button id="challenge-next-btn" class="btn btn-primary">Next Challenge</button>
-                <button id="challenge-menu-btn" class="btn btn-secondary">Back to Menu</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    // Event handlers
-    document.getElementById('challenge-next-btn').addEventListener('click', () => {
-        overlay.remove();
-        // Clear visualization and go to next challenge
-        clearVisualization();
-        showChallengeList();
-    });
-
-    document.getElementById('challenge-menu-btn').addEventListener('click', () => {
-        overlay.remove();
-        clearVisualization();
-        showModeSelector();
-    });
 }
 
 /**
@@ -10913,7 +10820,8 @@ async function showChallengeResults(efficiency, rank) {
             }</p>
 
             <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
-                <button class="btn btn-primary" id="view-leaderboard-btn">View Leaderboard</button>
+                <button class="btn btn-primary" id="next-challenge-btn">Next Challenge</button>
+                <button class="btn btn-secondary" id="view-leaderboard-btn">View Leaderboard</button>
                 <button class="btn btn-secondary" id="back-to-menu-btn">Back to Menu</button>
             </div>
         </div>
@@ -10924,6 +10832,11 @@ async function showChallengeResults(efficiency, rank) {
     if (resultsPanel) resultsPanel.classList.remove('visible');
 
     document.body.appendChild(overlay);
+
+    document.getElementById('next-challenge-btn').addEventListener('click', async () => {
+        overlay.remove();
+        await goToNextChallenge();
+    });
 
     document.getElementById('view-leaderboard-btn').addEventListener('click', () => {
         overlay.remove();
@@ -10937,13 +10850,57 @@ async function showChallengeResults(efficiency, rank) {
 }
 
 /**
+ * Go to the next uncompleted challenge
+ */
+async function goToNextChallenge() {
+    // Reset current challenge state
+    resetChallengeState();
+    clearVisualization();
+    clearUserPath();
+
+    // Refresh the challenge list to get updated completion status
+    await updateChallengeButton();
+
+    const challenges = GameState.challengeState.activeChallenges || [];
+    const userEntries = GameState.challengeState.userEntries || new Map();
+
+    // Find the first uncompleted challenge
+    const nextChallenge = challenges.find(c => !userEntries.has(c.id));
+
+    if (nextChallenge) {
+        // Start the next challenge
+        showChallengeInfoScreen(nextChallenge);
+    } else {
+        // All challenges completed
+        showToast('All challenges completed! Check back later for more.');
+        exitChallengeMode();
+    }
+}
+
+/**
+ * Reset all challenge-specific state (SSOT cleanup)
+ * Call this whenever exiting challenge mode to ensure no stale references persist
+ */
+function resetChallengeState() {
+    GameState.challengeState.activeChallenge = null;
+    GameState.challengeState.startTime = null;
+    GameState.challengeState.optimalPath = null;
+    GameState.challengeState.optimalDistance = null;
+}
+
+/**
  * Exit challenge mode and return to menu
  */
 function exitChallengeMode() {
+    // Reset challenge state first (SSOT - single source of truth)
+    resetChallengeState();
+
     // Reset game state
     GameState.gameMode = 'competitive';
     GameState.gameStarted = false;
-    GameState.challengeState.startTime = null;
+
+    // Disable drawing
+    disableDrawing();
 
     // Clear visualization
     clearVisualization();
@@ -10952,6 +10909,9 @@ function exitChallengeMode() {
     // Hide results
     const resultsPanel = document.getElementById('results-panel');
     if (resultsPanel) resultsPanel.classList.remove('visible');
+
+    // Enter MENU phase
+    GameController.enterPhase(GamePhase.MENU);
 
     // Show mode selector
     showModeSelector();
@@ -11164,6 +11124,87 @@ function preloadNextCity() {
         console.warn('City preload failed (will fetch fresh):', error);
         GameState.continuousPlay.preloadedCity = null;
         GameState.continuousPlay.preloadedData = null;
+    });
+}
+
+/**
+ * Preload road network data for a challenge city (fire-and-forget)
+ * @param {Object} challenge - Challenge object with center_lat, center_lng, city_name, id
+ */
+function preloadChallengeCity(challenge) {
+    // Skip if already preloaded
+    if (GameState.challengeState.preloadCache.has(challenge.id)) {
+        return;
+    }
+
+    // Calculate bounds for the challenge location
+    const lat = parseFloat(challenge.center_lat);
+    const lng = parseFloat(challenge.center_lng);
+    const zoom = challenge.zoom_level || 15;
+    const latOffset = 0.015 * Math.pow(2, 15 - zoom);
+    const lngOffset = 0.02 * Math.pow(2, 15 - zoom);
+
+    const bounds = {
+        south: lat - latOffset,
+        north: lat + latOffset,
+        west: lng - lngOffset,
+        east: lng + lngOffset
+    };
+
+    // Build the Overpass query
+    const query = `
+        [out:json][timeout:25];
+        (
+            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+        );
+        out body;
+        >;
+        out skel qt;
+    `;
+
+    // Fetch in background
+    const servers = CONFIG.overpassServers;
+    const server = servers[Math.floor(Math.random() * servers.length)];
+
+    fetch(server, {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.elements && data.elements.length > 0) {
+            GameState.challengeState.preloadCache.set(challenge.id, {
+                city: challenge.city_name,
+                data: data,
+                timestamp: Date.now()
+            });
+            console.log(`[Challenge] Preloaded ${challenge.city_name}: ${data.elements.length} elements`);
+        }
+    })
+    .catch(error => {
+        console.warn(`[Challenge] Preload failed for ${challenge.city_name}:`, error);
+    });
+}
+
+/**
+ * Preload road network data for the top N uncompleted challenges
+ * @param {number} count - Number of challenges to preload (default: 3)
+ */
+function preloadTopChallenges(count = 3) {
+    const challenges = GameState.challengeState.activeChallenges || [];
+    const userEntries = GameState.challengeState.userEntries || new Map();
+
+    // Filter to uncompleted challenges and take first N
+    const toPreload = challenges
+        .filter(c => !userEntries.has(c.id))
+        .slice(0, count);
+
+    console.log(`[Challenge] Preloading ${toPreload.length} challenge cities...`);
+
+    toPreload.forEach(challenge => {
+        preloadChallengeCity(challenge);
     });
 }
 

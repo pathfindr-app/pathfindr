@@ -146,6 +146,84 @@ When `TESTING_MODE` is true:
 
 ---
 
+## Challenge Mode Architecture
+
+Challenges are timed competitions where players compete to find the shortest route in a specific city.
+
+### State Management (SSOT)
+
+Challenge state follows a Single Source of Truth hierarchy:
+
+```
+GameState.gameMode === 'challenge'     // Mode is active
+GameState.challengeState.activeChallenge // Current challenge object (null when not in challenge)
+GameState.challengeState.startTime       // Set on first user click (for fair timing)
+```
+
+**Invariant**: If `gameMode !== 'challenge'`, both `activeChallenge` and `startTime` must be null.
+
+The `resetChallengeState()` function is the single point for cleanup, ensuring consistency.
+
+### Key Functions
+
+- `beginChallengeGame(challenge)` - Sets up map, loads road network, enables drawing
+- `showChallengeResults(efficiency, rank)` - Shows results with Next Challenge button
+- `goToNextChallenge()` - Navigates to next uncompleted challenge
+- `exitChallengeMode()` - Cleans up and returns to menu (calls `resetChallengeState()`)
+- `resetChallengeState()` - Clears all challenge-specific state
+
+### Challenge Flow
+
+```
+User clicks challenge → showChallengeInfoScreen() → beginChallengeGame()
+                                                           ↓
+                                                    [User draws path]
+                                                           ↓
+                                      handlePathClick() starts timer on first click
+                                                           ↓
+                                      User reaches end → submitRoute() → A* visualization
+                                                           ↓
+                                      calculateAndShowScore() → showChallengeResults()
+                                                           ↓
+                              ┌─────────────────────────────┼─────────────────────────────┐
+                              ↓                             ↓                             ↓
+                     "Next Challenge"              "View Leaderboard"              "Back to Menu"
+                     goToNextChallenge()           showChallengeLeaderboard()      exitChallengeMode()
+```
+
+### Preloading System
+
+To reduce wait times between challenges, road network data is preloaded in background:
+
+```javascript
+GameState.challengeState.preloadCache  // Map<challengeId, {city, data, timestamp}>
+```
+
+**Preload triggers**:
+1. `updateChallengeButton()` - Preloads top 3 uncompleted challenges when list loads
+2. `showChallengeInfoScreen()` - Preloads current challenge while user reads info
+
+**Usage in `beginChallengeGame()`**:
+```javascript
+const preloadedData = GameState.challengeState.preloadCache?.get(challenge.id);
+if (preloadedData) {
+    processRoadData(preloadedData.data);  // Instant load
+} else {
+    await loadRoadNetwork(location);       // Fresh fetch (3-10 seconds)
+}
+```
+
+### Important Notes
+
+- Timer starts on first user click, not when map loads (fair timing)
+- Challenge uses competitive mode HUD layout (`setHUDMode('competitive')`)
+- When user reaches end node, `submitRoute()` handles A* visualization and scoring
+- Always call `resetChallengeState()` when exiting to prevent stale references
+- Click radius indicator renders even with just 1 node (start) - critical for UX
+- `redrawUserPath()` is called after `enableDrawing()` to show initial click radius
+
+---
+
 ## Git Authentication (IMPORTANT!)
 
 Git push uses the `~/.netrc` file for authentication with GitHub. This file contains a Personal Access Token (PAT) for the `pathfindr-app` GitHub account.
