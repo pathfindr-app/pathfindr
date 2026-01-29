@@ -5260,8 +5260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initChallengeCreationUI();  // Admin challenge creation
     initInlineLocationSearch();  // Click-to-search on location display
     initCustomCursor();  // Custom cursor for web version
-    // Show mode selector first
-    showModeSelector();
+    initSplashScreen();  // Show splash screen first
 });
 
 // Initialize sound on first user interaction
@@ -8475,6 +8474,51 @@ function setDifficulty(difficulty) {
     });
 
     console.log(`[Game] Difficulty set to: ${difficulty} (${CONFIG.segmentDistance[difficulty]}km max segment)`);
+}
+
+// =============================================================================
+// SPLASH SCREEN
+// =============================================================================
+
+function initSplashScreen() {
+    const splashScreen = document.getElementById('splash-screen');
+    const continueBtn = document.getElementById('splash-continue-btn');
+
+    if (!splashScreen || !continueBtn) {
+        // If splash screen doesn't exist, go straight to mode selector
+        showModeSelector();
+        return;
+    }
+
+    // Check if user has seen splash before (optional: remove this to always show)
+    // const hasSeenSplash = localStorage.getItem('pathfindr_seen_splash_v01');
+    // if (hasSeenSplash) {
+    //     splashScreen.classList.add('hidden');
+    //     showModeSelector();
+    //     return;
+    // }
+
+    // Show splash screen
+    splashScreen.classList.remove('hidden');
+
+    // Handle continue button click
+    continueBtn.addEventListener('click', () => {
+        SoundEngine.init();
+        SoundEngine.click();
+
+        // Mark as seen (optional)
+        // localStorage.setItem('pathfindr_seen_splash_v01', 'true');
+
+        // Hide splash and show mode selector
+        splashScreen.classList.add('hidden');
+        showModeSelector();
+    });
+
+    // Add hover sound to continue button
+    continueBtn.addEventListener('mouseenter', () => {
+        SoundEngine.init();
+        SoundEngine.hover();
+    });
 }
 
 function showModeSelector() {

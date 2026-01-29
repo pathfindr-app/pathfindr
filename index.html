@@ -237,8 +237,54 @@
                 <canvas id="viz-canvas"></canvas>
                 <div id="marker-container"></div>
 
+                <!-- Splash Screen (Alpha Welcome) -->
+                <div id="splash-screen" class="overlay">
+                    <div class="overlay-content splash-content">
+                        <div class="splash-version">ALPHA v0.1</div>
+                        <h1 class="splash-title">pathfindr</h1>
+                        <p class="splash-tagline">Beat the Algorithm</p>
+
+                        <div class="splash-description">
+                            <p>Draw what you think is the shortest route between two points on a real city map.</p>
+                            <p>Then watch the <span class="highlight-cyan">A* pathfinding algorithm</span> reveal the optimal path.</p>
+                            <p>How close can you get to <span class="highlight-gold">perfect efficiency</span>?</p>
+                        </div>
+
+                        <div class="splash-features">
+                            <div class="splash-feature">
+                                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                                </svg>
+                                <span>Real city streets</span>
+                            </div>
+                            <div class="splash-feature">
+                                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                                <span>A* visualization</span>
+                            </div>
+                            <div class="splash-feature">
+                                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
+                                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
+                                    <path d="M4 22h16"/>
+                                    <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
+                                </svg>
+                                <span>Global leaderboards</span>
+                            </div>
+                        </div>
+
+                        <button id="splash-continue-btn" class="btn btn-primary btn-glow splash-btn">
+                            Enter
+                        </button>
+
+                        <p class="splash-disclaimer">This is an early alpha build. Expect bugs and frequent updates.</p>
+                    </div>
+                </div>
+
                 <!-- Loading Overlay with Map Transition -->
-                <div id="loading-overlay" class="overlay">
+                <div id="loading-overlay" class="overlay hidden">
                     <div id="transition-map"></div>
                     <canvas id="globe-canvas"></canvas>
                     <div class="overlay-content globe-overlay-content">
