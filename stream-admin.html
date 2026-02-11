@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfindr Stream Admin</title>
+  <style>
+    :root {
+      --bg: #0b0e13;
+      --panel: #151a23;
+      --line: #2a3443;
+      --text: #e8f0ff;
+      --muted: #9fb0c8;
+      --accent: #5ce9ff;
+      --danger: #ff6f7f;
+      --ok: #7dff9f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Sora", "Helvetica Neue", sans-serif;
+      background: radial-gradient(1200px 600px at 10% 10%, #10202b 0, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 12px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 18px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 14px;
+    }
+    .card {
+      background: linear-gradient(155deg, rgba(255,255,255,0.02), transparent), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 16px; color: var(--accent); letter-spacing: 0.02em; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+    input, button, select {
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0d121a;
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+    }
+    input, select { width: 100%; }
+    button { cursor: pointer; }
+    button.primary { border-color: #248ea4; background: linear-gradient(180deg, #1e6b80, #164d5d); }
+    button.warn { border-color: #7b3441; background: linear-gradient(180deg, #7e3340, #60242e); }
+    .badge {
+      font-size: 12px;
+      color: #091019;
+      background: var(--accent);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-weight: 700;
+    }
+    .status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 20px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid #222d3b;
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: #94a7c1; font-weight: 600; }
+    .pill {
+      display: inline-block;
+      border: 1px solid #325070;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: #9dc7f7;
+    }
+    .controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .controls input { width: 80px; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .controls { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Pathfindr Stream Admin</h1>
+    <div class="sub">Manage live queue without terminal commands.</div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Connection</h2>
+        <div class="row">
+          <input id="api-base" placeholder="API base URL" />
+        </div>
+        <div class="row">
+          <input id="api-key" placeholder="Optional STREAM_QUEUE_API_KEY" />
+        </div>
+        <div class="row">
+          <button id="save-conn" class="primary">Save</button>
+          <button id="refresh-all">Refresh</button>
+        </div>
+
+        <h2 style="margin-top:16px;">Add Request</h2>
+        <div class="row"><input id="city" placeholder="City (e.g. Tokyo, Japan)" /></div>
+        <div class="row"><input id="requested-by" placeholder="Requested by (e.g. @chat-user)" /></div>
+        <div class="row">
+          <select id="tier">
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+          </select>
+          <input id="priority" type="number" value="0" />
+        </div>
+        <div class="row">
+          <button id="enqueue" class="primary">Enqueue</button>
+          <button id="clear-queue" class="warn">Clear Queue</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;">
+          <h2 style="margin:0;">Queue</h2>
+          <div class="row" style="margin:0;">
+            <span class="pill" id="paid-only-pill">paid-only: off</span>
+            <span class="badge" id="queue-depth">0</span>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>City</th>
+              <th>By</th>
+              <th>Priority</th>
+              <th>Source</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const storageKey = 'pathfindr_stream_admin_v1';
+    const state = {
+      apiBase: '',
+      apiKey: '',
+      queue: [],
+      paidOnlyMode: false,
+    };
+
+    const els = {
+      apiBase: document.getElementById('api-base'),
+      apiKey: document.getElementById('api-key'),
+      saveConn: document.getElementById('save-conn'),
+      refreshAll: document.getElementById('refresh-all'),
+      city: document.getElementById('city'),
+      requestedBy: document.getElementById('requested-by'),
+      tier: document.getElementById('tier'),
+      priority: document.getElementById('priority'),
+      enqueue: document.getElementById('enqueue'),
+      clearQueue: document.getElementById('clear-queue'),
+      queueDepth: document.getElementById('queue-depth'),
+      paidOnlyPill: document.getElementById('paid-only-pill'),
+      queueBody: document.getElementById('queue-body'),
+      status: document.getElementById('status'),
+    };
+
+    function setStatus(message, mode = '') {
+      els.status.textContent = message || '';
+      els.status.className = `status ${mode}`.trim();
+    }
+
+    function loadSettings() {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
+        state.apiBase = `${window.location.origin}/api`;
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        state.apiBase = parsed.apiBase || `${window.location.origin}/api`;
+        state.apiKey = parsed.apiKey || '';
+      } catch {
+        state.apiBase = `${window.location.origin}/api`;
+      }
+    }
+
+    function saveSettings() {
+      localStorage.setItem(storageKey, JSON.stringify({
+        apiBase: state.apiBase,
+        apiKey: state.apiKey,
+      }));
+    }
+
+    function headers() {
+      const h = { 'Content-Type': 'application/json' };
+      if (state.apiKey) h['x-stream-key'] = state.apiKey;
+      return h;
+    }
+
+    async function api(path, init = {}) {
+      const url = `${state.apiBase.replace(/\/$/, '')}${path}`;
+      const response = await fetch(url, {
+        ...init,
+        headers: { ...headers(), ...(init.headers || {}) },
+      });
+      if (response.status === 204) return null;
+      const text = await response.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch {}
+      if (!response.ok) {
+        throw new Error(json?.error || text || `HTTP ${response.status}`);
+      }
+      return json;
+    }
+
+    function renderQueue() {
+      const rows = state.queue || [];
+      els.queueDepth.textContent = String(rows.length);
+      els.queueBody.innerHTML = '';
+
+      if (rows.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="5" style="color:#9fb0c8;">Queue is empty.</td>`;
+        els.queueBody.appendChild(tr);
+        return;
+      }
+
+      rows.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.name || '-'}</td>
+          <td>${item.requestedBy || '-'}</td>
+          <td><span class="pill">${item.priorityTier || 'free'} / ${item.priority || 0}</span></td>
+          <td>${item.source || '-'}</td>
+          <td>
+            <div class="controls">
+              <input type="number" value="${item.priority || 0}" data-prio="${item.id}" />
+              <button data-promote="${item.id}">Promote</button>
+              <button class="warn" data-remove="${item.id}">Remove</button>
+            </div>
+          </td>
+        `;
+        els.queueBody.appendChild(tr);
+      });
+    }
+
+    async function refreshQueue() {
+      const data = await api('/queue', { method: 'GET' });
+      state.queue = data?.queue || [];
+      renderQueue();
+    }
+
+    async function refreshHealth() {
+      const data = await api('/health', { method: 'GET' });
+      state.paidOnlyMode = Boolean(data?.paidOnlyMode);
+      els.paidOnlyPill.textContent = `paid-only: ${state.paidOnlyMode ? 'on' : 'off'}`;
+    }
+
+    async function refreshAllData() {
+      await Promise.all([refreshQueue(), refreshHealth()]);
+    }
+
+    async function enqueue() {
+      const city = els.city.value.trim();
+      if (!city) {
+        setStatus('City is required.', 'err');
+        return;
+      }
+      const payload = {
+        city,
+        requestedBy: els.requestedBy.value.trim() || '@manual',
+        priorityTier: els.tier.value === 'paid' ? 'paid' : 'free',
+        priorityScore: Number(els.priority.value || 0),
+        sourceType: 'manual_admin',
+      };
+      await api('/requests', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      els.city.value = '';
+      setStatus('Queued successfully.', 'ok');
+      await refreshAllData();
+    }
+
+    async function clearQueue() {
+      await api('/admin/clear-queue', { method: 'POST', body: '{}' });
+      setStatus('Queue cleared.', 'ok');
+      await refreshAllData();
+    }
+
+    async function removeRequest(id) {
+      await api('/admin/remove-request', {
+        method: 'POST',
+        body: JSON.stringify({ id }),
+      });
+      setStatus(`Removed ${id.slice(0, 8)}...`, 'ok');
+      await refreshAllData();
+    }
+
+    async function promoteRequest(id, priority) {
+      await api('/admin/promote-request', {
+        method: 'POST',
+        body: JSON.stringify({ id, priority }),
+      });
+      setStatus(`Updated priority for ${id.slice(0, 8)}...`, 'ok');
+      await refreshAllData();
+    }
+
+    els.saveConn.addEventListener('click', async () => {
+      state.apiBase = els.apiBase.value.trim() || `${window.location.origin}/api`;
+      state.apiKey = els.apiKey.value.trim();
+      saveSettings();
+      setStatus('Connection saved.', 'ok');
+      try { await refreshAllData(); } catch (err) { setStatus(err.message, 'err'); }
+    });
+
+    els.refreshAll.addEventListener('click', async () => {
+      try {
+        await refreshAllData();
+        setStatus('Refreshed.', 'ok');
+      } catch (err) {
+        setStatus(err.message, 'err');
+      }
+    });
+
+    els.enqueue.addEventListener('click', async () => {
+      try { await enqueue(); } catch (err) { setStatus(err.message, 'err'); }
+    });
+
+    els.clearQueue.addEventListener('click', async () => {
+      if (!confirm('Clear all queued requests?')) return;
+      try { await clearQueue(); } catch (err) { setStatus(err.message, 'err'); }
+    });
+
+    els.queueBody.addEventListener('click', async (event) => {
+      const promoteId = event.target.getAttribute('data-promote');
+      const removeId = event.target.getAttribute('data-remove');
+      if (promoteId) {
+        const input = els.queueBody.querySelector(`input[data-prio="${promoteId}"]`);
+        const priority = Number(input?.value || 0);
+        try { await promoteRequest(promoteId, priority); } catch (err) { setStatus(err.message, 'err'); }
+        return;
+      }
+      if (removeId) {
+        try { await removeRequest(removeId); } catch (err) { setStatus(err.message, 'err'); }
+      }
+    });
+
+    function boot() {
+      loadSettings();
+      els.apiBase.value = state.apiBase;
+      els.apiKey.value = state.apiKey;
+      refreshAllData().catch((err) => setStatus(err.message, 'err'));
+    }
+
+    boot();
+    setInterval(() => refreshAllData().catch(() => {}), 5000);
+  </script>
+</body>
+</html>

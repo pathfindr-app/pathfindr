@@ -81,6 +81,18 @@ interface CityFactsRequest {
   lng?: number
 }
 
+interface ParsedLocation {
+  parts: string[]
+  cityName: string
+  region: string
+  country: string
+}
+
+interface WikiLookupResult {
+  extract: string
+  title: string
+}
+
 interface WikipediaResponse {
   query?: {
     pages?: {
@@ -90,6 +102,138 @@ interface WikipediaResponse {
       }
     }
   }
+}
+
+function parseLocationParts(input: string): ParsedLocation {
+  const parts = input
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  const cityName = parts[0] || input.trim()
+  const country = parts.length >= 2 ? parts[parts.length - 1] : ''
+  const region = parts.length > 2 ? parts.slice(1, -1).join(', ') : (parts[1] || '')
+
+  return { parts, cityName, region, country }
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isLikelyPlaceArticle(title: string, extract: string, location: ParsedLocation): boolean {
+  const lowerTitle = title.toLowerCase()
+  const lowerExtract = extract.toLowerCase()
+
+  if (!extract || extract.length < 50) return false
+  if (lowerTitle.includes('(disambiguation)')) return false
+  if (/\bmay refer to\b/.test(lowerExtract)) return false
+
+  const placePattern = /\b(city|town|village|municipality|capital|county|state|province|country|district|metropolitan|river|harbor|port|is a city|is a town|is a municipality)\b/
+  const personOrMediaPattern = /\b(actor|actress|singer|rapper|musician|film|movie|album|song|novel|television|tv series|footballer|basketball player|baseball player|politician|poet|model|athlete|surname|given name)\b/
+  const personLeadPattern = /^.{0,140}\bis an?\b.{0,90}\b(actor|actress|singer|rapper|musician|footballer|politician|poet|model|athlete)\b/
+
+  const hasPlacePattern = placePattern.test(lowerExtract)
+  const hasPersonOrMediaPattern = personOrMediaPattern.test(lowerExtract)
+  const hasPersonLeadPattern = personLeadPattern.test(lowerExtract)
+
+  const normalizedTitle = normalizeText(title)
+  const normalizedCity = normalizeText(location.cityName)
+  const hasCityInTitle = normalizedCity.length > 0 && normalizedTitle.includes(normalizedCity)
+
+  const locationHints = [location.region, location.country]
+    .map(normalizeText)
+    .filter(value => value.length > 1)
+  const hasLocationHint = locationHints.some(hint =>
+    lowerTitle.includes(hint) || lowerExtract.includes(hint)
+  )
+
+  if ((hasPersonLeadPattern || hasPersonOrMediaPattern) && !hasPlacePattern) {
+    return false
+  }
+
+  return hasPlacePattern || hasCityInTitle || hasLocationHint
+}
+
+function buildGenericFacts(city: string): string[] {
+  return [
+    `${city} has a street layout shaped by local geography and history.`,
+    `${city}'s roads reflect how the area grew over time.`,
+    `Major routes in ${city} often connect historic and modern districts.`,
+    `${city} combines residential streets with dense urban corridors.`,
+    `${city}'s neighborhoods create distinct pathfinding patterns.`,
+  ]
+}
+
+function sanitizeFacts(rawFacts: unknown, city: string): string[] {
+  if (!Array.isArray(rawFacts)) return []
+
+  const cityTokens = parseLocationParts(city).parts
+    .map(normalizeText)
+    .filter(token => token.length > 2)
+
+  const locationPattern = /\b(city|town|village|municipality|district|county|state|province|country|capital|harbor|port|river|coast|mountain|valley|population|downtown|metro|metropolitan|neighborhood|street|avenue|bridge|park|museum|airport|station)\b/
+  const personOrMediaPattern = /\b(actor|actress|singer|rapper|musician|band|album|song|film|movie|television|tv series|novel|poet|athlete|footballer|basketball|baseball|celebrity|influencer|youtube|grammy|oscar|born|died|married)\b/
+  const quirkyPattern = /\b(local legend says|rumor has it|some say)\b/
+
+  const seen = new Set<string>()
+  const cleaned: string[] = []
+
+  for (const entry of rawFacts) {
+    if (typeof entry !== 'string') continue
+
+    const fact = entry
+      .trim()
+      .replace(/^[-*\d\).\s]+/, '')
+      .replace(/^["']+|["']+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (fact.length < 20 || fact.length > 180) continue
+
+    const lower = fact.toLowerCase()
+    if (quirkyPattern.test(lower)) continue
+    if (personOrMediaPattern.test(lower)) continue
+
+    const hasCityToken = cityTokens.some(token => token && lower.includes(token))
+    const hasLocationSignal = locationPattern.test(lower)
+    if (!hasCityToken && !hasLocationSignal) continue
+
+    const dedupeKey = lower.replace(/[^a-z0-9]/g, '')
+    if (seen.has(dedupeKey)) continue
+
+    seen.add(dedupeKey)
+    cleaned.push(fact)
+  }
+
+  return cleaned
+}
+
+function fillFacts(facts: string[], city: string, targetCount = 5): string[] {
+  const result: string[] = []
+  const seen = new Set<string>()
+
+  const pushUnique = (fact: string) => {
+    if (result.length >= targetCount) return
+    const key = fact.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    result.push(fact)
+  }
+
+  for (const fact of facts) {
+    pushUnique(fact)
+  }
+
+  for (const fallback of buildGenericFacts(city)) {
+    pushUnique(fallback)
+  }
+
+  return result.slice(0, targetCount)
 }
 
 serve(async (req) => {
@@ -126,8 +270,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Normalize city name for lookup
+    // Normalize city name for lookup and parsing
     const normalizedCity = city.toLowerCase().trim()
+    const parsedLocation = parseLocationParts(city)
 
     // 1. Check cache first
     const { data: cached } = await supabase
@@ -137,21 +282,26 @@ serve(async (req) => {
       .single()
 
     if (cached?.facts?.length > 0) {
-      console.log(`Cache hit for: ${city}`)
-      return new Response(
-        JSON.stringify({
-          facts: cached.facts,
-          city: cached.display_name || city,
-          cached: true
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      const cachedFacts = sanitizeFacts(cached.facts, city)
+      if (cachedFacts.length >= 3) {
+        console.log(`Cache hit for: ${city}`)
+        return new Response(
+          JSON.stringify({
+            facts: fillFacts(cachedFacts, city),
+            city: cached.display_name || city,
+            cached: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log(`Cache quality miss for: ${city}, regenerating facts...`)
     }
 
     console.log(`Cache miss for: ${city}, fetching from Wikipedia...`)
 
     // 2. Fetch from Wikipedia - try multiple search strategies
-    async function tryWikipediaSearch(searchTerm: string): Promise<{ extract: string, title: string } | null> {
+    async function tryWikipediaSearch(searchTerm: string): Promise<WikiLookupResult | null> {
       const wikiUrl = `https://en.wikipedia.org/w/api.php?` + new URLSearchParams({
         action: 'query',
         prop: 'extracts',
@@ -174,18 +324,19 @@ serve(async (req) => {
       const extract = pages[pageId]?.extract || ''
       const title = pages[pageId]?.title || searchTerm
 
-      if (extract && extract.length >= 50) {
-        return { extract, title }
+      if (!isLikelyPlaceArticle(title, extract, parsedLocation)) {
+        return null
       }
-      return null
+
+      return { extract, title }
     }
 
-    // Try Wikipedia search API to find the best match
-    async function wikiSearch(query: string): Promise<string | null> {
+    // Try Wikipedia search API and return multiple candidates
+    async function wikiSearch(query: string, limit = 5): Promise<string[]> {
       const searchUrl = `https://en.wikipedia.org/w/api.php?` + new URLSearchParams({
         action: 'opensearch',
         search: query,
-        limit: '1',
+        limit: String(limit),
         format: 'json',
       })
 
@@ -193,77 +344,102 @@ serve(async (req) => {
         headers: { 'User-Agent': 'Pathfindr/1.0 (pathfindr.world; pathfindr.game@gmail.com)' }
       })
 
-      if (!response.ok) return null
+      if (!response.ok) return []
       const data = await response.json()
-      return data[1]?.[0] || null  // First search result title
+      return Array.isArray(data?.[1]) ? data[1] : []
     }
 
-    // Extract city name and country if available
-    const parts = city.split(',').map(p => p.trim())
-    const cityName = parts[0]
-    const country = parts[1] || ''
+    // Use coordinates when available to find nearby place pages
+    async function wikiGeoSearch(latitude: number, longitude: number): Promise<string[]> {
+      const searchUrl = `https://en.wikipedia.org/w/api.php?` + new URLSearchParams({
+        action: 'query',
+        list: 'geosearch',
+        gscoord: `${latitude}|${longitude}`,
+        gsradius: '10000',
+        gslimit: '10',
+        format: 'json',
+      })
 
-    // Strategy 1: Try the exact city name first
-    let result = await tryWikipediaSearch(city)
+      const response = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'Pathfindr/1.0 (pathfindr.world; pathfindr.game@gmail.com)' }
+      })
 
-    // Strategy 2: Try "CityName, Country" format for disambiguation
-    if (!result && country) {
-      result = await tryWikipediaSearch(`${cityName}, ${country}`)
+      if (!response.ok) return []
+
+      const data = await response.json()
+      const geoResults = data?.query?.geosearch || []
+      return geoResults
+        .map((item: { title?: string }) => item.title)
+        .filter((title: string | undefined): title is string => Boolean(title))
     }
 
-    // Strategy 3: For UK cities, try with common region suffixes
-    if (!result && (country.includes('United Kingdom') || country.includes('UK') || country.includes('England'))) {
-      // Try common UK disambiguation patterns
-      const ukSearches = [
+    function isBlockedTitle(title: string): boolean {
+      const lower = title.toLowerCase()
+      return lower.includes('church') ||
+        lower.includes('school') ||
+        lower.includes('hospital') ||
+        lower.includes('album') ||
+        lower.includes('song') ||
+        lower.includes('film') ||
+        lower.includes('tv') ||
+        lower.includes('television') ||
+        lower.includes('(disambiguation)')
+    }
+
+    async function trySearchCandidates(candidates: string[]): Promise<WikiLookupResult | null> {
+      for (const candidate of candidates) {
+        if (!candidate || isBlockedTitle(candidate)) continue
+        const result = await tryWikipediaSearch(candidate)
+        if (result) return result
+      }
+      return null
+    }
+
+    const { cityName, region, country } = parsedLocation
+    const lowerCountry = country.toLowerCase()
+
+    let result: WikiLookupResult | null = null
+
+    // Strategy 1: direct lookups with full and partial location context
+    const directCandidates = [
+      city,
+      region ? `${cityName}, ${region}` : '',
+      country ? `${cityName}, ${country}` : '',
+      cityName,
+    ]
+    result = await trySearchCandidates(directCandidates)
+
+    // Strategy 2: UK-specific disambiguation for frequent naming collisions
+    if (!result && (lowerCountry.includes('united kingdom') || lowerCountry === 'uk' || lowerCountry.includes('england'))) {
+      result = await trySearchCandidates([
         `${cityName}, England`,
         `${cityName}, Merseyside`,
         `${cityName}, Greater Manchester`,
         `${cityName} (borough)`,
-      ]
-      for (const search of ukSearches) {
-        result = await tryWikipediaSearch(search)
-        if (result) break
-      }
+      ])
     }
 
-    // Strategy 4: Search Wikipedia for "cityName city" or "cityName town"
+    // Strategy 3: search by city/town intent
     if (!result) {
-      const searchResult = await wikiSearch(`${cityName} city`)
-      if (searchResult && !searchResult.toLowerCase().includes('church') && !searchResult.toLowerCase().includes('school')) {
-        result = await tryWikipediaSearch(searchResult)
-      }
+      result = await trySearchCandidates(await wikiSearch(`${cityName} city`, 5))
+    }
+    if (!result) {
+      result = await trySearchCandidates(await wikiSearch(`${cityName} town`, 5))
     }
 
-    if (!result) {
-      const searchResult = await wikiSearch(`${cityName} town`)
-      if (searchResult && !searchResult.toLowerCase().includes('church') && !searchResult.toLowerCase().includes('school')) {
-        result = await tryWikipediaSearch(searchResult)
-      }
+    // Strategy 4: coordinate-biased search for local mode and DB cities
+    if (!result && typeof lat === 'number' && typeof lng === 'number') {
+      result = await trySearchCandidates(await wikiGeoSearch(lat, lng))
     }
 
-    // Strategy 5: General search but filter out non-geographical results
+    // Strategy 5: broader search fallback
     if (!result) {
-      const searchResult = await wikiSearch(cityName)
-      if (searchResult &&
-          !searchResult.toLowerCase().includes('church') &&
-          !searchResult.toLowerCase().includes('school') &&
-          !searchResult.toLowerCase().includes('hospital')) {
-        result = await tryWikipediaSearch(searchResult)
-      }
+      result = await trySearchCandidates(await wikiSearch(cityName, 8))
     }
 
     if (!result) {
-      // No Wikipedia article found, generate generic + quirky facts
-      const genericFacts = [
-        `${city} has unique street patterns waiting to be explored.`,
-        `Navigate the roads of ${city} and find the optimal path!`,
-        `Every city tells a story through its streets. Discover ${city}'s.`,
-        `Local legend says the pigeons here give excellent directions.`,
-        `Rumor has it the coffee is stronger the closer you get to downtown.`,
-      ]
-
       return new Response(
-        JSON.stringify({ facts: genericFacts, city: city, generated: 'generic' }),
+        JSON.stringify({ facts: fillFacts([], city), city: city, generated: 'generic' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -288,32 +464,25 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You create interesting facts about cities for a pathfinding game called Pathfindr.
+            content: `You create concise, factual location facts for a pathfinding game.
 
-Your task is to return 5 facts total - a MIX of real and quirky:
+Return exactly 5 facts about the city place only.
 
-REAL FACTS (first 3):
-- Extract from the Wikipedia text provided
-- Short (under 100 characters each)
-- About geography, history, architecture, or culture
-- Accurate and informative
+Rules:
+- Use only information grounded in the provided Wikipedia extract.
+- No invented details, jokes, rumors, or "some say" phrasing.
+- Avoid people-centric trivia (celebrities, births, awards, gossip).
+- Keep each fact short and clear (roughly 50-120 characters).
+- Focus on geography, history, urban form, landmarks, and culture of the place.
 
-QUIRKY/FUNNY FACTS (last 2):
-- MAKE THESE UP - be creative and humorous!
-- Short (under 100 characters each)
-- Slightly outrageous but plausible-sounding
-- Use phrases like "Local legend says...", "Rumor has it...", "Some say..."
-- Related to the city's vibe, stereotypes, or character
-- Should make someone smile or chuckle
-
-Return ONLY a JSON array of exactly 5 strings, no labels or explanations.`
+Return ONLY a JSON array of exactly 5 strings, with no extra text.`
           },
           {
             role: 'user',
-            content: `Create 5 facts about ${wikiTitle} (3 real from Wikipedia, 2 quirky/funny you make up):\n\n${extract.substring(0, 2000)}`
+            content: `Create 5 factual place-based facts about ${wikiTitle} from this extract:\n\n${extract.substring(0, 2500)}`
           }
         ],
-        temperature: 0.7,
+        temperature: 0.2,
         max_tokens: 500,
       }),
     })
@@ -338,15 +507,17 @@ Return ONLY a JSON array of exactly 5 strings, no labels or explanations.`
       facts = factsText.split('\n').filter((f: string) => f.trim().length > 10).slice(0, 5)
     }
 
-    // Clean up facts - remove extra quotes, whitespace, and formatting artifacts
+    // Clean and sanitize facts for relevance and safety
     facts = facts.map((fact: string) => {
       return fact
         .trim()
-        .replace(/^["'\s]+|["'\s]+$/g, '')  // Remove leading/trailing quotes and whitespace
-        .replace(/^\\"|\\\"$/g, '')          // Remove escaped quotes
-        .replace(/\\"/g, '"')                // Unescape remaining quotes
+        .replace(/^["'\s]+|["'\s]+$/g, '')
+        .replace(/^\\"|\\\"$/g, '')
+        .replace(/\\"/g, '"')
         .trim()
-    }).filter((fact: string) => fact.length > 10)
+    })
+    facts = sanitizeFacts(facts, city)
+    facts = fillFacts(facts, city)
 
     // 4. Cache the results
     const { error: insertError } = await supabase

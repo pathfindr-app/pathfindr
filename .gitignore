@@ -16,6 +16,8 @@ nul
 
 # Temp files
 tmpclaude-*
+tmp/stream-runtime.json
+tmp/youtube-worker-state.json
 
 # Environment
 .env
@@ -31,6 +33,10 @@ android/app/build/
 android/build/
 *.apk
 *.aab
+android/keystore/
+*.keystore
+*.jks
+android/keystore.properties
 
 # iOS build artifacts
 ios/App/Pods/

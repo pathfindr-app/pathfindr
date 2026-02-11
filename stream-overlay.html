@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfindr Stream Overlay</title>
+  <style>
+    :root {
+      --bg: rgba(7, 10, 16, 0.72);
+      --line: rgba(116, 250, 255, 0.45);
+      --city: #ffffff;
+      --label: #74faff;
+      --meta: #b1d4de;
+      --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      --font: "Space Grotesk", "Sora", "Helvetica Neue", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: var(--font);
+    }
+
+    .overlay {
+      position: fixed;
+      left: 28px;
+      bottom: 28px;
+      min-width: 360px;
+      max-width: min(90vw, 640px);
+      padding: 16px 18px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, var(--bg), rgba(20, 20, 30, 0.76));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(7px);
+    }
+
+    .headline {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--label);
+      font-weight: 700;
+      opacity: 0.95;
+    }
+
+    .city {
+      font-size: 30px;
+      line-height: 1;
+      color: var(--city);
+      font-weight: 700;
+      text-shadow: 0 2px 16px rgba(255, 255, 255, 0.1);
+    }
+
+    .meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: var(--meta);
+      font-size: 14px;
+    }
+
+    .meta strong {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .cta {
+      margin-top: 10px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.9);
+      opacity: 0.95;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    <div class="headline">
+      <div class="badge">Now Exploring</div>
+      <div class="city" id="city-name">Loading...</div>
+    </div>
+    <div class="meta">
+      <div>Requested by <strong id="requested-by">Auto</strong></div>
+      <div>Queue <strong id="queue-depth">0</strong></div>
+      <div>Event <strong id="event-type">init</strong></div>
+      <div>Uptime <strong id="uptime">0m</strong></div>
+    </div>
+    <div class="cta">Type !city in chat to request the next location</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const stateUrl = params.get('stateUrl') || '/api/stream-state';
+    const pollMs = Number.parseInt(params.get('pollMs') || '2500', 10);
+
+    const cityEl = document.getElementById('city-name');
+    const requestedByEl = document.getElementById('requested-by');
+    const queueDepthEl = document.getElementById('queue-depth');
+    const eventTypeEl = document.getElementById('event-type');
+    const uptimeEl = document.getElementById('uptime');
+
+    function formatUptime(ms) {
+      const safeMs = Number(ms);
+      if (!Number.isFinite(safeMs) || safeMs <= 0) return '0m';
+
+      const totalSeconds = Math.floor(safeMs / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      return `${minutes}m`;
+    }
+
+    async function refreshOverlay() {
+      try {
+        const response = await fetch(stateUrl, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+
+        const current = data.current || data.state || {};
+        const city = current.city?.name || current.current_city || current.metadata?.city?.name || 'Auto mode';
+        const requester = current.city?.requestedBy || current.requested_by || current.metadata?.city?.requestedBy || 'Auto';
+        const queueDepth = data.queueDepth
+          ?? data.queue?.queue_depth_paid + data.queue?.queue_depth_free
+          ?? current.queueDepth
+          ?? 0;
+        const eventType = current.event || current.event_type || current.metadata?.event || 'live';
+        const uptimeMs = current.uptimeMs ?? current.uptime_ms ?? current.metadata?.uptimeMs ?? 0;
+
+        cityEl.textContent = city;
+        requestedByEl.textContent = requester;
+        queueDepthEl.textContent = String(Number.isFinite(queueDepth) ? queueDepth : 0);
+        eventTypeEl.textContent = eventType;
+        uptimeEl.textContent = formatUptime(uptimeMs);
+      } catch (_) {
+        // Keep last good values.
+      }
+    }
+
+    refreshOverlay();
+    setInterval(refreshOverlay, Math.max(1000, pollMs));
+  </script>
+</body>
+</html>

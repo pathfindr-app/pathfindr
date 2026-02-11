@@ -253,12 +253,20 @@ const CONFIG = {
         // This stays constant across all rounds so players always know "this is MY path"
         userPath: { r: 255, g: 255, b: 255, name: 'White' },
 
+        // Optimal path - ALWAYS CYAN for instant recognition
+        // Distinct from round colors for clarity
+        optimalPath: { r: 80, g: 240, b: 255, name: 'Cyan' },
+
         getAmbient() {
             return this.ambient;
         },
 
         getUserPathColor() {
             return this.userPath;
+        },
+
+        getOptimalPathColor() {
+            return this.optimalPath;
         },
     },
 
@@ -304,6 +312,232 @@ const CONFIG = {
     // Supabase Edge Function URL for random cities
     randomCityUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-random-city',
 };
+
+// =============================================================================
+// STREAM MODE (24/7 BROADCAST RUNTIME)
+// =============================================================================
+
+function parseUrlFlag(value, defaultValue = false) {
+    if (value == null) return defaultValue;
+    const normalized = String(value).trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function parseUrlInt(value, defaultValue) {
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+const StreamConfig = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const enabled = parseUrlFlag(params.get('stream'), false);
+    const autostart = (params.get('autostart') || '').trim().toLowerCase();
+    const backend = (params.get('streamBackend') || 'local').trim().toLowerCase();
+    const supabaseFunctionBase = window?.PathfindrConfig?.supabase?.url
+        ? `${window.PathfindrConfig.supabase.url}/functions/v1`
+        : null;
+    const defaultCityApi = (backend === 'supabase' && supabaseFunctionBase)
+        ? `${supabaseFunctionBase}/stream-queue-next`
+        : '/api/next-city';
+    const defaultStateApi = (backend === 'supabase' && supabaseFunctionBase)
+        ? `${supabaseFunctionBase}/stream-state`
+        : '/api/stream-state';
+
+    return {
+        enabled,
+        backend,
+        autostartMode: autostart || (enabled ? 'visualizer' : ''),
+        noEscExit: parseUrlFlag(params.get('streamNoEscExit'), enabled),
+        hideUi: parseUrlFlag(params.get('streamHideUI'), false),
+        cityApiUrl: (params.get('streamCityApi') || defaultCityApi).trim(),
+        stateApiUrl: (params.get('streamStateApi') || defaultStateApi).trim(),
+        requestTimeoutMs: parseUrlInt(params.get('streamApiTimeoutMs'), 3500),
+        heartbeatIntervalMs: parseUrlInt(params.get('streamHeartbeatMs'), 15000),
+        pushState: parseUrlFlag(params.get('streamStatePush'), enabled),
+        streamStartMs: Date.now(),
+        lastHeartbeatPushAt: 0,
+        lastErrorLogAt: 0,
+    };
+})();
+
+function shouldAutostartStreamVisualizer() {
+    return StreamConfig.enabled && StreamConfig.autostartMode === 'visualizer';
+}
+
+function applyStreamUiMode() {
+    if (!StreamConfig.hideUi) return;
+
+    // Keep stream visuals clean; external overlays can provide metadata/CTA.
+    const toHide = [
+        'mode-selector',
+        'splash-screen',
+        'mode-exit-btn',
+        'fullscreen-btn',
+        'location-search-inline',
+        'mobile-menu-btn'
+    ];
+
+    toHide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+}
+
+function logStreamError(error) {
+    const now = Date.now();
+    if (now - StreamConfig.lastErrorLogAt < 30000) return;
+    StreamConfig.lastErrorLogAt = now;
+    console.warn('[StreamMode] City override unavailable:', error?.message || error);
+}
+
+function normalizeStreamCityPayload(payload) {
+    if (!payload) return null;
+
+    const candidate = payload.city || payload.nextCity || payload.location || payload;
+    if (!candidate || candidate.skip === true || candidate.available === false) return null;
+
+    const rawName = candidate.name || candidate.city || candidate.location;
+    const lat = Number(candidate.lat ?? candidate.latitude);
+    const lng = Number(candidate.lng ?? candidate.lon ?? candidate.longitude);
+    const zoom = Number(candidate.zoom);
+
+    let city = null;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        city = {
+            lat,
+            lng,
+            zoom: Number.isFinite(zoom) ? zoom : 15,
+            name: (typeof rawName === 'string' && rawName.trim()) ? rawName.trim() : `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+        };
+    } else if (typeof rawName === 'string' && rawName.trim()) {
+        city = findCityByName(rawName.trim());
+    }
+
+    if (!city) return null;
+
+    const requestedBy = candidate.requestedBy || payload.requestedBy || null;
+    const requestId = candidate.requestId || payload.requestId || null;
+    const queueDepthRaw = candidate.queueDepth ?? payload.queueDepth;
+    const queueDepth = Number(queueDepthRaw);
+
+    if (typeof requestedBy === 'string' && requestedBy.trim()) {
+        city.requestedBy = requestedBy.trim();
+    }
+    if (requestId != null) {
+        city.requestId = requestId;
+    }
+    if (Number.isFinite(queueDepth)) {
+        city.queueDepth = queueDepth;
+    }
+
+    return city;
+}
+
+function findCityByName(name) {
+    if (typeof name !== 'string') return null;
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return null;
+
+    const allCities = [...CONFIG.usCities, ...CONFIG.globalCities];
+
+    const exactCity = allCities.find(city => (city.name || '').toLowerCase() === normalized);
+    if (exactCity) return maybePickDistrict(exactCity);
+
+    for (const city of allCities) {
+        if (!city.districts || city.districts.length === 0) continue;
+        const district = city.districts.find(d => (d.name || '').toLowerCase() === normalized);
+        if (district) {
+            return {
+                lat: district.lat,
+                lng: district.lng,
+                zoom: district.zoom || city.zoom || 15,
+                name: `${district.name}, ${city.name.split(',')[0]}`,
+                parentCity: city.name,
+                wikiName: city.wikiName,
+                isDistrict: true,
+            };
+        }
+    }
+
+    const partialCity = allCities.find(city => (city.name || '').toLowerCase().includes(normalized));
+    if (partialCity) return maybePickDistrict(partialCity);
+
+    return null;
+}
+
+async function fetchStreamOverrideCity() {
+    if (!StreamConfig.enabled || !StreamConfig.cityApiUrl) return null;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), StreamConfig.requestTimeoutMs);
+
+    try {
+        const response = await fetch(StreamConfig.cityApiUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store',
+            signal: controller.signal
+        });
+
+        if (response.status === 204) return null;
+        if (!response.ok) return null;
+
+        const payload = await response.json();
+        return normalizeStreamCityPayload(payload);
+    } catch (error) {
+        logStreamError(error);
+        return null;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function pushStreamState(eventType, city = null) {
+    if (!StreamConfig.enabled || !StreamConfig.pushState || !StreamConfig.stateApiUrl) return;
+    const nowMs = Date.now();
+
+    if (eventType === 'heartbeat') {
+        if ((nowMs - StreamConfig.lastHeartbeatPushAt) < StreamConfig.heartbeatIntervalMs) {
+            return;
+        }
+        StreamConfig.lastHeartbeatPushAt = nowMs;
+    }
+
+    const payload = {
+        event: eventType,
+        timestamp: new Date().toISOString(),
+        uptimeMs: Math.max(0, nowMs - StreamConfig.streamStartMs),
+        streamBackend: StreamConfig.backend,
+        city: city ? {
+            name: city.name,
+            lat: city.lat,
+            lng: city.lng,
+            zoom: city.zoom || 15,
+            requestedBy: city.requestedBy || null,
+            requestId: city.requestId || null,
+        } : null,
+        queueDepth: city?.queueDepth ?? null,
+        visualizerCount: GameState?.visualizerState?.currentVisualization ?? 0,
+        visualizerMaxPerCity: GameState?.visualizerState?.maxPerCity ?? 0,
+    };
+
+    fetch(StreamConfig.stateApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true
+    }).catch(() => {
+        // No-op by design; stream should never block on telemetry.
+    });
+}
+
+async function getNextVisualizerCity() {
+    if (StreamConfig.enabled) {
+        const override = await fetchStreamOverrideCity();
+        if (override) return override;
+    }
+    return getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
+}
 
 // =============================================================================
 // GAME CONTROLLER - Central State Machine & Animation Coordinator
@@ -480,7 +714,8 @@ const GameController = {
             case GamePhase.LOADING:
                 // Minimal rendering during menus/loading
                 ctx.clearRect(0, 0, width, height);
-                if (GameState.useWebGL && GameState.edgeList?.length > 0) {
+                if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.edgeList?.length > 0) {
+                    WebGLRenderer.setGlobalOpacity(1.0);
                     WebGLRenderer.renderAmbient(performance.now());
                 }
                 break;
@@ -492,12 +727,18 @@ const GameController = {
         ctx.clearRect(0, 0, width, height);
 
         // Layer 0: WebGL road network
-        if (GameState.useWebGL && GameState.edgeList?.length > 0) {
+        if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.edgeList?.length > 0) {
+            WebGLRenderer.setGlobalOpacity(1.0);
             WebGLRenderer.renderAmbient(performance.now());
         }
 
+        // WebGL mode: draw virtual edges overlay on the 2D viz canvas
+        if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.showCustomRoads) {
+            drawVirtualEdgesOverlay(ctx, width, height, 1);
+        }
+
         // Layer 1: Canvas 2D fallback
-        if (!GameState.useWebGL && GameState.showCustomRoads) {
+        if ((!GameState.useWebGL || !WebGLRenderer.canUseWebGL) && GameState.showCustomRoads) {
             drawRoadNetwork(ctx);
         }
 
@@ -590,30 +831,67 @@ const CityFacts = {
     citiesQueried: new Set(),  // Track unique cities queried this session
 
     /**
+     * Resolve city input into a normalized object shape
+     */
+    resolveCityInput(cityInput) {
+        if (cityInput && typeof cityInput === 'object') {
+            return cityInput;
+        }
+
+        const cityName = typeof cityInput === 'string' ? cityInput : '';
+        if (GameState.currentCity?.name === cityName) {
+            return GameState.currentCity;
+        }
+
+        const allCities = [...CONFIG.usCities, ...CONFIG.globalCities];
+        const matchedCity = allCities.find(c => c.name === cityName);
+        return matchedCity || { name: cityName };
+    },
+
+    /**
+     * Build a stable cache key for city facts lookups
+     */
+    getCacheKey(cityInput) {
+        const city = this.resolveCityInput(cityInput);
+        return this.getWikiName(city).toLowerCase().trim();
+    },
+
+    /**
      * Fetch facts for a city from Supabase Edge Function
      * Results are cached locally and on the server
      */
-    async fetchFacts(cityName) {
+    async fetchFacts(cityInput) {
+        const city = this.resolveCityInput(cityInput);
+        const cityName = this.getWikiName(city);
+        const cacheKey = this.getCacheKey(city);
+        if (!cityName) return [];
+
         // In testing mode, log every unique city we query
-        if (this.TESTING_MODE && !this.citiesQueried.has(cityName)) {
-            this.citiesQueried.add(cityName);
+        if (this.TESTING_MODE && !this.citiesQueried.has(cacheKey)) {
+            this.citiesQueried.add(cacheKey);
             console.log(`[CityFacts] Testing mode: Queried ${this.citiesQueried.size} unique cities this session`);
             console.log(`[CityFacts] Cities: ${Array.from(this.citiesQueried).join(', ')}`);
         }
 
         // Check local cache first (still cache locally for performance)
-        if (this.cache.has(cityName)) {
-            return this.cache.get(cityName);
+        if (this.cache.has(cacheKey)) {
+            return this.cache.get(cacheKey);
         }
 
         try {
+            const requestBody = { city: cityName };
+            if (typeof city.lat === 'number' && typeof city.lng === 'number') {
+                requestBody.lat = city.lat;
+                requestBody.lng = city.lng;
+            }
+
             const response = await fetch(CONFIG.cityFactsUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
                 },
-                body: JSON.stringify({ city: cityName }),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -624,7 +902,7 @@ const CityFacts = {
             const facts = data.facts || [];
 
             // Cache locally
-            this.cache.set(cityName, facts);
+            this.cache.set(cacheKey, facts);
 
             return facts;
         } catch (error) {
@@ -637,28 +915,26 @@ const CityFacts = {
     /**
      * Get a random fact for the current city
      */
-    async getRandomFact(cityName) {
-        const facts = await this.fetchFacts(cityName);
+    async getRandomFact(cityInput) {
+        const facts = await this.fetchFacts(cityInput);
         if (facts.length === 0) return null;
 
         // Rotate through facts to avoid repetition
+        this.currentFact = facts[this.factIndex % facts.length];
         this.factIndex = (this.factIndex + 1) % facts.length;
-        this.currentFact = facts[this.factIndex];
         return this.currentFact;
     },
 
     /**
      * Display fact in the results panel
      */
-    async showFactInResults(cityName) {
+    async showFactInResults(cityInput) {
         const factEl = document.getElementById('location-fact');
         const factTextEl = document.getElementById('fact-text');
 
         if (!factEl || !factTextEl) return;
 
-        // Use wikiName if available for better lookups
-        const lookupName = this.getWikiName(cityName);
-        const fact = await this.getRandomFact(lookupName);
+        const fact = await this.getRandomFact(cityInput);
 
         if (fact) {
             factTextEl.textContent = fact;
@@ -671,32 +947,22 @@ const CityFacts = {
     /**
      * Get the Wikipedia-friendly name for a city
      */
-    getWikiName(cityName) {
-        // Check if this is the current city and it has a wikiName
-        if (GameState.currentCity?.name === cityName && GameState.currentCity?.wikiName) {
-            return GameState.currentCity.wikiName;
-        }
-
-        // Check if we have a wikiName defined for this city in CONFIG
-        const allCities = [...CONFIG.usCities, ...CONFIG.globalCities];
-        const city = allCities.find(c => c.name === cityName);
+    getWikiName(cityInput) {
+        const city = this.resolveCityInput(cityInput);
         if (city?.wikiName) return city.wikiName;
 
-        // Otherwise strip country/state suffix for better Wikipedia results
-        // "New York, NY" -> "New York"
-        // "Tokyo, Japan" -> "Tokyo"
-        return cityName.split(',')[0].trim();
+        // Preserve full location context (city, region, country) to avoid ambiguous lookups.
+        return (city?.name || '').trim();
     },
 
     /**
      * Display fact in the transition overlay
      */
-    async showFactInTransition(cityName) {
+    async showFactInTransition(cityInput) {
         const factEl = document.getElementById('transition-fact');
         if (!factEl) return;
 
-        const lookupName = this.getWikiName(cityName);
-        const fact = await this.getRandomFact(lookupName);
+        const fact = await this.getRandomFact(cityInput);
         factEl.textContent = fact || '';
     },
 
@@ -716,10 +982,9 @@ const CityFacts = {
     /**
      * Preload facts for a city (call during loading screens)
      */
-    preload(cityName) {
+    preload(cityInput) {
         // Fire and forget - just populate the cache
-        const lookupName = this.getWikiName(cityName);
-        this.fetchFacts(lookupName).catch(() => {});
+        this.fetchFacts(cityInput).catch(() => {});
     },
 
     // =========================================================================
@@ -738,7 +1003,7 @@ const CityFacts = {
     /**
      * Start the facts ticker for Explorer/Visualizer modes
      */
-    async startTicker(cityName) {
+    async startTicker(cityInput) {
         const tickerEl = document.getElementById('facts-ticker');
         const textEl = document.getElementById('ticker-text');
         if (!tickerEl || !textEl) return;
@@ -747,9 +1012,9 @@ const CityFacts = {
         this.stopTicker();
 
         // Get facts for this city
-        const lookupName = this.getWikiName(cityName);
-        this.ticker.facts = await this.fetchFacts(lookupName);
-        this.ticker.cityName = cityName;
+        const city = this.resolveCityInput(cityInput);
+        this.ticker.facts = await this.fetchFacts(city);
+        this.ticker.cityName = city?.name || null;
         this.ticker.currentIndex = 0;
         this.ticker.active = true;
 
@@ -804,13 +1069,14 @@ const CityFacts = {
     /**
      * Update ticker with new city (when map moves significantly)
      */
-    async updateTickerCity(cityName) {
+    async updateTickerCity(cityInput) {
         if (!this.ticker.active) return;
+        const city = this.resolveCityInput(cityInput);
+        const cityName = city?.name || '';
         if (cityName === this.ticker.cityName) return;
 
         // Fetch new facts
-        const lookupName = this.getWikiName(cityName);
-        const newFacts = await this.fetchFacts(lookupName);
+        const newFacts = await this.fetchFacts(city);
 
         if (newFacts.length > 0) {
             this.ticker.facts = newFacts;
@@ -964,6 +1230,10 @@ const WebGLRenderer = {
     needsHeatUpdate: false,
     needsExploredUpdate: false, // Flag for explored buffer upload
     globalOpacity: 1.0,         // For settling transition fadeout
+    supportsUint32Indices: false,
+    indexType: null,
+    indexArrayType: null,
+    canUseWebGL: true,
 
     // Uniforms
     uniforms: {
@@ -1009,6 +1279,7 @@ const WebGLRenderer = {
             uniform float u_time;
             uniform vec2 u_resolution;
             uniform vec2 u_center;
+            uniform float u_opacity;
 
             varying float v_heat;
             varying vec2 v_position;
@@ -1057,6 +1328,7 @@ const WebGLRenderer = {
                 float energyBoost = energyFlow * 0.15;
 
                 float alpha = (baseAlpha + energyBoost) * breathe;
+                alpha *= u_opacity;
 
                 gl_FragColor = vec4(color * alpha, alpha);
             }
@@ -1277,6 +1549,7 @@ const WebGLRenderer = {
             uniform float u_time;
             uniform vec2 u_resolution;
             uniform vec2 u_center;
+            uniform float u_opacity;
 
             varying float v_heat;
             varying vec2 v_position;
@@ -1300,6 +1573,7 @@ const WebGLRenderer = {
 
                 // Visible atmospheric glow
                 float alpha = mix(0.18, 0.04, dist) * breathe * flow;
+                alpha *= u_opacity;
 
                 gl_FragColor = vec4(color * alpha, alpha);
             }
@@ -1331,6 +1605,12 @@ const WebGLRenderer = {
         // Enable blending for transparency and glow
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        // Check for 32-bit index support
+        this.supportsUint32Indices = !!gl.getExtension('OES_element_index_uint');
+        this.indexType = gl.UNSIGNED_SHORT;
+        this.indexArrayType = Uint16Array;
+        this.canUseWebGL = true;
 
         // Compile shader programs
         this.programs.roads = this.createProgram(
@@ -1422,6 +1702,7 @@ const WebGLRenderer = {
             decaySpeed: gl.getUniformLocation(program, 'u_decaySpeed'),
             heatFloor: gl.getUniformLocation(program, 'u_heatFloor'),
             vizStartTime: gl.getUniformLocation(program, 'u_vizStartTime'),
+            opacity: gl.getUniformLocation(program, 'u_opacity'),
             // Pre-computed effect values (CPU-side sin calculations)
             flicker: gl.getUniformLocation(program, 'u_flicker'),
             frontierPulse: gl.getUniformLocation(program, 'u_frontierPulse'),
@@ -1454,18 +1735,50 @@ const WebGLRenderer = {
 
     // Build edge geometry buffers from road network
     buildEdgeBuffers() {
-        if (!this.initialized || !GameState.edgeList || GameState.edgeList.length === 0) {
-            return;
+        if (!this.initialized || !GameState.edgeList) {
+            this.canUseWebGL = false;
+            return false;
+        }
+
+        if (GameState.edgeList.length === 0) {
+            this.edgeCount = 0;
+            this.indexCount = 0;
+            this.exploredIndexCount = 0;
+            this.edgeKeyToIndex.clear();
+            this.exploredEdgeSet.clear();
+            this.canUseWebGL = true;
+            return true;
         }
 
         const gl = this.gl;
         const edges = GameState.edgeList;
         const map = GameState.map;
 
-        if (!map) return;
+        if (!map) {
+            this.canUseWebGL = false;
+            return false;
+        }
 
         this.edgeCount = edges.length;
         this.edgeKeyToIndex.clear();
+
+        const vertexCount = edges.length * 4;
+        const needsUint32 = vertexCount > 65535;
+
+        if (needsUint32 && !this.supportsUint32Indices) {
+            console.warn('WebGL index limit exceeded for this city. Falling back to Canvas rendering.');
+            this.canUseWebGL = false;
+            this.indexCount = 0;
+            this.exploredIndexCount = 0;
+            this.exploredEdgeSet.clear();
+            this.needsHeatUpdate = false;
+            this.needsExploredUpdate = false;
+            return false;
+        }
+
+        this.canUseWebGL = true;
+        this.indexType = needsUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+        this.indexArrayType = needsUint32 ? Uint32Array : Uint16Array;
 
         // Each edge needs 4 vertices (2 triangles for thick line)
         // Position: x, y for each vertex
@@ -1528,7 +1841,7 @@ const WebGLRenderer = {
         // Each edge = 2 triangles = 6 indices
         // Vertices per edge: 0=from-left, 1=from-right, 2=to-left, 3=to-right
         // Triangle 1: 0, 1, 2  |  Triangle 2: 1, 3, 2
-        const indices = new Uint16Array(edges.length * 6);
+        const indices = new this.indexArrayType(edges.length * 6);
         for (let i = 0; i < edges.length; i++) {
             const baseVertex = i * 4;
             const baseIndex = i * 6;
@@ -1557,12 +1870,13 @@ const WebGLRenderer = {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
         // Initialize explored indices array (empty initially, populated during A*)
-        this.exploredIndicesData = new Uint16Array(edges.length * 6);  // Max same size
+        this.exploredIndicesData = new this.indexArrayType(edges.length * 6);  // Max same size
         this.exploredIndexCount = 0;
         this.exploredEdgeSet.clear();
         this.needsExploredUpdate = false;
 
         console.log(`WebGL: Built buffers for ${edges.length} edges (${this.indexCount} indices)`);
+        return true;
     },
 
     // Update edge positions when map moves/zooms
@@ -1721,7 +2035,7 @@ const WebGLRenderer = {
 
     // Main render function
     render(time) {
-        if (!this.initialized || !this.gl) return;
+        if (!this.initialized || !this.gl || !this.canUseWebGL) return;
 
         const gl = this.gl;
         const width = this.canvas.width;
@@ -1758,7 +2072,7 @@ const WebGLRenderer = {
 
     // Render ONLY ambient roads (for continuous background rendering)
     renderAmbient(time) {
-        if (!this.initialized || !this.gl) return;
+        if (!this.initialized || !this.gl || !this.canUseWebGL) return;
 
         const gl = this.gl;
         const width = this.canvas.width;
@@ -1793,6 +2107,7 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wide soft glow
         gl.uniform2f(program.uniforms.center, width / 2, height / 2);
+        if (program.uniforms.opacity) gl.uniform1f(program.uniforms.opacity, this.globalOpacity);
 
         // Bind buffers
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
@@ -1808,7 +2123,7 @@ const WebGLRenderer = {
         gl.vertexAttribPointer(program.attributes.heat, 1, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
-        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, this.indexType, 0);
     },
 
     // Render ambient road network
@@ -1823,6 +2138,7 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 3.0);
         gl.uniform2f(program.uniforms.center, width / 2, height / 2);
+        if (program.uniforms.opacity) gl.uniform1f(program.uniforms.opacity, this.globalOpacity);
 
         // Bind position buffer
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgePositions);
@@ -1841,7 +2157,7 @@ const WebGLRenderer = {
 
         // Bind index buffer and draw ALL edges in a single call
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.edgeIndices);
-        gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.indexCount, this.indexType, 0);
     },
 
     // Render heat-mapped exploration edges
@@ -1889,7 +2205,7 @@ const WebGLRenderer = {
 
         // Draw ONLY explored edges (massive performance win!)
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.exploredIndices);
-        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, this.indexType, 0);
     },
 
     // Render glow effect (wider, more transparent)
@@ -1934,7 +2250,14 @@ const WebGLRenderer = {
 
         // Draw ONLY explored edges (massive performance win!)
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffers.exploredIndices);
-        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.exploredIndexCount, this.indexType, 0);
+    },
+
+    clear() {
+        if (!this.gl || !this.canvas) return;
+        const gl = this.gl;
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
     },
 
     // Cleanup
@@ -3444,12 +3767,13 @@ const AmbientViz = {
         ctx.clearRect(0, 0, width, height);
 
         // Layer 0: WebGL road network (always render if available and we have edges)
-        if (GameState.useWebGL && GameState.edgeList && GameState.edgeList.length > 0) {
+        if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.edgeList && GameState.edgeList.length > 0) {
+            WebGLRenderer.setGlobalOpacity(1.0);
             WebGLRenderer.renderAmbient(performance.now());
         }
 
         // Layer 1: Orange road network Canvas 2D fallback (if no WebGL)
-        if (!GameState.useWebGL && GameState.showCustomRoads) {
+        if ((!GameState.useWebGL || !WebGLRenderer.canUseWebGL) && GameState.showCustomRoads) {
             drawRoadNetwork(ctx);
         }
 
@@ -3512,7 +3836,7 @@ const AmbientViz = {
             const effectiveIntensity = round.intensity * vizDimFactor;
             ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
-            // Render optimal path with contrasting color (dimmed during active viz)
+            // Render optimal path with distinct optimal color (dimmed during active viz)
             if (round.optimalPath.length > 1) {
                 const optimalPoints = round.optimalPath.map(nodeId => {
                     const pos = GameState.nodes.get(nodeId);
@@ -3524,7 +3848,7 @@ const AmbientViz = {
                 }).filter(p => p !== null);
 
                 if (optimalPoints.length > 1) {
-                    // Use contrasting optimal color (fall back to exploration color if not set)
+                    // Use round-specific hot color for optimal path
                     const pathColor = round.hotColor || round.color;
                     // Initialize sweep for this path if not exists
                     if (!round.optimalSweep) {
@@ -3773,7 +4097,6 @@ const AmbientViz = {
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.globalCompositeOperation = 'lighter';
 
         // Build path with segment-level clipping (skip horizon-crossing segments)
         const maxSegmentLength = 3000; // Skip segments longer than this (horizon artifacts)
@@ -3798,29 +4121,37 @@ const AmbientViz = {
             }
         }
 
+        // Dark outline pass for contrast against busy backgrounds
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = `rgba(10, 10, 18, ${0.25 + 0.35 * effectiveIntensity})`;
+        ctx.lineWidth = 12;
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'lighter';
+
         // ENHANCED: Wide atmospheric bloom - makes path GLOW prominently
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.15 * effectiveIntensity})`;
-        ctx.lineWidth = 32;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
+        ctx.lineWidth = 36;
         ctx.stroke();
 
         // ENHANCED: Outer glow - brighter and wider
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.25 * effectiveIntensity})`;
-        ctx.lineWidth = 18;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.3 * effectiveIntensity})`;
+        ctx.lineWidth = 22;
         ctx.stroke();
 
         // ENHANCED: Mid glow - stronger presence
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
-        ctx.lineWidth = 10;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * effectiveIntensity})`;
+        ctx.lineWidth = 12;
         ctx.stroke();
 
         // ENHANCED: Core - bright and solid
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.95 * effectiveIntensity})`;
+        ctx.lineWidth = 6;
         ctx.stroke();
 
         // ENHANCED: Hot center highlight - white-hot core
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * effectiveIntensity})`;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
         // ASMR: Single elegant sweep instead of chaotic pulses
@@ -3918,7 +4249,6 @@ const AmbientViz = {
 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.globalCompositeOperation = 'lighter';
 
         // Build path with segment-level clipping (skip horizon-crossing segments)
         const maxSegmentLength = 3000;
@@ -3942,29 +4272,37 @@ const AmbientViz = {
             }
         }
 
+        // Dark outline for contrast
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = `rgba(10, 10, 18, ${0.22 + 0.3 * effectiveIntensity})`;
+        ctx.lineWidth = 10;
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'lighter';
+
         // ENHANCED: Wide atmospheric bloom - the "power" aura
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.12 * effectiveIntensity})`;
-        ctx.lineWidth = 28;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.16 * effectiveIntensity})`;
+        ctx.lineWidth = 32;
         ctx.stroke();
 
         // ENHANCED: Outer glow - visible presence
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.22 * effectiveIntensity})`;
-        ctx.lineWidth = 16;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.26 * effectiveIntensity})`;
+        ctx.lineWidth = 20;
         ctx.stroke();
 
         // ENHANCED: Mid glow - stronger
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.45 * effectiveIntensity})`;
-        ctx.lineWidth = 9;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.55 * effectiveIntensity})`;
+        ctx.lineWidth = 11;
         ctx.stroke();
 
         // ENHANCED: Core line - bright and solid
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.85 * effectiveIntensity})`;
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.95 * effectiveIntensity})`;
+        ctx.lineWidth = 5;
         ctx.stroke();
 
         // ENHANCED: Hot center - white-hot core
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 * effectiveIntensity})`;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * effectiveIntensity})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
         // ASMR: Render elegant sweep instead of chaotic pulses
@@ -4571,7 +4909,7 @@ const ElectricitySystem = {
         // Update sweep position with easing
         const elapsed = (performance.now() - sweep.startTime) / 1000;
         // Ease in-out cubic for smooth start/stop feel
-        const duration = 5.0; // 5 seconds for full sweep
+        const duration = 3.2; // Faster sweep cadence
         const cycleTime = elapsed % (duration * 2); // ping-pong
         let rawProgress;
         if (cycleTime < duration) {
@@ -4631,10 +4969,10 @@ const ElectricitySystem = {
 
         // Gradient: transparent tail -> colored body -> bright white head
         gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
-        gradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.3 * intensity})`);
-        gradient.addColorStop(0.7, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.7 * intensity})`);
-        gradient.addColorStop(0.9, `rgba(255, 255, 255, ${0.6 * intensity})`);
-        gradient.addColorStop(1.0, `rgba(255, 255, 255, ${0.9 * intensity})`);
+        gradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, ${0.6 * intensity})`);
+        gradient.addColorStop(0.7, `rgba(${color.r}, ${color.g}, ${color.b}, ${1.0 * intensity})`);
+        gradient.addColorStop(0.9, `rgba(255, 255, 255, ${0.9 * intensity})`);
+        gradient.addColorStop(1.0, `rgba(255, 255, 255, ${1.0 * intensity})`);
 
         // Draw the sweep segment with multiple layers for glow
         const drawSweepSegment = (width, alpha) => {
@@ -4653,13 +4991,13 @@ const ElectricitySystem = {
         };
 
         // Layered glow effect
-        drawSweepSegment(16, 0.15);  // Wide atmospheric glow
-        drawSweepSegment(8, 0.35);   // Mid glow
-        drawSweepSegment(4, 0.7);    // Core
-        drawSweepSegment(2, 1.0);    // Bright center
+        drawSweepSegment(28, 0.25);  // Wide atmospheric glow
+        drawSweepSegment(16, 0.55);  // Mid glow
+        drawSweepSegment(7, 0.95);   // Core
+        drawSweepSegment(3, 1.0);    // Bright center
 
         // Bright orb at the head for that satisfying leading edge
-        const orbSize = 8 + Math.sin(elapsed * 2) * 2; // Subtle breathing
+        const orbSize = 12 + Math.sin(elapsed * 2) * 3; // Subtle breathing
         const orbGradient = ctx.createRadialGradient(
             headPoint.x, headPoint.y, 0,
             headPoint.x, headPoint.y, orbSize
@@ -5087,6 +5425,7 @@ const GameState = {
         currentVisualization: 0,
         maxPerCity: 5,
         loopTimeout: null,
+        loopRunning: false,
         delayBetweenRuns: 3000,  // ms between visualizations
     },
 
@@ -5104,8 +5443,12 @@ const GameState = {
         citiesCompleted: 0,
         preloadedCity: null,
         preloadedData: null,
+        preloadRequestId: 0,
         cityScores: [],
     },
+
+    // Road network load coordination
+    roadLoadRequestId: 0,
 
     // Game state
     startNode: null,
@@ -5121,6 +5464,7 @@ const GameState = {
     userDrawnPoints: [],    // Raw lat/lng points (actual mouse path for distance calc)
     userDistance: 0,        // Distance in km (single value used everywhere)
     userPathLayer: null,
+    virtualNodeIds: new Set(),
 
     // Electric trace animation for new path segments
     traceAnimation: {
@@ -5158,6 +5502,8 @@ const GameState = {
         phase: 'idle',
         pathProgress: 0,
         pulsePhase: 0,
+        optimalRevealStartTime: 0,
+        optimalRevealEndTime: 0,
     },
 
     // Layers
@@ -5354,11 +5700,20 @@ function initMap() {
     // Unified map change handler
     function onMapChange() {
         ScreenCoordCache.invalidate();  // Invalidate coordinate cache
-        if (GameState.useWebGL) WebGLRenderer.updateEdgePositions();
+        if (GameState.useWebGL && WebGLRenderer.canUseWebGL) WebGLRenderer.updateEdgePositions();
         updateMarkerPositions();
         redrawUserPath();
-        if (GameState.showCustomRoads && !GameState.vizState.active) drawRoadNetwork();
-        if (GameState.vizState.active) renderVisualization();
+        // Let the main render loop handle drawing to avoid over-rendering during pan/zoom.
+        if (!GameController.animationId) {
+            if (GameState.vizState.active) {
+                renderVisualization();
+            } else if (GameState.showCustomRoads) {
+                if (GameState.vizCtx) {
+                    GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
+                }
+                drawRoadNetwork();
+            }
+        }
     }
 
     // MapLibre events - includes pitch and rotate
@@ -5398,7 +5753,7 @@ function resizeCanvases() {
     GameState.vizCanvas.height = height;
 
     // Resize WebGL canvas
-    if (GameState.useWebGL) {
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.resize();
     }
 
@@ -5717,7 +6072,15 @@ function setupMobileTouchHandling() {
 // ROAD NETWORK LOADING
 // =============================================================================
 
-async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
+async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, requestId = null) {
+    if (requestId === null) {
+        GameState.roadLoadRequestId = (GameState.roadLoadRequestId || 0) + 1;
+        requestId = GameState.roadLoadRequestId;
+    }
+
+    if (requestId !== GameState.roadLoadRequestId) return;
+    const isStale = () => requestId !== GameState.roadLoadRequestId;
+
     const maxRetries = 4; // More retries since we have multiple servers
     const baseDelay = 1500;
     const servers = CONFIG.overpassServers;
@@ -5751,7 +6114,7 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
         const query = `
             [out:json][timeout:25];
             (
-                way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+                way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
                 (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
             );
             out body;
@@ -5771,10 +6134,12 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
 
         clearTimeout(timeoutId);
 
+        if (isStale()) return;
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
         const data = await response.json();
 
+        if (isStale()) return;
         // Validate we got actual data
         if (!data.elements || data.elements.length === 0) {
             throw new Error('No road data returned');
@@ -5782,6 +6147,7 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
 
         processRoadData(data);
 
+        if (isStale()) return;
         document.getElementById('current-location').textContent = location.name;
         hideLoading();
 
@@ -5798,6 +6164,7 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
         }
 
     } catch (error) {
+        if (isStale()) return;
         console.error(`Road network loading (server ${serverIndex + 1}, attempt ${retryCount + 1}):`, error);
 
         if (retryCount < maxRetries) {
@@ -5815,7 +6182,8 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0) {
             showLoading(waitMessages[Math.floor(Math.random() * waitMessages.length)]);
 
             await new Promise(resolve => setTimeout(resolve, delay));
-            return loadRoadNetwork(location, retryCount + 1, nextServer);
+            if (isStale()) return;
+            return loadRoadNetwork(location, retryCount + 1, nextServer, requestId);
         } else {
             // Max retries exceeded - friendly message with retry button
             showLoading(`
@@ -5835,6 +6203,7 @@ function processRoadData(data) {
     GameState.edges.clear();
     GameState.edgeList = [];
     GameState.edgeLookup.clear();
+    GameState.virtualNodeIds.clear();
 
     const nodeMap = new Map();
     for (const element of data.elements) {
@@ -5890,9 +6259,15 @@ function processRoadData(data) {
     // Invalidate coordinate cache - new road data loaded
     ScreenCoordCache.invalidate();
 
-    // Build WebGL buffers for road network
-    if (GameState.useWebGL) {
-        WebGLRenderer.buildEdgeBuffers();
+    // Build WebGL buffers for road network (fallback to Canvas if too large)
+    if (WebGLRenderer.initialized) {
+        const canUseWebGL = WebGLRenderer.buildEdgeBuffers();
+        GameState.useWebGL = canUseWebGL;
+        if (!canUseWebGL) {
+            WebGLRenderer.clear();
+        }
+    } else {
+        GameState.useWebGL = false;
     }
 
     // Draw road network if custom view is enabled
@@ -5963,8 +6338,8 @@ async function nextRound() {
         GameState.currentRound++;
         updateRoundDisplay();
 
-        // Trigger preload during round 4 if continuous play is enabled
-        if (GameState.currentRound === 4 && GameState.continuousPlay.enabled) {
+        // Trigger preload earlier (round 2) if continuous play is enabled
+        if (GameState.currentRound === 2 && GameState.continuousPlay.enabled) {
             preloadNextCity();
         }
 
@@ -6036,6 +6411,7 @@ function selectRandomEndpoints() {
     } else {
         nodeIds = Array.from(GameState.nodes.keys());
     }
+    nodeIds = nodeIds.filter(nodeId => !GameState.nodes.get(nodeId)?.virtual);
 
     if (nodeIds.length < 2) {
         console.error('Not enough nodes!');
@@ -6351,7 +6727,8 @@ function redrawUserPath() {
 
     // Get animation state
     const elec = GameState.userPathElectricity;
-    const time = performance.now() * 0.001;
+    const now = performance.now();
+    const time = now * 0.001;
     elec.phase = time;
 
     // Organic flicker - more pronounced for "human" feel
@@ -6905,7 +7282,7 @@ async function runEpicVisualization(explored, path) {
                 const edgeKey = `${Math.min(nodeId, neighbor)}-${Math.max(nodeId, neighbor)}`;
                 viz.edgeHeat.set(edgeKey, 1.0);
                 // Sync to WebGL
-                if (GameState.useWebGL) {
+                if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
                     WebGLRenderer.setEdgeHeat(edgeKey, 1.0);
                 }
             }
@@ -6930,6 +7307,8 @@ async function runEpicVisualization(explored, path) {
 
     // Animate optimal path - BATCHED for performance
     viz.phase = 'path';
+    viz.optimalRevealStartTime = performance.now();
+    viz.optimalRevealEndTime = 0;
 
     // Target ~1.5 seconds for path animation regardless of path length
     const targetDuration = 1500 / speed;
@@ -6953,6 +7332,7 @@ async function runEpicVisualization(explored, path) {
 
     viz.pathProgress = path.length - 1;
     viz.phase = 'complete';
+    viz.optimalRevealEndTime = performance.now();
 
     // Final burst - limited
     const endPos = GameState.nodes.get(path[path.length - 1]);
@@ -7023,7 +7403,7 @@ function startRenderLoop() {
 }
 
 // Ambient road network - subtle glow that stays locked to roads
-function drawAmbientRoads(ctx, time, width, height) {
+function drawAmbientRoads(ctx, time, width, height, opacity = 1) {
     const edges = ScreenCoordCache.getEdges();
     if (edges.length === 0) return;
 
@@ -7047,7 +7427,7 @@ function drawAmbientRoads(ctx, time, width, height) {
     };
 
     // Outer warm glow layer - using ambient.outer
-    ctx.strokeStyle = `rgba(${ambient.outer.r}, ${ambient.outer.g}, ${ambient.outer.b}, ${0.2 * breathe})`;
+    ctx.strokeStyle = `rgba(${ambient.outer.r}, ${ambient.outer.g}, ${ambient.outer.b}, ${0.2 * breathe * opacity})`;
     ctx.lineWidth = 6;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -7059,7 +7439,7 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.stroke();
 
     // Mid glow layer - using ambient.mid
-    ctx.strokeStyle = `rgba(${ambient.mid.r}, ${ambient.mid.g}, ${ambient.mid.b}, ${0.22 * breathe})`;
+    ctx.strokeStyle = `rgba(${ambient.mid.r}, ${ambient.mid.g}, ${ambient.mid.b}, ${0.22 * breathe * opacity})`;
     ctx.lineWidth = 3;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -7071,7 +7451,7 @@ function drawAmbientRoads(ctx, time, width, height) {
     ctx.stroke();
 
     // Core roads - using ambient.core (warm amber)
-    ctx.strokeStyle = `rgba(${ambient.core.r}, ${ambient.core.g}, ${ambient.core.b}, ${0.15 * breathe})`;
+    ctx.strokeStyle = `rgba(${ambient.core.r}, ${ambient.core.g}, ${ambient.core.b}, ${0.15 * breathe * opacity})`;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < edges.length; i++) {
@@ -7118,7 +7498,8 @@ function renderVisualization() {
 
     viz.pulsePhase += CONFIG.viz.pulseSpeed;
 
-    const time = performance.now() * 0.001;
+    const now = performance.now();
+    const time = now * 0.001;
     // Enhanced organic flicker - multiple layered sine waves with phase offsets
     const flicker = 0.88 +
         Math.sin(time * 23) * 0.03 +           // Primary pulse
@@ -7165,7 +7546,7 @@ function renderVisualization() {
         : CONFIG.viz.heatFloor;
 
     // Only run CPU decay loop for Canvas 2D fallback
-    if (!GameState.useWebGL) {
+    if (!GameState.useWebGL || !WebGLRenderer.canUseWebGL) {
         for (const [nodeId, heat] of viz.nodeHeat) {
             const newHeat = heat * settlingDecay;
             viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
@@ -7193,19 +7574,24 @@ function renderVisualization() {
         ctx.restore();
     }
 
+    // Dim background roads during optimal path reveal
+    const optimalDimMin = 0.45;
+    let roadOpacity = 1;
+    if (viz.phase === 'path') {
+        roadOpacity = optimalDimMin;
+    } else if (viz.phase === 'complete' && viz.optimalRevealEndTime) {
+        const t = Math.min(1, (now - viz.optimalRevealEndTime) / 600);
+        const easeOut = 1 - Math.pow(1 - t, 2);
+        roadOpacity = optimalDimMin + (1 - optimalDimMin) * easeOut;
+    }
+
     // Use WebGL for road and heat rendering
-    if (GameState.useWebGL) {
-        // During settling, reduce WebGL opacity
-        if (viz.phase === 'settling') {
-            WebGLRenderer.setGlobalOpacity(heatOpacity);
-        }
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
+        WebGLRenderer.setGlobalOpacity(roadOpacity);
         WebGLRenderer.render(performance.now());
-        if (viz.phase === 'settling') {
-            WebGLRenderer.setGlobalOpacity(1.0);
-        }
     } else {
         // Canvas 2D fallback - draw ambient road network
-        drawAmbientRoads(ctx, time, width, height);
+        drawAmbientRoads(ctx, time, width, height, roadOpacity);
 
         // Batch render explored edges
         ctx.globalCompositeOperation = 'lighter';
@@ -7460,7 +7846,7 @@ function drawOptimalPath(ctx) {
 
     if (path.length < 2) return;
 
-    // Get current visualization's optimal color (hot shade for visibility)
+    // Use round-specific hot color for optimal path (round-coded)
     const theme = getCurrentVizTheme();
     const oc = theme.hot;
 
@@ -7479,43 +7865,56 @@ function drawOptimalPath(ctx) {
     ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
 
-    // CLEAN OPTIMAL PATH TRACE - Simple, elegant layers
+    // CLEAN OPTIMAL PATH TRACE - Boosted contrast for readability
+    // Dark outline pass for separation against busy backgrounds
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(10, 10, 18, 0.55)`;
+    ctx.lineWidth = 14;
+    drawSmoothPath(ctx, points);
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'lighter';
+
     // Wide atmospheric bloom
-    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.08)`;
-    ctx.lineWidth = 24;
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.16)`;
+    ctx.lineWidth = 30;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Outer glow
-    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.18)`;
-    ctx.lineWidth = 12;
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.30)`;
+    ctx.lineWidth = 18;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Main colored line
-    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.7)`;
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.95)`;
+    ctx.lineWidth = 7;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Bright white core - crisp definition
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth = 3;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // LEAD POINT during tracing - clean bright dot
+    // LEAD POINT during tracing - boosted visibility with particle-like head
     if (progress < path.length - 1 && points.length > 0) {
         const leadPoint = points[points.length - 1];
+        const t = performance.now() * 0.001;
+        const pulse = 0.6 + 0.4 * Math.sin(t * 6.0);
+        const ringPulse = 0.4 + 0.6 * Math.sin(t * 3.2 + 1.7);
+
         ctx.globalCompositeOperation = 'lighter';
 
-        // Simple clean glow
-        const radius = 14;
+        // Core glow
+        const radius = 20 + 7 * pulse;
         const gradient = ctx.createRadialGradient(leadPoint.x, leadPoint.y, 0, leadPoint.x, leadPoint.y, radius);
         gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.3, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.8)`);
+        gradient.addColorStop(0.3, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.9)`);
         gradient.addColorStop(1, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0)`);
 
         ctx.fillStyle = gradient;
@@ -7523,6 +7922,41 @@ function drawOptimalPath(ctx) {
         ctx.arc(leadPoint.x, leadPoint.y, radius, 0, Math.PI * 2);
         ctx.fill();
 
+        // Pulsing ring
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, ${0.35 + 0.35 * ringPulse})`;
+        ctx.beginPath();
+        ctx.arc(leadPoint.x, leadPoint.y, radius * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Particle sprite on the head if available
+        const sprite = AmbientViz.sprites?.glowWhite || AmbientViz.sprites?.glowCyan;
+        if (sprite) {
+            const size = 24 + 8 * pulse;
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(sprite, leadPoint.x - size / 2, leadPoint.y - size / 2, size, size);
+        }
+
+        // Subtle spark tail behind the head (uses last few points)
+        const tailCount = Math.min(12, points.length);
+        for (let i = 1; i <= tailCount; i++) {
+            const idx = points.length - 1 - i;
+            if (idx < 0) break;
+            const p = points[idx];
+            const fade = 1 - i / (tailCount + 1);
+            const tailSize = 16 + 10 * fade;
+            ctx.globalAlpha = 0.55 * fade;
+            if (sprite) {
+                ctx.drawImage(sprite, p.x - tailSize / 2, p.y - tailSize / 2, tailSize, tailSize);
+            } else {
+                ctx.fillStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, ${0.55 * fade})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, tailSize * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -7621,9 +8055,11 @@ function clearVisualizationState() {
     viz.particles = [];
     viz.phase = 'idle';
     viz.pathProgress = 0;
+    viz.optimalRevealStartTime = 0;
+    viz.optimalRevealEndTime = 0;
 
     // Clear WebGL heat data
-    if (GameState.useWebGL) {
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.clearHeat();
     }
 
@@ -7662,8 +8098,12 @@ function clearVisualization() {
  * This ensures the path always follows valid roads.
  */
 function addPointToUserPath(lat, lng) {
-    const targetNode = findNearestNode(lat, lng);
-    if (targetNode === null) return false;
+    const snapTarget = findSnapTarget(lat, lng);
+    if (!snapTarget) return false;
+
+    const targetNode = snapTarget.type === 'node'
+        ? snapTarget.nodeId
+        : createVirtualNode(snapTarget.point, snapTarget.fromNode, snapTarget.toNode);
 
     const lastNode = GameState.userPathNodes[GameState.userPathNodes.length - 1];
 
@@ -8199,7 +8639,14 @@ async function animateScoreCountUp(targetScore, targetEfficiency) {
 
 // snapPathToRoads() removed - snapping now happens in real-time via addPointToUserPath()
 
-function findNearestNode(lat, lng) {
+function getSnapRadiusMeters() {
+    const maxDistanceKm = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    const maxDistanceMeters = maxDistanceKm * 1000;
+    return Math.min(120, Math.max(40, maxDistanceMeters * 0.6));
+}
+
+function findNearestNodeWithDist(lat, lng, options = {}) {
+    const { ignoreVirtual = true } = options;
     let nearestNode = null;
     let nearestDist = Infinity;
 
@@ -8209,6 +8656,7 @@ function findNearestNode(lat, lng) {
     for (const [nodeId, pos] of GameState.nodes) {
         // Skip nodes not in the largest component
         if (validNodes instanceof Set && !validNodes.has(nodeId)) continue;
+        if (ignoreVirtual && pos?.virtual) continue;
 
         const dist = haversineDistance(lat, lng, pos.lat, pos.lng);
         if (dist < nearestDist) {
@@ -8217,7 +8665,125 @@ function findNearestNode(lat, lng) {
         }
     }
 
-    return nearestNode;
+    return { nodeId: nearestNode, distance: nearestDist };
+}
+
+function findNearestNode(lat, lng) {
+    return findNearestNodeWithDist(lat, lng).nodeId;
+}
+
+function findNearestEdgePoint(lat, lng, maxDistanceMeters) {
+    const originLat = lat;
+    const originLng = lng;
+    const originLatRad = originLat * Math.PI / 180;
+    const metersPerDegLat = 111320;
+    const metersPerDegLng = 111320 * Math.cos(originLatRad);
+
+    const maxLatDelta = maxDistanceMeters / metersPerDegLat;
+    const maxLngDelta = metersPerDegLng > 0 ? maxDistanceMeters / metersPerDegLng : maxLatDelta;
+
+    let best = null;
+    let bestDist = Infinity;
+
+    const validNodes = GameState.debug.largestComponentNodes;
+
+    for (const edge of GameState.edgeList) {
+        const posA = edge.fromPos;
+        const posB = edge.toPos;
+
+        // Skip edges not in the largest component (if available)
+        if (validNodes instanceof Set && (!validNodes.has(edge.from) || !validNodes.has(edge.to))) continue;
+
+        // Quick bounding box filter around the click
+        if (posA.lat < originLat - maxLatDelta && posB.lat < originLat - maxLatDelta) continue;
+        if (posA.lat > originLat + maxLatDelta && posB.lat > originLat + maxLatDelta) continue;
+        if (posA.lng < originLng - maxLngDelta && posB.lng < originLng - maxLngDelta) continue;
+        if (posA.lng > originLng + maxLngDelta && posB.lng > originLng + maxLngDelta) continue;
+
+        // Convert to local meters with click as origin
+        const ax = (posA.lng - originLng) * metersPerDegLng;
+        const ay = (posA.lat - originLat) * metersPerDegLat;
+        const bx = (posB.lng - originLng) * metersPerDegLng;
+        const by = (posB.lat - originLat) * metersPerDegLat;
+
+        const abx = bx - ax;
+        const aby = by - ay;
+        const abLenSq = (abx * abx) + (aby * aby);
+        if (abLenSq === 0) continue;
+
+        // Project origin (0,0) onto segment AB
+        let t = -((ax * abx) + (ay * aby)) / abLenSq;
+        t = Math.max(0, Math.min(1, t));
+
+        const cx = ax + abx * t;
+        const cy = ay + aby * t;
+        const dist = Math.sqrt((cx * cx) + (cy * cy));
+
+        if (dist < bestDist) {
+            const snappedLat = originLat + (cy / metersPerDegLat);
+            const snappedLng = originLng + (cx / metersPerDegLng);
+            bestDist = dist;
+            best = {
+                fromNode: edge.from,
+                toNode: edge.to,
+                point: { lat: snappedLat, lng: snappedLng },
+                distance: dist
+            };
+        }
+    }
+
+    return best;
+}
+
+function findSnapTarget(lat, lng) {
+    const maxSnapDist = getSnapRadiusMeters();
+    const nearestNode = findNearestNodeWithDist(lat, lng, { ignoreVirtual: true });
+    const nearestEdge = findNearestEdgePoint(lat, lng, maxSnapDist);
+
+    if (!nearestEdge && (!nearestNode.nodeId || nearestNode.distance > maxSnapDist)) {
+        return null;
+    }
+
+    if (nearestEdge && nearestEdge.distance <= maxSnapDist &&
+        (!nearestNode.nodeId || nearestEdge.distance < nearestNode.distance)) {
+        return {
+            type: 'edge',
+            fromNode: nearestEdge.fromNode,
+            toNode: nearestEdge.toNode,
+            point: nearestEdge.point
+        };
+    }
+
+    if (nearestNode.nodeId && nearestNode.distance <= maxSnapDist) {
+        return { type: 'node', nodeId: nearestNode.nodeId };
+    }
+
+    return null;
+}
+
+function createVirtualNode(point, fromNode, toNode) {
+    const nodeId = `virtual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    GameState.nodes.set(nodeId, { lat: point.lat, lng: point.lng, virtual: true });
+    GameState.virtualNodeIds.add(nodeId);
+
+    const posA = GameState.nodes.get(fromNode);
+    const posB = GameState.nodes.get(toNode);
+    if (!posA || !posB) return nodeId;
+
+    const weightA = haversineDistance(point.lat, point.lng, posA.lat, posA.lng);
+    const weightB = haversineDistance(point.lat, point.lng, posB.lat, posB.lng);
+
+    if (!GameState.edges.has(nodeId)) GameState.edges.set(nodeId, []);
+    if (!GameState.edges.has(fromNode)) GameState.edges.set(fromNode, []);
+    if (!GameState.edges.has(toNode)) GameState.edges.set(toNode, []);
+
+    GameState.edges.get(nodeId).push({ neighbor: fromNode, weight: weightA });
+    GameState.edges.get(nodeId).push({ neighbor: toNode, weight: weightB });
+
+    GameState.edges.get(fromNode).push({ neighbor: nodeId, weight: weightA });
+    GameState.edges.get(toNode).push({ neighbor: nodeId, weight: weightB });
+
+    return nodeId;
 }
 
 /**
@@ -8484,6 +9050,14 @@ function initSplashScreen() {
     const splashScreen = document.getElementById('splash-screen');
     const continueBtn = document.getElementById('splash-continue-btn');
 
+    if (shouldAutostartStreamVisualizer()) {
+        if (splashScreen) splashScreen.classList.add('hidden');
+        applyStreamUiMode();
+        GameState.gameMode = 'visualizer';
+        startVisualizerMode();
+        return;
+    }
+
     if (!splashScreen || !continueBtn) {
         // If splash screen doesn't exist, go straight to mode selector
         showModeSelector();
@@ -8522,6 +9096,7 @@ function initSplashScreen() {
 }
 
 function showModeSelector() {
+    if (StreamConfig.enabled) return;
     document.getElementById('loading-overlay').classList.add('hidden');
     document.getElementById('mode-selector').classList.remove('hidden');
     SoundEngine.uiTransition();
@@ -8534,8 +9109,32 @@ function hideModeSelector() {
     document.getElementById('mode-selector').classList.add('hidden');
 }
 
-// DEBUG: Set to true to bypass premium checks for testing
-const DEBUG_BYPASS_PREMIUM = false;
+// Local dev-only premium bypass:
+// Visit with ?unlock=1 once to enable on local/private hosts.
+// Visit with ?unlock=0 to disable.
+const DEBUG_BYPASS_PREMIUM = (() => {
+    const host = window.location.hostname || '';
+    const isPrivateHost =
+        host === 'localhost' ||
+        host.endsWith('.local') ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+
+    if (!isPrivateHost) return false;
+
+    const params = new URLSearchParams(window.location.search);
+    const storageKey = 'pathfindr_dev_unlock';
+
+    if (params.get('unlock') === '1') {
+        localStorage.setItem(storageKey, '1');
+    } else if (params.get('unlock') === '0') {
+        localStorage.removeItem(storageKey);
+    }
+
+    return localStorage.getItem(storageKey) === '1';
+})();
 
 function checkPremiumAccess(mode) {
     // Debug bypass
@@ -8735,6 +9334,13 @@ async function showPremiumRequired(modeName) {
 }
 
 function selectGameMode(mode) {
+    if (StreamConfig.enabled && mode === 'visualizer') {
+        GameState.gameMode = mode;
+        hideModeSelector();
+        startVisualizerMode();
+        return;
+    }
+
     // Check premium access for explorer and visualizer modes
     if ((mode === 'explorer' || mode === 'visualizer')) {
         if (!checkPremiumAccess(mode)) {
@@ -8796,6 +9402,7 @@ function initVisualizerUI() {
     const modeExitBtn = document.getElementById('mode-exit-btn');
     if (modeExitBtn) {
         modeExitBtn.addEventListener('click', () => {
+            if (StreamConfig.enabled && StreamConfig.noEscExit) return;
             if (GameState.visualizerState.active) {
                 stopVisualizerMode();
             } else if (GameState.gameMode === 'explorer') {
@@ -8850,10 +9457,14 @@ async function navigateToCity(city) {
     VisualizerHistory.clear();
 
     try {
+        if (GameState.visualizerState.active && GameState.visualizerState.loopTimeout) {
+            clearTimeout(GameState.visualizerState.loopTimeout);
+            GameState.visualizerState.loopTimeout = null;
+        }
         await loadRoadNetwork(GameState.currentCity);
 
         // Start facts ticker for new city
-        CityFacts.startTicker(city.name);
+        CityFacts.startTicker(GameState.currentCity);
 
         // If in visualizer mode, restart the loop
         if (GameState.visualizerState.active) {
@@ -9377,6 +9988,7 @@ function exitVisualizerFullscreen() {
 
 // Handle ESC key exiting fullscreen - also stop visualizer
 document.addEventListener('fullscreenchange', () => {
+    if (StreamConfig.enabled && StreamConfig.noEscExit) return;
     // If we exited fullscreen while visualizer is active, stop visualizer
     if (!document.fullscreenElement && GameState.visualizerState?.active) {
         // User pressed ESC to exit fullscreen - also stop visualizer mode
@@ -9389,38 +10001,46 @@ function startVisualizerMode() {
     GameState.visualizerState.currentVisualization = 0;
 
     // Request true fullscreen (like Netflix/YouTube)
-    requestVisualizerFullscreen();
+    if (!StreamConfig.enabled) {
+        requestVisualizerFullscreen();
+    }
 
     // Switch HUD to visualizer mode
     setHUDMode('visualizer');
+    applyStreamUiMode();
 
     // Show location search bar
     showLocationSearch();
-
-    // Pick a random city and start
-    const city = getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
-    GameState.currentCity = city;
-
-    // Update location and stats
-    const locationEl = document.getElementById('current-location');
-    if (locationEl) locationEl.textContent = city.name;
-    updateModeStats(1, GameState.visualizerState.maxPerCity);
 
     // Load road network and start the loop
     GameController.enterPhase(GamePhase.LOADING);
     document.getElementById('loading-overlay').classList.remove('hidden');
     document.getElementById('loading-text').textContent = 'Loading visualizer...';
 
-    GameState.map.jumpTo({ center: [city.lng, city.lat], zoom: city.zoom || 15 });
-    loadRoadNetwork(city).then(() => {
-        // Start unified animation loop (replaces AmbientViz.start())
-        GameController.startLoop();
-        // Start facts ticker for visualizer mode
-        CityFacts.startTicker(city.name);
-        // Enter IDLE phase, then start visualizer loop
-        GameController.enterPhase(GamePhase.IDLE);
-        runVisualizerLoop();
-    });
+    getNextVisualizerCity()
+        .then(city => {
+            if (!city || !GameState.visualizerState.active || GameState.gameMode !== 'visualizer') return null;
+            GameState.currentCity = city;
+
+            // Update location and stats
+            const locationEl = document.getElementById('current-location');
+            if (locationEl) locationEl.textContent = city.name;
+            updateModeStats(1, GameState.visualizerState.maxPerCity);
+
+            GameState.map.jumpTo({ center: [city.lng, city.lat], zoom: city.zoom || 15 });
+            pushStreamState('city_loaded', city);
+            return loadRoadNetwork(city).then(() => city);
+        })
+        .then(city => {
+            if (!city || !GameState.visualizerState.active || GameState.gameMode !== 'visualizer') return;
+            // Start unified animation loop (replaces AmbientViz.start())
+            GameController.startLoop();
+            // Start facts ticker for visualizer mode
+            CityFacts.startTicker(city);
+            // Enter IDLE phase, then start visualizer loop
+            GameController.enterPhase(GamePhase.IDLE);
+            runVisualizerLoop();
+        });
 }
 
 function updateVisualizerUI(cityName, count) {
@@ -9438,38 +10058,50 @@ async function runVisualizerLoop() {
         return;
     }
 
-    // Pick random start/end points
-    selectRandomEndpoints();
-
-    GameState.visualizerState.currentVisualization++;
-    updateVisualizerUI(
-        GameState.currentCity?.name || 'Unknown',
-        GameState.visualizerState.currentVisualization
-    );
-
-    // Run the A* visualization
-    await runVisualizerAStar();
-
-    // Check again after async operation (user might have exited during viz)
-    if (!GameState.visualizerState.active) return;
-
-    // Check if we should load a new city
-    if (GameState.visualizerState.currentVisualization >= GameState.visualizerState.maxPerCity) {
-        GameState.visualizerState.currentVisualization = 0;
-        await loadNextVisualizerCity();
+    if (GameState.visualizerState.loopRunning) {
+        return;
     }
 
-    // Check AGAIN after potential city load (user might have exited)
-    if (!GameState.visualizerState.active) return;
+    GameState.visualizerState.loopRunning = true;
 
-    // Return to IDLE phase after visualization completes
-    GameController.enterPhase(GamePhase.IDLE);
+    try {
+        pushStreamState('heartbeat', GameState.currentCity || null);
 
-    // Continue the loop after a delay
-    GameState.visualizerState.loopTimeout = setTimeout(
-        runVisualizerLoop,
-        GameState.visualizerState.delayBetweenRuns
-    );
+        // Pick random start/end points
+        selectRandomEndpoints();
+
+        GameState.visualizerState.currentVisualization++;
+        updateVisualizerUI(
+            GameState.currentCity?.name || 'Unknown',
+            GameState.visualizerState.currentVisualization
+        );
+
+        // Run the A* visualization
+        await runVisualizerAStar();
+
+        // Check again after async operation (user might have exited during viz)
+        if (!GameState.visualizerState.active) return;
+
+        // Check if we should load a new city
+        if (GameState.visualizerState.currentVisualization >= GameState.visualizerState.maxPerCity) {
+            GameState.visualizerState.currentVisualization = 0;
+            await loadNextVisualizerCity();
+        }
+
+        // Check AGAIN after potential city load (user might have exited)
+        if (!GameState.visualizerState.active) return;
+
+        // Return to IDLE phase after visualization completes
+        GameController.enterPhase(GamePhase.IDLE);
+
+        // Continue the loop after a delay
+        GameState.visualizerState.loopTimeout = setTimeout(
+            runVisualizerLoop,
+            GameState.visualizerState.delayBetweenRuns
+        );
+    } finally {
+        GameState.visualizerState.loopRunning = false;
+    }
 }
 
 async function runVisualizerAStar() {
@@ -9515,14 +10147,15 @@ async function loadNextVisualizerCity() {
         GameState.endMarker = null;
     }
 
-    // Pick a new random city
-    const city = getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
+    // Pick next city (stream override first, random fallback)
+    const city = await getNextVisualizerCity();
     GameState.currentCity = city;
 
     updateVisualizerUI(city.name, 1);
+    pushStreamState('city_loaded', city);
 
     // Update facts ticker for new city
-    CityFacts.updateTickerCity(city.name);
+    CityFacts.updateTickerCity(city);
 
     // Show loading briefly
     document.getElementById('loading-overlay').classList.remove('hidden');
@@ -9534,6 +10167,8 @@ async function loadNextVisualizerCity() {
 }
 
 function stopVisualizerMode() {
+    if (StreamConfig.enabled && StreamConfig.noEscExit) return;
+
     // Mark visualizer as inactive FIRST (stops loop callbacks)
     GameState.visualizerState.active = false;
 
@@ -9545,6 +10180,7 @@ function stopVisualizerMode() {
         clearTimeout(GameState.visualizerState.loopTimeout);
         GameState.visualizerState.loopTimeout = null;
     }
+    GameState.visualizerState.loopRunning = false;
 
     // Use GameController to cleanly exit VISUALIZING phase (if active)
     // This handles vizState.active cleanup automatically
@@ -9687,7 +10323,7 @@ function startExplorerMode() {
     GameState.map.on('click', handleExplorerMapClick);
 
     // Start facts ticker for explorer mode
-    CityFacts.startTicker(GameState.currentCity?.name);
+    CityFacts.startTicker(GameState.currentCity);
 
     updateExplorerButtons();
 }
@@ -11096,9 +11732,9 @@ async function handleChallengeCreation(e) {
     const endDate = document.getElementById('challenge-end-date').value;
     const endTime = document.getElementById('challenge-end-time').value;
 
-    // Build timestamps
-    const activeFrom = new Date(`${startDate}T${startTime}:00Z`).toISOString();
-    const activeUntil = new Date(`${endDate}T${endTime}:00Z`).toISOString();
+    // Build timestamps (interpret as local time, then convert to UTC ISO)
+    const activeFrom = new Date(`${startDate}T${startTime}:00`).toISOString();
+    const activeUntil = new Date(`${endDate}T${endTime}:00`).toISOString();
 
     // Get map center and zoom
     const center = GameState.map.getCenter();
@@ -11186,6 +11822,8 @@ function preloadNextCity() {
     // Pick next city based on location mode
     const nextCity = getRandomCity(GameState.locationMode);
     GameState.continuousPlay.preloadedCity = nextCity;
+    GameState.continuousPlay.preloadRequestId += 1;
+    const requestId = GameState.continuousPlay.preloadRequestId;
 
     // Calculate bounds for the city
     const zoom = nextCity.zoom || 15;
@@ -11203,7 +11841,7 @@ function preloadNextCity() {
     const query = `
         [out:json][timeout:25];
         (
-            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
             (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
         );
         out body;
@@ -11222,12 +11860,17 @@ function preloadNextCity() {
     })
     .then(response => response.json())
     .then(data => {
+        if (!GameState.continuousPlay.enabled) return;
+        if (GameState.continuousPlay.preloadRequestId !== requestId) return;
+        if (GameState.continuousPlay.preloadedCity !== nextCity) return;
         if (data.elements && data.elements.length > 0) {
             GameState.continuousPlay.preloadedData = data;
             console.log(`Preloaded ${nextCity.name}: ${data.elements.length} elements`);
         }
     })
     .catch(error => {
+        if (!GameState.continuousPlay.enabled) return;
+        if (GameState.continuousPlay.preloadRequestId !== requestId) return;
         console.warn('City preload failed (will fetch fresh):', error);
         GameState.continuousPlay.preloadedCity = null;
         GameState.continuousPlay.preloadedData = null;
@@ -11262,7 +11905,7 @@ function preloadChallengeCity(challenge) {
     const query = `
         [out:json][timeout:25];
         (
-            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
             (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
         );
         out body;
@@ -11338,6 +11981,7 @@ async function transitionToNextCity() {
         // Stay in same location, pick new endpoints
         selectRandomEndpoints();
         enableDrawing();
+        GameController.enterPhase(GamePhase.PLAYING);
         return;
     }
 
@@ -11364,7 +12008,7 @@ async function transitionToNextCity() {
     if (overlay) overlay.classList.remove('hidden');
 
     // Show a fact about the next city in the transition
-    CityFacts.showFactInTransition(nextCity.name);
+    CityFacts.showFactInTransition(nextCity);
 
     // Reset game state for new city
     GameState.currentRound = 1;
@@ -11406,6 +12050,7 @@ async function transitionToNextCity() {
         if (overlay) overlay.classList.add('hidden');
         selectRandomEndpoints();
         enableDrawing();
+        GameController.enterPhase(GamePhase.PLAYING);
     } else {
         // Fetch fresh
         if (overlay) overlay.classList.add('hidden');
@@ -11422,7 +12067,7 @@ async function loadRoadNetworkForContinuous(location) {
     const query = `
         [out:json][timeout:25];
         (
-            way["highway"]["highway"!~"footway|path|steps|pedestrian|cycleway|track"]
+            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
             (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
         );
         out body;
@@ -11444,6 +12089,7 @@ async function loadRoadNetworkForContinuous(location) {
             hideLoading();
             selectRandomEndpoints();
             enableDrawing();
+            GameController.enterPhase(GamePhase.PLAYING);
         } else {
             throw new Error('No road data');
         }
@@ -11461,6 +12107,7 @@ function enableContinuousPlay() {
     GameState.continuousPlay.cityScores = [];
     GameState.continuousPlay.preloadedCity = null;
     GameState.continuousPlay.preloadedData = null;
+    GameState.continuousPlay.preloadRequestId += 1;
 
     // Update HUD to show continuous mode
     updateContinuousHUD();
@@ -11470,6 +12117,7 @@ function disableContinuousPlay() {
     GameState.continuousPlay.enabled = false;
     GameState.continuousPlay.preloadedCity = null;
     GameState.continuousPlay.preloadedData = null;
+    GameState.continuousPlay.preloadRequestId += 1;
 }
 
 function updateContinuousHUD() {
@@ -11698,7 +12346,7 @@ function startGameWithLocation(location) {
     showLoading('Discovering routes...', false, location);
 
     // Preload facts for this city (non-blocking)
-    CityFacts.preload(location.name);
+    CityFacts.preload(location);
 
     loadRoadNetwork(location);
 }
@@ -11768,7 +12416,7 @@ function showResults() {
 
     // Show a city fact in the results panel
     if (GameState.currentCity?.name) {
-        CityFacts.showFactInResults(GameState.currentCity.name);
+        CityFacts.showFactInResults(GameState.currentCity);
     }
 
     // Show banner ad during round recaps (progressive frequency, delayed)
@@ -12022,6 +12670,74 @@ function sleep(ms) {
 // CUSTOM ROAD NETWORK RENDERING
 // =============================================================================
 
+function buildVirtualEdgesForRender(width, height) {
+    if (!GameState.map || !GameState.virtualNodeIds || GameState.virtualNodeIds.size === 0) {
+        return [];
+    }
+
+    const visibleEdges = [];
+    const seen = new Set();
+    const padding = 100;
+
+    for (const nodeId of GameState.virtualNodeIds) {
+        const nodePos = GameState.nodes.get(nodeId);
+        if (!nodePos) continue;
+
+        const neighbors = GameState.edges.get(nodeId) || [];
+        for (const edge of neighbors) {
+            const neighborId = edge.neighbor;
+            const neighborPos = GameState.nodes.get(neighborId);
+            if (!neighborPos) continue;
+
+            const keyA = String(nodeId);
+            const keyB = String(neighborId);
+            const edgeKey = keyA < keyB ? `${keyA}-${keyB}` : `${keyB}-${keyA}`;
+            if (seen.has(edgeKey)) continue;
+            seen.add(edgeKey);
+
+            const from = GameState.map.project([nodePos.lng, nodePos.lat]);
+            const to = GameState.map.project([neighborPos.lng, neighborPos.lat]);
+
+            if (from.x < -padding && to.x < -padding) continue;
+            if (from.x > width + padding && to.x > width + padding) continue;
+            if (from.y < -padding && to.y < -padding) continue;
+            if (from.y > height + padding && to.y > height + padding) continue;
+
+            visibleEdges.push({ from, to });
+        }
+    }
+
+    return visibleEdges;
+}
+
+function drawVirtualEdgesOverlay(ctx, width, height, intensity = 1) {
+    const visibleEdges = buildVirtualEdgesForRender(width, height);
+    if (visibleEdges.length === 0) return;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255, 190, 120, ${0.18 * intensity})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = `rgba(255, 190, 120, ${0.55 * intensity})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+        ctx.moveTo(edge.from.x, edge.from.y);
+        ctx.lineTo(edge.to.x, edge.to.y);
+    }
+    ctx.stroke();
+}
+
 /**
  * Draw the road network with cyberpunk CRT aesthetic.
  * Always visible as the base layer - the "canvas" for pathfinding.
@@ -12029,8 +12745,15 @@ function sleep(ms) {
  */
 function drawRoadNetwork(ctx) {
     // Use WebGL if available
-    if (GameState.useWebGL) {
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.render(performance.now());
+        ctx = ctx || GameState.vizCtx;
+        if (ctx) {
+            const width = GameState.vizCanvas.width;
+            const height = GameState.vizCanvas.height;
+            ctx.clearRect(0, 0, width, height);
+            drawVirtualEdgesOverlay(ctx, width, height, 1);
+        }
         return;
     }
 
@@ -12099,6 +12822,8 @@ function drawRoadNetwork(ctx) {
         ctx.lineTo(edge.to.x, edge.to.y);
     }
     ctx.stroke();
+
+    drawVirtualEdgesOverlay(ctx, width, height, crtIntensity);
 }
 
 /**
@@ -12154,6 +12879,8 @@ function drawRoadNetworkScanning(ctx, time, pulsePhase) {
         ctx.lineTo(edge.to.x, edge.to.y);
     }
     ctx.stroke();
+
+    drawVirtualEdgesOverlay(ctx, width, height, breathe);
 }
 
 /**
@@ -12185,6 +12912,7 @@ function toggleMapView() {
         if (text) text.textContent = 'Road View';
         if (btn) btn.classList.remove('active');
     }
+
 }
 
 // =============================================================================

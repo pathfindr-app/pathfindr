@@ -1,0 +1,50 @@
+module.exports = {
+  apps: [
+    {
+      name: 'pathfindr-stream-server',
+      script: 'scripts/stream-server.js',
+      cwd: __dirname,
+      env_file: '.env.local',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      exp_backoff_restart_delay: 200,
+      env: {
+        NODE_ENV: 'production',
+        HOST: '0.0.0.0',
+        PORT: '3000',
+      },
+    },
+    {
+      name: 'pathfindr-youtube-worker',
+      script: 'scripts/youtube-worker-launcher.js',
+      cwd: __dirname,
+      env_file: '.env.local',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      exp_backoff_restart_delay: 500,
+      env: {
+        NODE_ENV: 'production',
+      },
+    },
+    {
+      name: 'pathfindr-stream-watchdog',
+      script: 'scripts/stream-watchdog.js',
+      cwd: __dirname,
+      env_file: '.env.local',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      exp_backoff_restart_delay: 500,
+      env: {
+        NODE_ENV: 'production',
+        WATCHDOG_HEALTH_URL: 'http://127.0.0.1:3000/api/health',
+        WATCHDOG_STATE_URL: 'http://127.0.0.1:3000/api/stream-state',
+      },
+    },
+  ],
+};
