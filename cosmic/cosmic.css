@@ -1,0 +1,439 @@
+:root {
+  --bg-0: #060a16;
+  --bg-1: #0b1530;
+  --bg-2: #11264f;
+  --ink: #f1f7ff;
+  --ink-dim: #a9bfdc;
+  --glass: rgba(8, 16, 36, 0.68);
+  --glass-border: rgba(150, 190, 255, 0.28);
+  --teal: #83ffe6;
+  --gold: #ffd27f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at 17% 10%, #1f3d6f 0%, var(--bg-1) 31%, var(--bg-0) 72%);
+}
+
+.cosmic-app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#cosmic-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+#cosmic-canvas.dragging {
+  cursor: grabbing;
+}
+
+.glass {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(128deg, rgba(12, 22, 46, 0.78), var(--glass));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+}
+
+.hud-top {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 14px;
+  z-index: 20;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.brand-wrap h1 {
+  margin: 0;
+  font-family: "Orbitron", "Rajdhani", sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+}
+
+.brand-kicker {
+  color: var(--ink-dim);
+  font-size: 0.71rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.pill {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 232, 171, 0.58);
+  color: #ffe6a6;
+  padding: 0.14rem 0.48rem;
+  font-size: 0.58rem;
+  vertical-align: middle;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stat-card {
+  min-height: 50px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(13, 29, 58, 0.62);
+  border: 1px solid rgba(138, 182, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card .label {
+  color: var(--ink-dim);
+  font-size: 0.69rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stat-card .value {
+  margin-top: 2px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 0.84rem;
+  color: var(--ink);
+  background: linear-gradient(125deg, rgba(42, 79, 144, 0.76), rgba(25, 44, 86, 0.92));
+  border: 1px solid rgba(149, 194, 255, 0.38);
+  border-radius: 8px;
+  padding: 0.46rem 0.7rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+  border-color: rgba(197, 222, 255, 0.72);
+}
+
+.btn-small {
+  font-size: 0.78rem;
+  padding: 0.36rem 0.56rem;
+}
+
+.btn[aria-pressed="true"] {
+  background: linear-gradient(125deg, rgba(52, 131, 116, 0.8), rgba(27, 73, 62, 0.96));
+  border-color: rgba(145, 255, 230, 0.72);
+}
+
+.hud-left-wrap {
+  position: absolute;
+  left: 16px;
+  top: 118px;
+  width: min(360px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 19;
+}
+
+.observer-panel,
+.compass-card,
+.facts-card,
+.hud-right {
+  border-radius: 12px;
+  padding: 13px;
+}
+
+.observer-panel h2,
+.compass-card h2,
+.facts-card h2,
+.hud-right h2 {
+  margin: 0 0 0.5rem;
+  font-family: "Orbitron", "Rajdhani", sans-serif;
+  font-size: 0.96rem;
+  letter-spacing: 0.05em;
+}
+
+.mission-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 0.32rem 0;
+  border-bottom: 1px solid rgba(130, 160, 220, 0.22);
+}
+
+.mission-row span {
+  color: var(--ink-dim);
+  font-size: 0.73rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mission-row strong {
+  max-width: 68%;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.observer-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 0.65rem;
+}
+
+.observer-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.observer-inputs input {
+  width: 100%;
+  border-radius: 7px;
+  border: 1px solid rgba(147, 192, 255, 0.32);
+  background: rgba(10, 21, 42, 0.84);
+  color: var(--ink);
+  padding: 0.34rem 0.42rem;
+  font: 600 0.84rem "Rajdhani", sans-serif;
+}
+
+.observer-buttons {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compass-heading {
+  font-family: "Orbitron", "Rajdhani", sans-serif;
+  font-size: 1.26rem;
+  letter-spacing: 0.07em;
+}
+
+.compass-alt,
+.compass-fov {
+  color: var(--ink-dim);
+  font-size: 0.86rem;
+  margin-top: 2px;
+}
+
+.compass-rose-wrap {
+  margin-top: 0.72rem;
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.compass-pointer {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 14px solid var(--teal);
+  filter: drop-shadow(0 0 5px rgba(131, 255, 230, 0.85));
+  z-index: 3;
+}
+
+.compass-rose {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(168, 209, 255, 0.5);
+  background: radial-gradient(circle at 50% 50%, rgba(24, 45, 84, 0.45), rgba(10, 19, 40, 0.85));
+  transition: transform 200ms ease;
+}
+
+.compass-rose span {
+  position: absolute;
+  font-family: "Orbitron", "Rajdhani", sans-serif;
+  font-size: 0.7rem;
+  color: #cbe6ff;
+}
+
+.compass-rose .n { left: 50%; top: 8px; transform: translateX(-50%); }
+.compass-rose .e { right: 8px; top: 50%; transform: translateY(-50%); }
+.compass-rose .s { left: 50%; bottom: 8px; transform: translateX(-50%); }
+.compass-rose .w { left: 8px; top: 50%; transform: translateY(-50%); }
+
+.hud-right {
+  position: absolute;
+  right: 16px;
+  top: 118px;
+  width: min(360px, calc(100vw - 32px));
+  z-index: 19;
+}
+
+.hint {
+  margin: 0.82rem 0 0;
+  color: #d2def3;
+  font-size: 0.9rem;
+  line-height: 1.28;
+}
+
+.fact-blurb {
+  margin: 0.72rem 0 0;
+  color: #d8e4f8;
+  font-size: 0.92rem;
+  line-height: 1.28;
+  min-height: 3.3em;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  background: rgba(6, 14, 30, 0.86);
+  border: 1px solid rgba(170, 215, 255, 0.42);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.toast.hidden {
+  display: none;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at center, rgba(14, 26, 55, 0.48), rgba(4, 8, 16, 0.88));
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+.loading-panel {
+  border-radius: 14px;
+  padding: 1rem 1.3rem;
+  width: min(500px, calc(100vw - 24px));
+  text-align: center;
+}
+
+.loading-title {
+  font-family: "Orbitron", "Rajdhani", sans-serif;
+  font-size: 1.03rem;
+  letter-spacing: 0.07em;
+  margin-bottom: 4px;
+}
+
+.loading-sub {
+  color: var(--ink-dim);
+  font-size: 0.93rem;
+}
+
+@media (max-width: 1220px) {
+  .hud-top {
+    grid-template-columns: 1fr;
+  }
+
+  .controls {
+    justify-content: flex-start;
+  }
+
+  .hud-left-wrap,
+  .hud-right {
+    position: static;
+    width: auto;
+  }
+
+  .hud-left-wrap {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 220px;
+    width: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hud-right {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    top: auto;
+    bottom: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-left-wrap {
+    grid-template-columns: 1fr;
+    top: 262px;
+    bottom: 190px;
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  .hud-right {
+    bottom: 8px;
+  }
+
+  .btn {
+    font-size: 0.77rem;
+    padding: 0.4rem 0.58rem;
+  }
+}

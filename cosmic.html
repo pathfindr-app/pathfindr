@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfindr Cosmic POC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/cosmic/cosmic.css" />
+</head>
+<body>
+  <div id="cosmic-app" class="cosmic-app">
+    <canvas id="cosmic-canvas" aria-label="Interactive 3D sky"></canvas>
+
+    <header class="hud-top glass">
+      <div class="brand-wrap">
+        <div class="brand-kicker">Pathfindr Experimental</div>
+        <h1>Cosmic Mode <span class="pill">Earth Sky POC</span></h1>
+      </div>
+
+      <div class="stats" id="stats-bar">
+        <div class="stat-card">
+          <span class="label">Sector</span>
+          <span class="value" id="stat-sector">Loading...</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Optimal</span>
+          <span class="value" id="stat-optimal">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Your Route</span>
+          <span class="value" id="stat-user">--</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Efficiency</span>
+          <span class="value" id="stat-efficiency">--</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-new-route" class="btn">New Route (N)</button>
+        <button id="btn-reset" class="btn">Reset Path (R)</button>
+        <button id="btn-center" class="btn">Center Route (C)</button>
+        <button id="btn-graph" class="btn btn-toggle" aria-pressed="false">Graph (G)</button>
+        <button id="btn-labels" class="btn btn-toggle" aria-pressed="true">Labels (L)</button>
+        <a class="btn btn-link" href="/index.html">Back To Main Game</a>
+      </div>
+    </header>
+
+    <div class="hud-left-wrap">
+      <section class="observer-panel glass">
+        <h2>Earth Observer</h2>
+        <div class="mission-row"><span>Location</span><strong id="observer-location">Initializing...</strong></div>
+        <div class="mission-row"><span>UTC</span><strong id="observer-time">--</strong></div>
+        <div class="mission-row"><span>LST</span><strong id="observer-lst">--</strong></div>
+
+        <div class="observer-inputs">
+          <label>
+            Lat
+            <input id="observer-lat" type="number" min="-89" max="89" step="0.0001" value="47.6062" />
+          </label>
+          <label>
+            Lon
+            <input id="observer-lon" type="number" min="-180" max="180" step="0.0001" value="-122.3321" />
+          </label>
+        </div>
+
+        <div class="observer-buttons">
+          <button id="btn-apply-observer" class="btn btn-small">Apply</button>
+          <button id="btn-geolocate" class="btn btn-small">Use My Location</button>
+        </div>
+
+        <div class="observer-buttons">
+          <button id="btn-live-time" class="btn btn-small btn-toggle" aria-pressed="true">Live Time</button>
+          <button id="btn-time-speed" class="btn btn-small">Speed 1x</button>
+        </div>
+      </section>
+
+      <section class="compass-card glass">
+        <h2>Compass</h2>
+        <div class="compass-heading" id="compass-heading">000° N</div>
+        <div class="compass-alt" id="compass-alt">Altitude +35.0°</div>
+        <div class="compass-fov" id="compass-fov">FOV 70°</div>
+
+        <div class="compass-rose-wrap">
+          <div class="compass-pointer"></div>
+          <div class="compass-rose" id="compass-ring">
+            <span class="n">N</span>
+            <span class="e">E</span>
+            <span class="s">S</span>
+            <span class="w">W</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="facts-card glass">
+        <h2>Star Facts</h2>
+        <div class="mission-row"><span>Name</span><strong id="fact-name">Click a star</strong></div>
+        <div class="mission-row"><span>Constellation</span><strong id="fact-con">--</strong></div>
+        <div class="mission-row"><span>Spectral</span><strong id="fact-spectral">--</strong></div>
+        <div class="mission-row"><span>Magnitude</span><strong id="fact-mag">--</strong></div>
+        <div class="mission-row"><span>Distance</span><strong id="fact-distance">--</strong></div>
+        <p class="fact-blurb" id="fact-blurb">
+          Click any visible star to get educational info. Zodiac constellations are labeled in-map.
+        </p>
+      </section>
+    </div>
+
+    <aside class="hud-right glass" id="route-panel">
+      <h2>Current Mission</h2>
+      <div class="mission-row"><span>From</span><strong id="mission-start">--</strong></div>
+      <div class="mission-row"><span>To</span><strong id="mission-end">--</strong></div>
+      <div class="mission-row"><span>Graph</span><strong id="mission-graph">--</strong></div>
+      <div class="mission-row"><span>Status</span><strong id="mission-status">Preparing sky...</strong></div>
+
+      <p class="hint">
+        Earth-view 3D sky: drag to look around, mouse wheel to zoom FOV.
+      </p>
+      <p class="hint">
+        Click stars to route through stellar links. A* compares your route against optimal.
+      </p>
+    </aside>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <div id="loading" class="loading-overlay">
+      <div class="loading-panel glass">
+        <div class="loading-title">Initializing Cosmic Graph</div>
+        <div class="loading-sub" id="loading-sub">Loading stars and constellation routes...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/cosmic/cosmic.js"></script>
+</body>
+</html>

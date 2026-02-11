@@ -577,7 +577,7 @@ const GameController = {
         this.previousPhase = oldPhase;
 
         // Exit cleanup for old phase
-        this._exitPhase(oldPhase);
+        this._exitPhase(oldPhase, newPhase);
 
         // Enter new phase
         this.phase = newPhase;
@@ -586,7 +586,7 @@ const GameController = {
         console.log(`[GameController] ${oldPhase} → ${newPhase}`);
     },
 
-    _exitPhase(phase) {
+    _exitPhase(phase, nextPhase = null) {
         switch (phase) {
             case GamePhase.LOADING:
                 // Cancel any pending load operations
@@ -596,6 +596,16 @@ const GameController = {
                 }
                 break;
             case GamePhase.VISUALIZING:
+                // Smoothly dissolve out of active viz into ambient visualizer history.
+                if (GameState.gameMode === 'visualizer' && nextPhase === GamePhase.IDLE) {
+                    VisualizerPhaseBlend.capture({
+                        durationMs: 980,
+                        maxAlpha: 0.72,
+                        composite: 'screen',
+                    });
+                } else {
+                    VisualizerPhaseBlend.clear();
+                }
                 // Ensure viz state is cleaned up
                 if (GameState.vizState) {
                     GameState.vizState.active = false;
@@ -608,11 +618,17 @@ const GameController = {
         switch (phase) {
             case GamePhase.LOADING:
                 this.abortController = new AbortController();
+                if (GameState.gameMode !== 'visualizer') {
+                    VisualizerPhaseBlend.clear();
+                }
                 break;
             case GamePhase.VISUALIZING:
                 if (GameState.vizState) {
                     GameState.vizState.active = true;
                 }
+                break;
+            case GamePhase.MENU:
+                VisualizerPhaseBlend.clear();
                 break;
             case GamePhase.PLAYING:
                 // Ensure ambient viz is running for gameplay
@@ -746,9 +762,13 @@ const GameController = {
         if (GameState.gameMode === 'explorer') {
             AmbientViz.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
         } else if (GameState.gameMode === 'visualizer') {
-            AmbientViz.renderPathHistory(ctx, deltaTime, VisualizerHistory.getPaths(), false);
+            VisualizerVibeRenderer.render(ctx, width, height, false);
         } else {
             AmbientViz.renderRoundHistory(ctx, deltaTime, false);
+        }
+
+        if (GameState.gameMode === 'visualizer') {
+            VisualizerPhaseBlend.render(ctx, width, height);
         }
 
         // Layer 3: Ambient particles and marker auras
@@ -2172,10 +2192,10 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
 
         // Linear decay: heat = 1.0 - time * decaySpeed
-        // Visualizer: Very slow decay (0.03) to high floor (0.6) - edges settle gently
-        // Other modes: Faster decay to lower floor
-        const decaySpeed = GameState.gameMode === 'visualizer' ? 0.03 : 0.12;
-        const heatFloor = GameState.gameMode === 'visualizer' ? 0.6 : 0.25;
+        // Visualizer mode gets dynamic settling so the handoff to ambient does not hard-cut.
+        const inVizSettling = GameState.gameMode === 'visualizer' && GameState.vizState?.phase === 'settling';
+        const decaySpeed = inVizSettling ? 0.14 : (GameState.gameMode === 'visualizer' ? 0.03 : 0.12);
+        const heatFloor = inVizSettling ? 0.05 : (GameState.gameMode === 'visualizer' ? 0.6 : 0.25);
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
         gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
@@ -2220,9 +2240,9 @@ const WebGLRenderer = {
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
 
         // Linear decay parameters (same as heat edges)
-        // Visualizer: Very slow decay to high floor - glow settles gently
-        const decaySpeed = GameState.gameMode === 'visualizer' ? 0.03 : 0.12;
-        const heatFloor = GameState.gameMode === 'visualizer' ? 0.6 : 0.25;
+        const inVizSettling = GameState.gameMode === 'visualizer' && GameState.vizState?.phase === 'settling';
+        const decaySpeed = inVizSettling ? 0.14 : (GameState.gameMode === 'visualizer' ? 0.03 : 0.12);
+        const heatFloor = inVizSettling ? 0.05 : (GameState.gameMode === 'visualizer' ? 0.6 : 0.25);
         gl.uniform1f(program.uniforms.decaySpeed, decaySpeed);
         gl.uniform1f(program.uniforms.heatFloor, heatFloor);
 
@@ -3782,7 +3802,7 @@ const AmbientViz = {
         if (GameState.gameMode === 'explorer') {
             this.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
         } else if (GameState.gameMode === 'visualizer') {
-            this.renderPathHistory(ctx, deltaTime, VisualizerHistory.getPaths(), false);
+            VisualizerVibeRenderer.render(ctx, width, height, false);
         } else {
             // Competitive mode - render round history
             this.renderRoundHistory(ctx, deltaTime, false);
@@ -4681,6 +4701,7 @@ const ExplorerHistory = {
 const VisualizerHistory = {
     paths: [],
     pathIndex: 0,
+    version: 0,        // Incremented whenever paths change (for renderer cache invalidation)
     lastMapState: null,  // Track map position for cache invalidation
 
     // Living Network state
@@ -4713,6 +4734,7 @@ const VisualizerHistory = {
             optimalPointsCache: null,
             cacheValid: false,
         });
+        this.version++;
     },
 
     update(deltaTime) {
@@ -4838,9 +4860,13 @@ const VisualizerHistory = {
     clear() {
         this.paths = [];
         this.pathIndex = 0;
+        this.version++;
         this.ripples = [];
         this.sparks = [];
         this.lastRipple = 0;
+        if (typeof VisualizerVibeRenderer !== 'undefined') {
+            VisualizerVibeRenderer.reset();
+        }
     },
 
     getPaths() {
@@ -4850,6 +4876,459 @@ const VisualizerHistory = {
     hasHistory() {
         return this.paths.length > 0;
     }
+};
+
+// =============================================================================
+// VISUALIZER VIBE RENDERER - Cached, persistent, high-performance history layer
+// =============================================================================
+
+const VisualizerVibeRenderer = {
+    coreCanvas: null,
+    coreCtx: null,
+    glowCanvas: null,
+    glowCtx: null,
+    width: 0,
+    height: 0,
+    lastMapSnapshot: null,
+    lastHistoryVersion: -1,
+    renderedPathCount: 0,
+    lastFrameTime: 0,
+    frameTimeEMA: 16,
+    lastRebuildTime: 0,
+    rebuildIntervalMs: 55,
+    drawOffsetX: 0,
+    drawOffsetY: 0,
+    pendingRebuild: false,
+    maxEdgesPerPath: 12000,
+
+    reset() {
+        this.lastMapSnapshot = null;
+        this.lastHistoryVersion = -1;
+        this.renderedPathCount = 0;
+        this.frameTimeEMA = 16;
+        this.lastRebuildTime = 0;
+        this.drawOffsetX = 0;
+        this.drawOffsetY = 0;
+        this.pendingRebuild = false;
+        this.lastFrameTime = 0;
+        this.clearCanvases();
+    },
+
+    clearCanvases() {
+        if (this.coreCtx && this.width > 0 && this.height > 0) {
+            this.coreCtx.clearRect(0, 0, this.width, this.height);
+        }
+        if (this.glowCtx && this.width > 0 && this.height > 0) {
+            this.glowCtx.clearRect(0, 0, this.width, this.height);
+        }
+    },
+
+    ensureBuffers(width, height) {
+        if (!this.coreCanvas) {
+            this.coreCanvas = document.createElement('canvas');
+            this.coreCtx = this.coreCanvas.getContext('2d');
+        }
+        if (!this.glowCanvas) {
+            this.glowCanvas = document.createElement('canvas');
+            this.glowCtx = this.glowCanvas.getContext('2d');
+        }
+        if (this.width !== width || this.height !== height) {
+            this.width = width;
+            this.height = height;
+            this.coreCanvas.width = width;
+            this.coreCanvas.height = height;
+            this.glowCanvas.width = width;
+            this.glowCanvas.height = height;
+            this.reset();
+        }
+    },
+
+    noteFrame() {
+        const now = performance.now();
+        if (this.lastFrameTime > 0) {
+            const dt = now - this.lastFrameTime;
+            this.frameTimeEMA = this.frameTimeEMA * 0.9 + dt * 0.1;
+        }
+        this.lastFrameTime = now;
+    },
+
+    getMapSnapshot() {
+        if (!GameState.map) return null;
+        const center = GameState.map.getCenter();
+        return {
+            centerLat: center.lat,
+            centerLng: center.lng,
+            zoom: GameState.map.getZoom(),
+            pitch: GameState.map.getPitch ? GameState.map.getPitch() : 0,
+            bearing: GameState.map.getBearing ? GameState.map.getBearing() : 0,
+        };
+    },
+
+    isMapStateSame(a, b) {
+        if (!a || !b) return false;
+        return (
+            Math.abs(a.centerLat - b.centerLat) < 1e-7 &&
+            Math.abs(a.centerLng - b.centerLng) < 1e-7 &&
+            Math.abs(a.zoom - b.zoom) < 0.0006 &&
+            Math.abs(a.pitch - b.pitch) < 0.04 &&
+            Math.abs(a.bearing - b.bearing) < 0.04
+        );
+    },
+
+    canApproximateWithPanOffset(a, b) {
+        if (!a || !b) return false;
+        return (
+            Math.abs(a.zoom - b.zoom) < 0.01 &&
+            Math.abs(a.pitch - b.pitch) < 0.2 &&
+            Math.abs(a.bearing - b.bearing) < 0.2
+        );
+    },
+
+    computePanOffset(snapshot) {
+        if (!snapshot || !GameState.map) return { x: 0, y: 0 };
+        const projected = GameState.map.project([snapshot.centerLng, snapshot.centerLat]);
+        const centerX = this.width * 0.5;
+        const centerY = this.height * 0.5;
+        return {
+            x: projected.x - centerX,
+            y: projected.y - centerY,
+        };
+    },
+
+    getAdaptiveStride(edgeCount, pathCount, isMoving) {
+        let budget = this.maxEdgesPerPath;
+        if (isMoving) budget = Math.floor(budget * 0.75);
+        if (pathCount > 28) budget = Math.floor(budget * 0.85);
+        if (pathCount > 45) budget = Math.floor(budget * 0.7);
+        if (this.frameTimeEMA > 20) budget = Math.floor(budget * 0.52);
+        else if (this.frameTimeEMA > 17) budget = Math.floor(budget * 0.72);
+        else if (this.frameTimeEMA < 12) budget = Math.floor(budget * 1.2);
+        return Math.max(1, Math.ceil(edgeCount / Math.max(1000, budget)));
+    },
+
+    getVibeColor(baseColor) {
+        const source = baseColor || { r: 120, g: 170, b: 255 };
+        return {
+            r: Math.min(255, Math.round(source.r * 0.35 + 25)),
+            g: Math.min(255, Math.round(source.g * 0.6 + 70)),
+            b: Math.min(255, Math.round(source.b * 0.95 + 90)),
+        };
+    },
+
+    appendPath(path, isMoving = false) {
+        if (!this.coreCtx || !this.glowCtx || !GameState.map) return;
+        const vibe = this.getVibeColor(path.color);
+        const maxSegmentLengthSq = 3000 * 3000;
+        const edgeCount = path.exploredEdges ? path.exploredEdges.size : 0;
+        const stride = this.getAdaptiveStride(edgeCount, VisualizerHistory.paths.length, isMoving);
+        const segments = [];
+        const padding = 180;
+        const minX = -padding;
+        const minY = -padding;
+        const maxX = this.width + padding;
+        const maxY = this.height + padding;
+
+        let index = 0;
+        for (const edgeKey of path.exploredEdges) {
+            if ((index++ % stride) !== 0) continue;
+            const edge = GameState.edgeLookup.get(edgeKey);
+            if (!edge) continue;
+
+            const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
+            const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
+            if (!isFinite(from.x) || !isFinite(from.y) || !isFinite(to.x) || !isFinite(to.y)) continue;
+
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            if ((dx * dx + dy * dy) >= maxSegmentLengthSq) continue;
+            if ((from.x < minX && to.x < minX) || (from.x > maxX && to.x > maxX)) continue;
+            if ((from.y < minY && to.y < minY) || (from.y > maxY && to.y > maxY)) continue;
+
+            segments.push({ from, to });
+        }
+        // Keep compatibility with living-network spark spawning logic.
+        path.screenEdgesCache = segments;
+        path.cacheValid = true;
+
+        if (segments.length > 0) {
+            const glow = this.glowCtx;
+            glow.globalCompositeOperation = 'lighter';
+            glow.lineCap = 'round';
+            glow.lineJoin = 'round';
+            glow.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.09)`;
+            glow.lineWidth = 12;
+            glow.beginPath();
+            for (const seg of segments) {
+                glow.moveTo(seg.from.x, seg.from.y);
+                glow.lineTo(seg.to.x, seg.to.y);
+            }
+            glow.stroke();
+
+            glow.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.15)`;
+            glow.lineWidth = 6;
+            glow.beginPath();
+            for (const seg of segments) {
+                glow.moveTo(seg.from.x, seg.from.y);
+                glow.lineTo(seg.to.x, seg.to.y);
+            }
+            glow.stroke();
+
+            const core = this.coreCtx;
+            core.globalCompositeOperation = 'lighter';
+            core.lineCap = 'round';
+            core.lineJoin = 'round';
+            core.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.34)`;
+            core.lineWidth = 1.7;
+            core.beginPath();
+            for (const seg of segments) {
+                core.moveTo(seg.from.x, seg.from.y);
+                core.lineTo(seg.to.x, seg.to.y);
+            }
+            core.stroke();
+        }
+
+        if (path.optimalPath && path.optimalPath.length > 1) {
+            const points = [];
+            for (const nodeId of path.optimalPath) {
+                const pos = GameState.nodes.get(nodeId);
+                if (!pos) continue;
+                const p = GameState.map.project([pos.lng, pos.lat]);
+                if (isFinite(p.x) && isFinite(p.y)) points.push(p);
+            }
+            if (points.length > 1) {
+                const hot = path.hotColor || vibe;
+                const glow = this.glowCtx;
+                glow.globalCompositeOperation = 'lighter';
+                glow.strokeStyle = `rgba(${hot.r}, ${hot.g}, ${hot.b}, 0.2)`;
+                glow.lineWidth = 18;
+                glow.beginPath();
+                glow.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    glow.lineTo(points[i].x, points[i].y);
+                }
+                glow.stroke();
+
+                const core = this.coreCtx;
+                core.globalCompositeOperation = 'lighter';
+                core.strokeStyle = `rgba(${hot.r}, ${hot.g}, ${hot.b}, 0.92)`;
+                core.lineWidth = 3.3;
+                core.beginPath();
+                core.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    core.lineTo(points[i].x, points[i].y);
+                }
+                core.stroke();
+            }
+        }
+    },
+
+    rebuildAll(paths, mapSnapshot, isMoving = false) {
+        this.clearCanvases();
+        for (const path of paths) {
+            this.appendPath(path, isMoving);
+        }
+        this.lastMapSnapshot = mapSnapshot;
+        this.lastHistoryVersion = VisualizerHistory.version;
+        this.renderedPathCount = paths.length;
+        this.lastRebuildTime = performance.now();
+        this.drawOffsetX = 0;
+        this.drawOffsetY = 0;
+        this.pendingRebuild = false;
+    },
+
+    sync(width, height) {
+        this.ensureBuffers(width, height);
+        const paths = VisualizerHistory.getPaths();
+        const mapSnapshot = this.getMapSnapshot();
+        const now = performance.now();
+        const moving = GameState.map && GameState.map.isMoving ? GameState.map.isMoving() : false;
+
+        if (paths.length === 0) {
+            this.clearCanvases();
+            this.lastMapSnapshot = mapSnapshot;
+            this.lastHistoryVersion = VisualizerHistory.version;
+            this.renderedPathCount = 0;
+            this.drawOffsetX = 0;
+            this.drawOffsetY = 0;
+            this.pendingRebuild = false;
+            return;
+        }
+
+        const mapChanged = !this.isMapStateSame(mapSnapshot, this.lastMapSnapshot);
+        const historyReset = VisualizerHistory.version < this.lastHistoryVersion || paths.length < this.renderedPathCount;
+        const versionChanged = VisualizerHistory.version !== this.lastHistoryVersion;
+
+        if (historyReset || this.lastHistoryVersion === -1 || !this.lastMapSnapshot) {
+            this.rebuildAll(paths, mapSnapshot, moving);
+            return;
+        }
+
+        if (mapChanged) {
+            if (!versionChanged &&
+                moving &&
+                this.canApproximateWithPanOffset(this.lastMapSnapshot, mapSnapshot) &&
+                (now - this.lastRebuildTime) < this.rebuildIntervalMs) {
+                const offset = this.computePanOffset(this.lastMapSnapshot);
+                this.drawOffsetX = offset.x;
+                this.drawOffsetY = offset.y;
+                this.pendingRebuild = true;
+                return;
+            }
+            this.rebuildAll(paths, mapSnapshot, moving);
+            return;
+        }
+
+        this.drawOffsetX = 0;
+        this.drawOffsetY = 0;
+
+        if (versionChanged) {
+            for (let i = this.renderedPathCount; i < paths.length; i++) {
+                this.appendPath(paths[i], moving);
+            }
+            this.renderedPathCount = paths.length;
+            this.lastHistoryVersion = VisualizerHistory.version;
+            this.lastMapSnapshot = mapSnapshot;
+            this.lastRebuildTime = now;
+            this.pendingRebuild = false;
+            return;
+        }
+
+        if (this.pendingRebuild && (now - this.lastRebuildTime) >= this.rebuildIntervalMs) {
+            this.rebuildAll(paths, mapSnapshot, moving);
+        }
+    },
+
+    renderDepth(ctx, width, height, isVizActive) {
+        if (!GameState.map) return;
+        const focus = [];
+        if (GameState.startMarkerLatLng) {
+            const p = GameState.map.project([GameState.startMarkerLatLng.lng, GameState.startMarkerLatLng.lat]);
+            if (isFinite(p.x) && isFinite(p.y)) focus.push(p);
+        }
+        if (GameState.endMarkerLatLng) {
+            const p = GameState.map.project([GameState.endMarkerLatLng.lng, GameState.endMarkerLatLng.lat]);
+            if (isFinite(p.x) && isFinite(p.y)) focus.push(p);
+        }
+        if (focus.length === 0) {
+            focus.push({ x: width * 0.52, y: height * 0.46 });
+        }
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = isVizActive ? 0.12 : 0.17;
+        for (const p of focus) {
+            const radius = Math.max(width, height) * 0.42;
+            const g = ctx.createRadialGradient(p.x, p.y, 20, p.x, p.y, radius);
+            g.addColorStop(0, 'rgba(160, 220, 255, 0.22)');
+            g.addColorStop(0.45, 'rgba(90, 130, 255, 0.1)');
+            g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = isVizActive ? 0.16 : 0.22;
+        const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.18, width * 0.5, height * 0.5, Math.max(width, height) * 0.7);
+        vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignette.addColorStop(0.65, 'rgba(8, 10, 20, 0.18)');
+        vignette.addColorStop(1, 'rgba(2, 4, 10, 0.35)');
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, width, height);
+        ctx.restore();
+    },
+
+    render(ctx, width, height, isVizActive = false) {
+        this.noteFrame();
+        this.sync(width, height);
+        if (!this.coreCanvas || !this.glowCanvas) return;
+
+        const breathe = 0.92 + Math.sin(performance.now() * 0.001 * 0.7) * 0.08;
+        const drawX = -this.drawOffsetX;
+        const drawY = -this.drawOffsetY;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (isVizActive ? 0.52 : 0.66) * breathe;
+        ctx.drawImage(this.glowCanvas, drawX, drawY, width, height);
+
+        ctx.globalAlpha = isVizActive ? 0.75 : 0.92;
+        ctx.drawImage(this.coreCanvas, drawX, drawY, width, height);
+        ctx.restore();
+
+        this.renderDepth(ctx, width, height, isVizActive);
+    },
+};
+
+// =============================================================================
+// VISUALIZER PHASE BLEND - Smooth crossfade between visualizer phases
+// =============================================================================
+
+const VisualizerPhaseBlend = {
+    canvas: null,
+    ctx: null,
+    width: 0,
+    height: 0,
+    active: false,
+    startTime: 0,
+    durationMs: 900,
+    maxAlpha: 0.7,
+    composite: 'screen',
+
+    ensureBuffer(width, height) {
+        if (!this.canvas) {
+            this.canvas = document.createElement('canvas');
+            this.ctx = this.canvas.getContext('2d');
+        }
+        if (this.width !== width || this.height !== height) {
+            this.width = width;
+            this.height = height;
+            this.canvas.width = width;
+            this.canvas.height = height;
+        }
+    },
+
+    capture(options = {}) {
+        const source = GameState.vizCanvas;
+        if (!source || source.width <= 0 || source.height <= 0) return;
+
+        this.ensureBuffer(source.width, source.height);
+        this.ctx.clearRect(0, 0, source.width, source.height);
+        this.ctx.drawImage(source, 0, 0, source.width, source.height);
+
+        this.durationMs = Math.max(120, options.durationMs || 900);
+        this.maxAlpha = Math.max(0, Math.min(1, options.maxAlpha ?? 0.7));
+        this.composite = options.composite || 'screen';
+        this.startTime = performance.now();
+        this.active = true;
+    },
+
+    clear() {
+        this.active = false;
+    },
+
+    render(ctx, width, height) {
+        if (!this.active || !this.canvas) return;
+
+        const elapsed = performance.now() - this.startTime;
+        const progress = Math.min(1, elapsed / this.durationMs);
+        if (progress >= 1) {
+            this.active = false;
+            return;
+        }
+
+        const eased = 1 - Math.pow(progress, 1.45);
+        const alpha = this.maxAlpha * eased * eased;
+        if (alpha <= 0.01) {
+            this.active = false;
+            return;
+        }
+
+        ctx.save();
+        ctx.globalCompositeOperation = this.composite;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(this.canvas, 0, 0, this.width, this.height, 0, 0, width, height);
+        ctx.restore();
+    },
 };
 
 // =============================================================================
@@ -5427,6 +5906,7 @@ const GameState = {
         loopTimeout: null,
         loopRunning: false,
         delayBetweenRuns: 3000,  // ms between visualizations
+        runId: 0,                // Monotonic token to cancel stale async work
     },
 
     // Explorer mode state
@@ -5504,6 +5984,8 @@ const GameState = {
         pulsePhase: 0,
         optimalRevealStartTime: 0,
         optimalRevealEndTime: 0,
+        settleStartTime: 0,
+        settleDuration: 0,
     },
 
     // Layers
@@ -6401,7 +6883,8 @@ function playAgain() {
     showModeSelector();
 }
 
-function selectRandomEndpoints() {
+function selectRandomEndpoints(options = {}) {
+    const { deferMarkerPlacement = true, markerDelayMs = 100, adjustViewport = true } = options;
     // Only use nodes from the largest connected component to ensure paths exist
     const largestComponentNodes = GameState.debug.largestComponentNodes;
     let nodeIds;
@@ -6489,14 +6972,20 @@ function selectRandomEndpoints() {
         [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
     ];
 
-    GameState.map.fitBounds(bounds, {
-        padding: 80,
-        maxZoom: 16
-    });
+    if (adjustViewport) {
+        GameState.map.fitBounds(bounds, {
+            padding: 80,
+            maxZoom: 16
+        });
+    }
 
-    setTimeout(() => {
+    if (deferMarkerPlacement) {
+        setTimeout(() => {
+            placeMarkers();
+        }, markerDelayMs);
+    } else {
         placeMarkers();
-    }, 100);
+    }
 }
 
 function centerOnRoute() {
@@ -7246,9 +7735,21 @@ async function playComparisonAnimation() {
     });
 }
 
-async function runEpicVisualization(explored, path) {
+async function runEpicVisualization(explored, path, shouldContinue = null, options = {}) {
     const viz = GameState.vizState;
     const speed = GameState.replaySpeed;
+    const canContinue = typeof shouldContinue === 'function' ? shouldContinue : () => true;
+    const onBeforeSettling = typeof options.onBeforeSettling === 'function' ? options.onBeforeSettling : null;
+    const abortVisualization = () => {
+        if (GameState.gameMode === 'visualizer' && SoundEngine.initialized) {
+            SoundEngine.stopScanning();
+        }
+    };
+
+    if (!canContinue()) {
+        abortVisualization();
+        return;
+    }
 
     // Reset visualization state
     viz.active = true;
@@ -7271,6 +7772,11 @@ async function runEpicVisualization(explored, path) {
 
     // Animate exploration
     for (let i = 0; i < explored.length; i++) {
+        if (!canContinue()) {
+            abortVisualization();
+            return;
+        }
+
         const nodeId = explored[i];
         viz.exploredSet.add(nodeId);
         viz.nodeHeat.set(nodeId, 1.0);
@@ -7300,10 +7806,18 @@ async function runEpicVisualization(explored, path) {
 
         if (i % CONFIG.viz.batchSize === 0) {
             await sleep(explorationDelay);
+            if (!canContinue()) {
+                abortVisualization();
+                return;
+            }
         }
     }
 
     await sleep(400 / speed);
+    if (!canContinue()) {
+        abortVisualization();
+        return;
+    }
 
     // Animate optimal path - BATCHED for performance
     viz.phase = 'path';
@@ -7317,6 +7831,11 @@ async function runEpicVisualization(explored, path) {
     const nodesPerFrame = Math.max(1, Math.ceil(path.length / totalFrames));
 
     for (let i = 0; i < path.length - 1; i += nodesPerFrame) {
+        if (!canContinue()) {
+            abortVisualization();
+            return;
+        }
+
         viz.pathProgress = Math.min(i, path.length - 2);
 
         // Spawn path particles occasionally
@@ -7328,6 +7847,10 @@ async function runEpicVisualization(explored, path) {
         }
 
         await sleep(frameTime);
+        if (!canContinue()) {
+            abortVisualization();
+            return;
+        }
     }
 
     viz.pathProgress = path.length - 1;
@@ -7343,16 +7866,34 @@ async function runEpicVisualization(explored, path) {
     }
 
     // Brief pause at full brightness
-    await sleep(250 / speed);
+    const holdAtPeakMs = GameState.gameMode === 'visualizer' ? 340 : (250 / speed);
+    await sleep(holdAtPeakMs);
+    if (!canContinue()) {
+        abortVisualization();
+        return;
+    }
+
+    // Commit path into persistent history before settling so the handoff can blend smoothly.
+    if (onBeforeSettling) {
+        try {
+            onBeforeSettling();
+        } catch (error) {
+            console.warn('[Visualization] onBeforeSettling callback failed:', error);
+        }
+    }
 
     // === SETTLING PHASE: Quick blend to ambient ===
     // Heat map blends into ambient (never fully fades)
     viz.phase = 'settling';
     viz.settleStartTime = performance.now();
-    viz.settleDuration = 400; // 0.4 seconds - snappy transition
+    viz.settleDuration = GameState.gameMode === 'visualizer' ? 1150 : 400;
 
     // Wait for settling to complete (renderVisualization handles the animation)
-    await sleep(viz.settleDuration / speed);
+    const settleWait = GameState.gameMode === 'visualizer' ? viz.settleDuration : (viz.settleDuration / speed);
+    await sleep(settleWait);
+    if (!canContinue()) {
+        abortVisualization();
+    }
 }
 
 async function replayVisualization() {
@@ -7490,7 +8031,7 @@ function renderVisualization() {
     if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
         AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), true);
     } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
-        AmbientViz.renderPathHistory(ctx, 16, VisualizerHistory.getPaths(), true);
+        VisualizerVibeRenderer.render(ctx, width, height, true);
     } else if (GameState.gameMode === 'competitive') {
         // Competitive mode - render round history
         AmbientViz.renderRoundHistory(ctx, 16, true);
@@ -7512,18 +8053,23 @@ function renderVisualization() {
     let settleProgress = 0;
     let heatOpacity = 1.0;
     let ambientOpacity = 0.0;
+    const isVisualizerMode = GameState.gameMode === 'visualizer';
 
     if (viz.phase === 'settling') {
         const elapsed = performance.now() - viz.settleStartTime;
-        settleProgress = Math.min(1, elapsed / (viz.settleDuration || 800));
+        const settleDuration = viz.settleDuration || (isVisualizerMode ? 1150 : 800);
+        settleProgress = Math.min(1, elapsed / settleDuration);
 
         // Ease-out curve for smooth deceleration
         const easeOut = 1 - Math.pow(1 - settleProgress, 2);
 
-        // VISUALIZER MODE: Keep heat at full brightness permanently
-        if (GameState.gameMode === 'visualizer') {
-            heatOpacity = 1.0;
-            ambientOpacity = 0.0;
+        // VISUALIZER MODE: Blend from live heat into persistent history instead of hard-switch.
+        if (isVisualizerMode) {
+            const holdRatio = 0.16;
+            const blendT = Math.max(0, (settleProgress - holdRatio) / (1 - holdRatio));
+            const smoothBlend = blendT * blendT * (3 - 2 * blendT); // smoothstep
+            heatOpacity = 1 - (smoothBlend * 0.9);  // Keep a little residual glow
+            ambientOpacity = 0.08 + (smoothBlend * 0.92);
         } else {
             // Other modes: Heat map blends into ambient - never fully fades out
             // Keep minimum 25% heat visibility so it blends smoothly
@@ -7538,11 +8084,15 @@ function renderVisualization() {
     // This CPU loop is only needed for Canvas 2D fallback
     const baseDecay = CONFIG.viz.heatDecay;
     const settlingDecay = viz.phase === 'settling'
-        ? Math.pow(baseDecay, 1 + settleProgress * 2)  // Up to 3x faster decay
+        ? (isVisualizerMode
+            ? Math.pow(baseDecay, 1 + settleProgress * 4.5)
+            : Math.pow(baseDecay, 1 + settleProgress * 2))
         : baseDecay;
     // Keep floor at minimum 20% during settling so heat blends into ambient
     const heatFloor = viz.phase === 'settling'
-        ? Math.max(0.2, CONFIG.viz.heatFloor * (1 - settleProgress * 0.7))
+        ? (isVisualizerMode
+            ? Math.max(0.04, CONFIG.viz.heatFloor * (1 - settleProgress * 0.98))
+            : Math.max(0.2, CONFIG.viz.heatFloor * (1 - settleProgress * 0.7)))
         : CONFIG.viz.heatFloor;
 
     // Only run CPU decay loop for Canvas 2D fallback
@@ -7566,7 +8116,7 @@ function renderVisualization() {
         if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
             AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), false);
         } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
-            AmbientViz.renderPathHistory(ctx, 16, VisualizerHistory.getPaths(), false);
+            VisualizerVibeRenderer.render(ctx, width, height, false);
         } else if (GameState.gameMode === 'competitive') {
             AmbientViz.renderRoundHistory(ctx, 16, false);
         }
@@ -7788,6 +8338,11 @@ function renderVisualization() {
     // Update and draw particles
     updateParticles();
     drawParticles(ctx);
+
+    // Crossfade layer for phase handoffs (ambient->viz and viz->ambient).
+    if (GameState.gameMode === 'visualizer') {
+        VisualizerPhaseBlend.render(ctx, width, height);
+    }
 }
 
 // LEGACY: Heat color interpolation - now uses current round's exploration color instead
@@ -8057,6 +8612,8 @@ function clearVisualizationState() {
     viz.pathProgress = 0;
     viz.optimalRevealStartTime = 0;
     viz.optimalRevealEndTime = 0;
+    viz.settleStartTime = 0;
+    viz.settleDuration = 0;
 
     // Clear WebGL heat data
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
@@ -9436,6 +9993,9 @@ function hideLocationSearch() {}
 
 async function navigateToCity(city) {
     console.log('Navigating to:', city.name);
+    const runId = GameState.visualizerState.active
+        ? VisualizerTimeline.createRunId()
+        : GameState.visualizerState.runId;
 
     // Update current city
     GameState.currentCity = {
@@ -9455,6 +10015,10 @@ async function navigateToCity(city) {
     // Clear existing visualization
     clearVisualization();
     VisualizerHistory.clear();
+    VisualizerTimeline.clearHeroState();
+    if (SoundEngine.initialized) {
+        SoundEngine.stopScanning();
+    }
 
     try {
         if (GameState.visualizerState.active && GameState.visualizerState.loopTimeout) {
@@ -9462,6 +10026,7 @@ async function navigateToCity(city) {
             GameState.visualizerState.loopTimeout = null;
         }
         await loadRoadNetwork(GameState.currentCity);
+        if (GameState.visualizerState.active && !VisualizerTimeline.isRunActive(runId)) return;
 
         // Start facts ticker for new city
         CityFacts.startTicker(GameState.currentCity);
@@ -9996,9 +10561,136 @@ document.addEventListener('fullscreenchange', () => {
     }
 });
 
+const VisualizerTimeline = {
+    config: {
+        preDropDelayMs: 90,
+        markerGapMs: 180,
+        postDropHoldMs: 160,
+        mapSettleTimeoutMs: 600,
+    },
+
+    createRunId() {
+        GameState.visualizerState.runId += 1;
+        return GameState.visualizerState.runId;
+    },
+
+    invalidateRuns() {
+        GameState.visualizerState.runId += 1;
+        this.clearHeroState();
+    },
+
+    isRunActive(runId) {
+        return GameState.visualizerState.active &&
+            GameState.gameMode === 'visualizer' &&
+            GameState.visualizerState.runId === runId;
+    },
+
+    clearHeroState() {
+        const mapContainer = document.getElementById('map-container');
+        if (mapContainer) mapContainer.classList.remove('visualizer-hero-active');
+        if (GameState.startMarkerEl) {
+            GameState.startMarkerEl.classList.remove('viz-marker-hidden', 'viz-marker-pop');
+        }
+        if (GameState.endMarkerEl) {
+            GameState.endMarkerEl.classList.remove('viz-marker-hidden', 'viz-marker-pop');
+        }
+    },
+
+    waitForMapSettle(timeoutMs = this.config.mapSettleTimeoutMs) {
+        return new Promise(resolve => {
+            const map = GameState.map;
+            if (!map) {
+                resolve();
+                return;
+            }
+            if (!map.isMoving || !map.isMoving()) {
+                resolve();
+                return;
+            }
+
+            let resolved = false;
+            const done = () => {
+                if (resolved) return;
+                resolved = true;
+                resolve();
+            };
+
+            const timeoutId = setTimeout(done, timeoutMs);
+            map.once('moveend', () => {
+                clearTimeout(timeoutId);
+                done();
+            });
+        });
+    },
+
+    async playHeroIntro(runId) {
+        if (!this.isRunActive(runId)) return false;
+
+        this.clearHeroState();
+        const mapContainer = document.getElementById('map-container');
+        if (mapContainer) mapContainer.classList.add('visualizer-hero-active');
+
+        // Visualizer-only: keep camera stable during loops to avoid zoom/pan jumpiness.
+        selectRandomEndpoints({ deferMarkerPlacement: false, adjustViewport: false });
+        await this.waitForMapSettle();
+        if (!this.isRunActive(runId)) {
+            this.clearHeroState();
+            return false;
+        }
+
+        updateMarkerPositions();
+
+        const startEl = GameState.startMarkerEl;
+        const endEl = GameState.endMarkerEl;
+        if (!startEl || !endEl) {
+            this.clearHeroState();
+            return false;
+        }
+
+        startEl.classList.add('viz-marker-hidden');
+        endEl.classList.add('viz-marker-hidden');
+
+        await sleep(this.config.preDropDelayMs);
+        if (!this.isRunActive(runId)) {
+            this.clearHeroState();
+            return false;
+        }
+
+        startEl.classList.remove('viz-marker-hidden');
+        startEl.classList.add('viz-marker-pop');
+        if (SoundEngine.initialized) SoundEngine.hover();
+
+        await sleep(this.config.markerGapMs);
+        if (!this.isRunActive(runId)) {
+            this.clearHeroState();
+            return false;
+        }
+
+        endEl.classList.remove('viz-marker-hidden');
+        endEl.classList.add('viz-marker-pop');
+        if (SoundEngine.initialized) SoundEngine.hover();
+
+        await sleep(this.config.postDropHoldMs);
+        this.clearHeroState();
+
+        return this.isRunActive(runId);
+    },
+};
+
 function startVisualizerMode() {
     GameState.visualizerState.active = true;
     GameState.visualizerState.currentVisualization = 0;
+    VisualizerTimeline.invalidateRuns();
+    const bootRunId = VisualizerTimeline.createRunId();
+
+    if (GameState.visualizerState.loopTimeout) {
+        clearTimeout(GameState.visualizerState.loopTimeout);
+        GameState.visualizerState.loopTimeout = null;
+    }
+    GameState.visualizerState.loopRunning = false;
+    if (SoundEngine.initialized) {
+        SoundEngine.stopScanning();
+    }
 
     // Request true fullscreen (like Netflix/YouTube)
     if (!StreamConfig.enabled) {
@@ -10019,7 +10711,7 @@ function startVisualizerMode() {
 
     getNextVisualizerCity()
         .then(city => {
-            if (!city || !GameState.visualizerState.active || GameState.gameMode !== 'visualizer') return null;
+            if (!city || !VisualizerTimeline.isRunActive(bootRunId)) return null;
             GameState.currentCity = city;
 
             // Update location and stats
@@ -10032,7 +10724,7 @@ function startVisualizerMode() {
             return loadRoadNetwork(city).then(() => city);
         })
         .then(city => {
-            if (!city || !GameState.visualizerState.active || GameState.gameMode !== 'visualizer') return;
+            if (!city || !VisualizerTimeline.isRunActive(bootRunId)) return;
             // Start unified animation loop (replaces AmbientViz.start())
             GameController.startLoop();
             // Start facts ticker for visualizer mode
@@ -10040,6 +10732,11 @@ function startVisualizerMode() {
             // Enter IDLE phase, then start visualizer loop
             GameController.enterPhase(GamePhase.IDLE);
             runVisualizerLoop();
+        })
+        .catch(error => {
+            if (VisualizerTimeline.isRunActive(bootRunId)) {
+                console.error('[Visualizer] Failed to start mode:', error);
+            }
         });
 }
 
@@ -10062,13 +10759,11 @@ async function runVisualizerLoop() {
         return;
     }
 
+    const runId = VisualizerTimeline.createRunId();
     GameState.visualizerState.loopRunning = true;
 
     try {
         pushStreamState('heartbeat', GameState.currentCity || null);
-
-        // Pick random start/end points
-        selectRandomEndpoints();
 
         GameState.visualizerState.currentVisualization++;
         updateVisualizerUI(
@@ -10076,37 +10771,57 @@ async function runVisualizerLoop() {
             GameState.visualizerState.currentVisualization
         );
 
+        // Cinematic marker intro before each run
+        const introOk = await VisualizerTimeline.playHeroIntro(runId);
+        if (!introOk) return;
+
         // Run the A* visualization
-        await runVisualizerAStar();
+        await runVisualizerAStar(runId);
 
         // Check again after async operation (user might have exited during viz)
-        if (!GameState.visualizerState.active) return;
+        if (!VisualizerTimeline.isRunActive(runId)) return;
 
         // Check if we should load a new city
         if (GameState.visualizerState.currentVisualization >= GameState.visualizerState.maxPerCity) {
             GameState.visualizerState.currentVisualization = 0;
-            await loadNextVisualizerCity();
+            await loadNextVisualizerCity(runId);
         }
 
         // Check AGAIN after potential city load (user might have exited)
-        if (!GameState.visualizerState.active) return;
+        if (!VisualizerTimeline.isRunActive(runId)) return;
 
         // Return to IDLE phase after visualization completes
         GameController.enterPhase(GamePhase.IDLE);
 
         // Continue the loop after a delay
+        if (GameState.visualizerState.loopTimeout) {
+            clearTimeout(GameState.visualizerState.loopTimeout);
+            GameState.visualizerState.loopTimeout = null;
+        }
         GameState.visualizerState.loopTimeout = setTimeout(
-            runVisualizerLoop,
+            () => {
+                // Prevent stale scheduled callbacks from previous runs.
+                if (VisualizerTimeline.isRunActive(runId)) {
+                    runVisualizerLoop();
+                }
+            },
             GameState.visualizerState.delayBetweenRuns
         );
     } finally {
         GameState.visualizerState.loopRunning = false;
+        VisualizerTimeline.clearHeroState();
     }
 }
 
-async function runVisualizerAStar() {
-    // VISUALIZER MODE: Clear history before each run - show only ONE visualization at a time
-    VisualizerHistory.clear();
+async function runVisualizerAStar(runId) {
+    // Blend ambient -> active visualization to avoid hard visual jump.
+    if (GameState.gameMode === 'visualizer') {
+        VisualizerPhaseBlend.capture({
+            durationMs: 460,
+            maxAlpha: 0.42,
+            composite: 'lighter',
+        });
+    }
 
     // Clear previous visualization state
     clearVisualizationState();
@@ -10118,24 +10833,53 @@ async function runVisualizerAStar() {
     const result = runAStar(GameState.startNode, GameState.endNode);
 
     if (result.path.length > 0) {
-        // Run the epic visualization (it's async)
-        await runEpicVisualization(result.explored, result.path);
+        let committedToHistory = false;
+        const commitToHistory = () => {
+            if (committedToHistory) return;
+            const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
+            VisualizerHistory.addPath(exploredEdgeKeys, result.path);
+            committedToHistory = true;
+        };
 
-        // Add to history for living network effect
-        const exploredEdgeKeys = Array.from(GameState.vizState.edgeHeat.keys());
-        VisualizerHistory.addPath(exploredEdgeKeys, result.path);
+        // Run the epic visualization (it's async)
+        await runEpicVisualization(
+            result.explored,
+            result.path,
+            () => VisualizerTimeline.isRunActive(runId) && GameController.phase === GamePhase.VISUALIZING,
+            {
+                onBeforeSettling: () => {
+                    if (VisualizerTimeline.isRunActive(runId)) {
+                        commitToHistory();
+                    }
+                }
+            }
+        );
+
+        if (!VisualizerTimeline.isRunActive(runId)) return;
+
+        // Visualizer mode does not call score flow, so trigger completion cue here.
+        if (SoundEngine.initialized) {
+            SoundEngine.pathFound();
+            await SoundEngine.fadeOutScanning(250);
+        }
+
+        // Fallback commit if callback path was skipped.
+        commitToHistory();
+    } else if (SoundEngine.initialized) {
+        await SoundEngine.fadeOutScanning(180);
     }
 
     // Exit VISUALIZING phase (GameController cleans up vizState.active)
     // Phase transition happens in runVisualizerLoop after this returns
 }
 
-async function loadNextVisualizerCity() {
-    if (!GameState.visualizerState.active) return;
+async function loadNextVisualizerCity(runId) {
+    if (!VisualizerTimeline.isRunActive(runId)) return;
 
     // Clear current visualization and history for new city
     clearVisualization();
     VisualizerHistory.clear();
+    VisualizerTimeline.clearHeroState();
 
     // Remove markers
     if (GameState.startMarker) {
@@ -10149,6 +10893,7 @@ async function loadNextVisualizerCity() {
 
     // Pick next city (stream override first, random fallback)
     const city = await getNextVisualizerCity();
+    if (!VisualizerTimeline.isRunActive(runId)) return;
     GameState.currentCity = city;
 
     updateVisualizerUI(city.name, 1);
@@ -10171,6 +10916,7 @@ function stopVisualizerMode() {
 
     // Mark visualizer as inactive FIRST (stops loop callbacks)
     GameState.visualizerState.active = false;
+    VisualizerTimeline.invalidateRuns();
 
     // Exit fullscreen if we're in it
     exitVisualizerFullscreen();
@@ -10206,6 +10952,7 @@ function stopVisualizerMode() {
 
     // Clear visualization and history
     clearVisualization();
+    VisualizerPhaseBlend.clear();
     VisualizerHistory.clear();
 
     // Remove markers (DOM-based)
@@ -11822,6 +12569,7 @@ function preloadNextCity() {
     // Pick next city based on location mode
     const nextCity = getRandomCity(GameState.locationMode);
     GameState.continuousPlay.preloadedCity = nextCity;
+    GameState.continuousPlay.preloadedData = null;
     GameState.continuousPlay.preloadRequestId += 1;
     const requestId = GameState.continuousPlay.preloadRequestId;
 
@@ -11997,9 +12745,18 @@ async function transitionToNextCity() {
     const cityName = document.getElementById('transition-city-name');
     const citiesCount = document.getElementById('transition-cities-count');
 
-    // Determine next city
-    let nextCity = GameState.continuousPlay.preloadedCity;
-    if (!nextCity) {
+    // Determine next city (atomically consume preload slot if present).
+    // This prevents late preload responses from a consumed city from writing
+    // back into shared state and blocking future preloads.
+    const usedPreloadedCity = GameState.continuousPlay.preloadedCity;
+    const usedPreloadedData = GameState.continuousPlay.preloadedData;
+
+    let nextCity = usedPreloadedCity;
+    if (usedPreloadedCity) {
+        GameState.continuousPlay.preloadedCity = null;
+        GameState.continuousPlay.preloadedData = null;
+        GameState.continuousPlay.preloadRequestId += 1; // Invalidate in-flight preload callbacks
+    } else {
         nextCity = getRandomCity(GameState.locationMode);
     }
 
@@ -12032,6 +12789,12 @@ async function transitionToNextCity() {
     // Wait for transition effect
     await new Promise(resolve => setTimeout(resolve, 2000));
 
+    // User may have exited continuous mode during transition.
+    if (!GameState.continuousPlay.enabled) {
+        if (overlay) overlay.classList.add('hidden');
+        return;
+    }
+
     // Move map to new city
     GameState.currentCity = nextCity;
     GameState.map.jumpTo({ center: [nextCity.lng, nextCity.lat], zoom: nextCity.zoom || 15 });
@@ -12040,11 +12803,9 @@ async function transitionToNextCity() {
     // Update HUD with new city number
     updateContinuousHUD();
 
-    // Use preloaded data if available
-    if (GameState.continuousPlay.preloadedData) {
-        processRoadData(GameState.continuousPlay.preloadedData);
-        GameState.continuousPlay.preloadedCity = null;
-        GameState.continuousPlay.preloadedData = null;
+    // Use atomically captured preloaded data if available
+    if (usedPreloadedData) {
+        processRoadData(usedPreloadedData);
 
         // Hide transition, start new round
         if (overlay) overlay.classList.add('hidden');
