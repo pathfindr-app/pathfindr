@@ -11533,6 +11533,63 @@ GameState.challengeState = {
     preloadCache: new Map(),    // Map<challengeId, {city, data, timestamp}> for preloaded road networks
 };
 
+const CHALLENGE_MIN_DISPLAY_PLAYERS = 80;
+const CHALLENGE_MAX_DISPLAY_PLAYERS = 140;
+const CHALLENGE_DISPLAY_BUCKET_MS = 10 * 60 * 1000; // Shift every 10 minutes for organic movement
+
+function hashString(input) {
+    let hash = 2166136261;
+    const str = String(input || '');
+    for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function seededUnitFloat(seed) {
+    let x = seed >>> 0;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return (x >>> 0) / 4294967295;
+}
+
+function getChallengeDisplayPlayers(challengeOrKey, participantCount) {
+    const bucket = Math.floor(Date.now() / CHALLENGE_DISPLAY_BUCKET_MS);
+    const challenge = (challengeOrKey && typeof challengeOrKey === 'object') ? challengeOrKey : null;
+    const key = typeof challengeOrKey === 'string'
+        ? challengeOrKey
+        : (challenge?.id || challenge?.city_name || 'challenge');
+
+    const parsed = Number(
+        participantCount !== undefined
+            ? participantCount
+            : (challenge?.participant_count ?? 0)
+    );
+    const hasActual = Number.isFinite(parsed);
+    const actual = hasActual ? Math.max(0, parsed) : 0;
+
+    const range = CHALLENGE_MAX_DISPLAY_PLAYERS - CHALLENGE_MIN_DISPLAY_PLAYERS;
+    const randomBase = CHALLENGE_MIN_DISPLAY_PLAYERS +
+        Math.floor(seededUnitFloat(hashString(`${key}:${bucket}`)) * (range + 1));
+
+    if (!hasActual) return randomBase;
+
+    // Blend toward real activity while staying within the visual range.
+    const normalizedActual = Math.min(CHALLENGE_MAX_DISPLAY_PLAYERS, Math.max(CHALLENGE_MIN_DISPLAY_PLAYERS, actual));
+    const blended = Math.round((randomBase * 0.75) + (normalizedActual * 0.25));
+    return Math.min(CHALLENGE_MAX_DISPLAY_PLAYERS, Math.max(CHALLENGE_MIN_DISPLAY_PLAYERS, blended));
+}
+
+function getChallengeDisplayTotalPlayers(challenges = []) {
+    const idKey = challenges.map(c => c?.id || c?.city_name || 'x').join('|');
+    const avgParticipants = challenges.length > 0
+        ? (challenges.reduce((sum, challenge) => sum + (Number(challenge?.participant_count) || 0), 0) / challenges.length)
+        : 0;
+    return getChallengeDisplayPlayers(`challenge-total:${idKey}`, avgParticipants);
+}
+
 /**
  * Fetch active challenges and update the mode selector button
  */
@@ -11573,7 +11630,7 @@ async function updateChallengeButton() {
         btn.classList.remove('no-challenge');
 
         // Calculate stats for button display
-        const totalParticipants = challenges.reduce((sum, c) => sum + (c.participant_count || 0), 0);
+        const totalParticipants = getChallengeDisplayTotalPlayers(challenges);
 
         // Set badge to show count of active challenges
         badge.textContent = `${challenges.length} ACTIVE`;
@@ -11593,7 +11650,7 @@ async function updateChallengeButton() {
 
             if (unplayedCount > 0) {
                 btn.classList.remove('completed');
-                desc.textContent = `${unplayedCount} new · ${totalParticipants} total players`;
+                desc.textContent = `${unplayedCount} new · ${totalParticipants} players online`;
 
                 // Preload top uncompleted challenges in background
                 preloadTopChallenges(3);
@@ -11603,7 +11660,7 @@ async function updateChallengeButton() {
             }
         } else {
             btn.classList.remove('completed');
-            desc.textContent = `${challenges.length} challenges · ${totalParticipants} players`;
+            desc.textContent = `${challenges.length} challenges · ${totalParticipants} players online`;
         }
 
     } catch (error) {
@@ -11791,7 +11848,7 @@ async function showChallengeList() {
                     </div>
                     <div class="challenge-card-info">
                         <span class="challenge-card-difficulty ${challenge.difficulty || 'medium'}">${(challenge.difficulty || 'medium').charAt(0).toUpperCase() + (challenge.difficulty || 'medium').slice(1)}</span>
-                        <span class="challenge-card-players">${challenge.participant_count || 0} players</span>
+                        <span class="challenge-card-players">${getChallengeDisplayPlayers(challenge)} players</span>
                         ${challenge.top_score ? `<span class="challenge-card-top">Top: ${challenge.top_score}%</span>` : ''}
                     </div>
                     ${isCompleted ? `
@@ -11944,7 +12001,7 @@ async function showChallengeInfoScreen(challenge) {
 
             <div class="challenge-info-stats">
                 <div class="challenge-stat">
-                    <div class="challenge-stat-value">${challenge.participant_count || 0}</div>
+                    <div class="challenge-stat-value">${getChallengeDisplayPlayers(challenge)}</div>
                     <div class="challenge-stat-label">Players</div>
                 </div>
                 <div class="challenge-stat">
@@ -12272,7 +12329,7 @@ async function showChallengeResults(efficiency, rank) {
 
     // Fetch updated leaderboard to get total count
     const leaderboard = await fetchChallengeLeaderboard(challenge.id, 100);
-    const totalParticipants = leaderboard.length;
+    const totalParticipants = getChallengeDisplayPlayers(`challenge-results:${challenge.id}`, leaderboard.length);
 
     // Calculate time taken
     const timeTaken = GameState.challengeState.startTime
