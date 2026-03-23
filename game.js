@@ -737,6 +737,8 @@ const GameController = {
         const ctx = GameState.vizCtx;
         if (!ctx) return;
 
+        ensureMapPresentationSync();
+
         const width = GameState.vizCanvas?.width || 0;
         const height = GameState.vizCanvas?.height || 0;
 
@@ -1301,6 +1303,8 @@ const WebGLRenderer = {
     indexType: null,
     indexArrayType: null,
     canUseWebGL: true,
+    projectionStateKey: null,
+    contextListenersAttached: false,
 
     // Uniforms
     uniforms: {
@@ -1667,6 +1671,19 @@ const WebGLRenderer = {
             return false;
         }
 
+        if (!this.contextListenersAttached) {
+            this.canvas.addEventListener('webglcontextlost', (event) => {
+                event.preventDefault();
+                console.warn('[WebGL] Context lost. Falling back to Canvas rendering.');
+                this.initialized = false;
+                this.canUseWebGL = false;
+                this.projectionStateKey = null;
+                GameState.useWebGL = false;
+                refreshMapPresentation();
+            });
+            this.contextListenersAttached = true;
+        }
+
         const gl = this.gl;
 
         // Enable blending for transparency and glow
@@ -1798,6 +1815,11 @@ const WebGLRenderer = {
         }
 
         this.uniforms.resolution = [width, height];
+        this.projectionStateKey = null;
+    },
+
+    invalidateProjectionState() {
+        this.projectionStateKey = null;
     },
 
     // Build edge geometry buffers from road network
@@ -1941,13 +1963,14 @@ const WebGLRenderer = {
         this.exploredIndexCount = 0;
         this.exploredEdgeSet.clear();
         this.needsExploredUpdate = false;
+        this.projectionStateKey = getMapPresentationStateKey();
 
         console.log(`WebGL: Built buffers for ${edges.length} edges (${this.indexCount} indices)`);
         return true;
     },
 
     // Update edge positions when map moves/zooms
-    updateEdgePositions() {
+    updateEdgePositions(force = false) {
         if (!this.initialized || !GameState.edgeList || this.edgeCount === 0) {
             return;
         }
@@ -1957,6 +1980,11 @@ const WebGLRenderer = {
         const map = GameState.map;
 
         if (!map) return;
+
+        const projectionStateKey = getMapPresentationStateKey();
+        if (!force && projectionStateKey && this.projectionStateKey === projectionStateKey) {
+            return;
+        }
 
         const positions = new Float32Array(edges.length * 8);
         const normals = new Float32Array(edges.length * 8);
@@ -2000,6 +2028,7 @@ const WebGLRenderer = {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.edgeNormals);
         gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
+        this.projectionStateKey = projectionStateKey;
     },
 
     // Mark edge as explored at current time (GPU calculates decay from this)
@@ -4209,12 +4238,12 @@ const AmbientViz = {
         const mapZoom = GameState.map.getZoom();
         const mapPitch = GameState.map.getPitch ? GameState.map.getPitch() : 0;
         const mapBearing = GameState.map.getBearing ? GameState.map.getBearing() : 0;
-        const mapState = `${mapCenter.lat.toFixed(6)},${mapCenter.lng.toFixed(6)},${mapZoom},${mapPitch.toFixed(1)},${mapBearing.toFixed(1)}`;
 
         // Tight viewport clipping for 3D pitch - prevents horizon artifacts
         const canvas = GameState.vizCanvas || GameState.drawCanvas;
         const vw = canvas ? canvas.width : window.innerWidth;
         const vh = canvas ? canvas.height : window.innerHeight;
+        const mapState = `${mapCenter.lat.toFixed(6)},${mapCenter.lng.toFixed(6)},${mapZoom},${mapPitch.toFixed(1)},${mapBearing.toFixed(1)},${vw},${vh}`;
         const padding = 100;  // Tight clipping
         const minX = -padding, maxX = vw + padding, minY = -padding, maxY = vh + padding;
 
@@ -5196,6 +5225,13 @@ const VisualizerVibeRenderer = {
     pendingRebuild: false,
     maxEdgesPerPath: 12000,
 
+    invalidateProjectionState() {
+        this.lastMapSnapshot = null;
+        this.drawOffsetX = 0;
+        this.drawOffsetY = 0;
+        this.pendingRebuild = false;
+    },
+
     reset() {
         this.lastMapSnapshot = null;
         this.lastHistoryVersion = -1;
@@ -5250,12 +5286,15 @@ const VisualizerVibeRenderer = {
     getMapSnapshot() {
         if (!GameState.map) return null;
         const center = GameState.map.getCenter();
+        const { width, height } = getPresentationCanvasSize();
         return {
             centerLat: center.lat,
             centerLng: center.lng,
             zoom: GameState.map.getZoom(),
             pitch: GameState.map.getPitch ? GameState.map.getPitch() : 0,
             bearing: GameState.map.getBearing ? GameState.map.getBearing() : 0,
+            width,
+            height,
         };
     },
 
@@ -5266,7 +5305,9 @@ const VisualizerVibeRenderer = {
             Math.abs(a.centerLng - b.centerLng) < 1e-7 &&
             Math.abs(a.zoom - b.zoom) < 0.0006 &&
             Math.abs(a.pitch - b.pitch) < 0.04 &&
-            Math.abs(a.bearing - b.bearing) < 0.04
+            Math.abs(a.bearing - b.bearing) < 0.04 &&
+            a.width === b.width &&
+            a.height === b.height
         );
     },
 
@@ -5275,7 +5316,9 @@ const VisualizerVibeRenderer = {
         return (
             Math.abs(a.zoom - b.zoom) < 0.01 &&
             Math.abs(a.pitch - b.pitch) < 0.2 &&
-            Math.abs(a.bearing - b.bearing) < 0.2
+            Math.abs(a.bearing - b.bearing) < 0.2 &&
+            a.width === b.width &&
+            a.height === b.height
         );
     },
 
@@ -6083,6 +6126,114 @@ function screenToGeo(x, y) {
     return { lat: lngLat.lat, lng: lngLat.lng };
 }
 
+function getMapContainerSize() {
+    const container = document.getElementById('map-container');
+    return {
+        width: container?.offsetWidth || 0,
+        height: container?.offsetHeight || 0,
+    };
+}
+
+function getPresentationCanvasSize() {
+    const { width: containerWidth, height: containerHeight } = getMapContainerSize();
+    return {
+        width: GameState.vizCanvas?.width || GameState.drawCanvas?.width || containerWidth,
+        height: GameState.vizCanvas?.height || GameState.drawCanvas?.height || containerHeight,
+    };
+}
+
+function getMapPresentationStateKey() {
+    if (!GameState.map) return null;
+
+    const center = GameState.map.getCenter();
+    const zoom = GameState.map.getZoom();
+    const pitch = GameState.map.getPitch ? GameState.map.getPitch() : 0;
+    const bearing = GameState.map.getBearing ? GameState.map.getBearing() : 0;
+    const { width, height } = getPresentationCanvasSize();
+
+    return [
+        center.lat.toFixed(7),
+        center.lng.toFixed(7),
+        zoom.toFixed(4),
+        pitch.toFixed(2),
+        bearing.toFixed(2),
+        width,
+        height,
+    ].join('|');
+}
+
+function markPathProjectionCachesDirty(paths = []) {
+    for (const path of paths) {
+        path.cacheValid = false;
+        path.lastMapState = null;
+        path.screenEdgesCache = null;
+        path.optimalPointsCache = null;
+        path.userPointsCache = null;
+    }
+}
+
+function invalidateProjectedCaches() {
+    ScreenCoordCache.invalidate();
+    GameState.presentationSyncKey = null;
+
+    if (typeof ExplorerHistory !== 'undefined') {
+        markPathProjectionCachesDirty(ExplorerHistory.paths);
+    }
+
+    if (typeof VisualizerHistory !== 'undefined') {
+        markPathProjectionCachesDirty(VisualizerHistory.paths);
+    }
+
+    if (typeof VisualizerVibeRenderer !== 'undefined' &&
+        typeof VisualizerVibeRenderer.invalidateProjectionState === 'function') {
+        VisualizerVibeRenderer.invalidateProjectionState();
+    }
+
+    if (typeof WebGLRenderer !== 'undefined' &&
+        typeof WebGLRenderer.invalidateProjectionState === 'function') {
+        WebGLRenderer.invalidateProjectionState();
+    }
+}
+
+function syncProjectedLayers() {
+    if (!GameState.map) return;
+
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
+        WebGLRenderer.updateEdgePositions();
+    }
+
+    updateMarkerPositions();
+    redrawUserPath();
+    GameState.presentationSyncKey = getMapPresentationStateKey();
+}
+
+function ensureMapPresentationSync() {
+    if (!GameState.map) return;
+
+    const { width, height } = getMapContainerSize();
+    if (!width || !height) return;
+
+    const webglCanvas = WebGLRenderer.canvas;
+    const canvasesNeedResize =
+        GameState.drawCanvas?.width !== width ||
+        GameState.drawCanvas?.height !== height ||
+        GameState.vizCanvas?.width !== width ||
+        GameState.vizCanvas?.height !== height ||
+        GameState.previewCanvas?.width !== width ||
+        GameState.previewCanvas?.height !== height ||
+        (webglCanvas && (webglCanvas.width !== width || webglCanvas.height !== height));
+
+    if (canvasesNeedResize) {
+        resizeCanvases();
+    }
+
+    const presentationKey = getMapPresentationStateKey();
+    if (!presentationKey || GameState.presentationSyncKey === presentationKey) return;
+
+    invalidateProjectedCaches();
+    syncProjectedLayers();
+}
+
 // =============================================================================
 // SCREEN COORDINATE CACHE - Avoid recalculating every frame
 // =============================================================================
@@ -6091,11 +6242,13 @@ const ScreenCoordCache = {
     edges: [],           // Array of {from: {x,y}, to: {x,y}, visible: bool} for each edge
     dirty: true,         // Needs refresh when map moves/zooms
     lastRefresh: 0,      // Timestamp of last refresh
+    stateKey: null,      // Map projection snapshot used for the cached edges
 
     // Refresh all edge screen coordinates
     refresh() {
         if (!GameState.map || !GameState.edgeList || GameState.edgeList.length === 0) {
             this.edges = [];
+            this.stateKey = null;
             return;
         }
 
@@ -6142,16 +6295,19 @@ const ScreenCoordCache = {
 
         this.dirty = false;
         this.lastRefresh = performance.now();
+        this.stateKey = getMapPresentationStateKey();
     },
 
     // Mark cache as needing refresh
     invalidate() {
         this.dirty = true;
+        this.stateKey = null;
     },
 
     // Get cached coordinates, refresh if needed
     getEdges() {
-        if (this.dirty || this.edges.length === 0) {
+        const currentStateKey = getMapPresentationStateKey();
+        if (this.dirty || this.edges.length === 0 || this.stateKey !== currentStateKey) {
             this.refresh();
         }
         return this.edges;
@@ -6311,6 +6467,7 @@ const GameState = {
     gamesCompleted: parseInt(localStorage.getItem('pathfindr_games_completed') || '0', 10),
     isLoading: true,
     roundTransitionInFlight: false,
+    presentationSyncKey: null,
     gameStarted: false,
     canDraw: false,
 
@@ -6501,10 +6658,8 @@ function initMap() {
 
     // Unified map change handler
     function onMapChange() {
-        ScreenCoordCache.invalidate();  // Invalidate coordinate cache
-        if (GameState.useWebGL && WebGLRenderer.canUseWebGL) WebGLRenderer.updateEdgePositions();
-        updateMarkerPositions();
-        redrawUserPath();
+        invalidateProjectedCaches();
+        syncProjectedLayers();
         // Let the main render loop handle drawing to avoid over-rendering during pan/zoom.
         if (!GameController.animationId) {
             if (GameState.vizState.active) {
@@ -6559,10 +6714,6 @@ function resizeCanvases() {
     const height = container.offsetHeight;
     if (!width || !height) return;
 
-    if (GameState.map?.resize) {
-        GameState.map.resize();
-    }
-
     GameState.drawCanvas.width = width;
     GameState.drawCanvas.height = height;
     GameState.vizCanvas.width = width;
@@ -6575,18 +6726,16 @@ function resizeCanvases() {
         WebGLRenderer.resize();
     }
 
+    if (GameState.map?.resize) {
+        GameState.map.resize();
+    }
+
     refreshMapPresentation();
 }
 
 function refreshMapPresentation() {
-    ScreenCoordCache.invalidate();
-
-    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
-        WebGLRenderer.updateEdgePositions();
-    }
-
-    updateMarkerPositions();
-    redrawUserPath();
+    invalidateProjectedCaches();
+    syncProjectedLayers();
 }
 
 function scheduleMapPresentationRefresh(options = {}) {
@@ -7172,8 +7321,8 @@ function processRoadData(data) {
     // Analyze graph connectivity
     analyzeGraphConnectivity();
 
-    // Invalidate coordinate cache - new road data loaded
-    ScreenCoordCache.invalidate();
+    // Invalidate all projected caches - new road data loaded
+    invalidateProjectedCaches();
 
     // Build WebGL buffers for road network (fallback to Canvas if too large)
     if (WebGLRenderer.initialized) {
