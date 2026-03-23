@@ -6545,6 +6545,9 @@ function initCanvases() {
 
     resizeCanvases();
     window.addEventListener('resize', resizeCanvases);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resizeCanvases);
+    }
 }
 
 function resizeCanvases() {
@@ -6555,7 +6558,7 @@ function resizeCanvases() {
     const height = container.offsetHeight;
     if (!width || !height) return;
 
-    if (!shouldUseLegacyMobileSync() && GameState.map?.resize) {
+    if (GameState.map?.resize) {
         GameState.map.resize();
     }
 
@@ -6569,11 +6572,6 @@ function resizeCanvases() {
     // Resize WebGL canvas
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.resize();
-    }
-
-    if (shouldUseLegacyMobileSync()) {
-        redrawUserPath();
-        return;
     }
 
     refreshMapPresentation();
