@@ -6300,6 +6300,21 @@ function ensureMapPresentationSync() {
     syncProjectedLayers(forceSync);
 }
 
+function requestPresentationSync() {
+    GameState.presentationDirty = true;
+
+    if (GameState.pendingPresentationSync) return;
+    GameState.pendingPresentationSync = true;
+
+    const run = () => {
+        GameState.pendingPresentationSync = false;
+        ensureMapPresentationSync();
+    };
+
+    requestAnimationFrame(run);
+    setTimeout(run, 160);
+}
+
 // =============================================================================
 // SCREEN COORDINATE CACHE - Avoid recalculating every frame
 // =============================================================================
@@ -6536,6 +6551,9 @@ const GameState = {
     presentationDirty: true,
     presentationSyncKey: null,
     mapWasMoving: false,
+    containerResizeObserver: null,
+    layoutMutationObserver: null,
+    pendingPresentationSync: false,
     gameStarted: false,
     canDraw: false,
 
@@ -6782,6 +6800,37 @@ function initCanvases() {
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', resizeCanvases);
     }
+
+    const mapContainer = document.getElementById('map-container');
+    if (window.ResizeObserver && mapContainer && !GameState.containerResizeObserver) {
+        GameState.containerResizeObserver = new ResizeObserver(() => {
+            requestPresentationSync();
+        });
+        GameState.containerResizeObserver.observe(mapContainer);
+    }
+
+    if (window.MutationObserver && !GameState.layoutMutationObserver) {
+        const mutationTargets = [
+            document.body,
+            document.getElementById('results-panel'),
+            document.getElementById('adsense-banner'),
+        ].filter(Boolean);
+
+        if (mutationTargets.length > 0) {
+            GameState.layoutMutationObserver = new MutationObserver(() => {
+                requestPresentationSync();
+            });
+
+            for (const target of mutationTargets) {
+                GameState.layoutMutationObserver.observe(target, {
+                    attributes: true,
+                    attributeFilter: ['class', 'style'],
+                    childList: true,
+                    subtree: target.id === 'results-panel' || target.id === 'adsense-banner',
+                });
+            }
+        }
+    }
 }
 
 function resizeCanvases() {
@@ -6817,16 +6866,13 @@ function refreshMapPresentation() {
 }
 
 function scheduleMapPresentationRefresh(options = {}) {
-    if (shouldUseLegacyMobileSync()) return;
-
     const { watchMoveEnd = false } = options;
-    const runSync = () => refreshMapPresentation();
+    const runSync = () => requestPresentationSync();
 
-    requestAnimationFrame(runSync);
-    setTimeout(runSync, 120);
+    runSync();
 
     if (watchMoveEnd && GameState.map?.once && typeof GameState.map.isMoving === 'function' && GameState.map.isMoving()) {
-        GameState.map.once('moveend', () => requestAnimationFrame(runSync));
+        GameState.map.once('moveend', () => runSync());
     }
 }
 
@@ -14500,6 +14546,7 @@ function shouldShowRoundAd() {
 function showResults() {
     SoundEngine.slide();
     document.getElementById('results-panel').classList.add('visible');
+    requestPresentationSync();
 
     // Show a city fact in the results panel
     if (GameState.currentCity?.name) {
@@ -14511,6 +14558,7 @@ function showResults() {
         if (shouldShowRoundAd()) {
             setTimeout(() => {
                 PathfindrAds.showBanner(PathfindrConfig.ads.bannerPosition || 'top');
+                requestPresentationSync();
             }, 600);
         }
     }
@@ -14519,17 +14567,20 @@ function showResults() {
     if (typeof PathfindrAds !== 'undefined') {
         setTimeout(() => {
             PathfindrAds.showInlineInterstitial();
+            requestPresentationSync();
         }, 500);
     }
 }
 
 function hideResults() {
     document.getElementById('results-panel').classList.remove('visible');
+    requestPresentationSync();
 
     // Hide banner ad when leaving round recap
     if (typeof PathfindrAds !== 'undefined') {
         PathfindrAds.hideBanner();
         PathfindrAds.hideInlineInterstitial();
+        requestPresentationSync();
     }
 }
 
