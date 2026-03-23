@@ -1796,6 +1796,55 @@ const WebGLRenderer = {
         return program;
     },
 
+    computeProjectedEdgeQuad(edge, width, height) {
+        const map = GameState.map;
+        if (!map) return null;
+
+        const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
+        const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
+
+        if (!isFinite(fromScreen.x) || !isFinite(fromScreen.y) ||
+            !isFinite(toScreen.x) || !isFinite(toScreen.y)) {
+            return null;
+        }
+
+        const padding = Math.max(160, Math.max(width, height) * 0.3);
+        const minX = -padding;
+        const maxX = width + padding;
+        const minY = -padding;
+        const maxY = height + padding;
+
+        if ((fromScreen.x < minX && toScreen.x < minX) ||
+            (fromScreen.x > maxX && toScreen.x > maxX) ||
+            (fromScreen.y < minY && toScreen.y < minY) ||
+            (fromScreen.y > maxY && toScreen.y > maxY)) {
+            return null;
+        }
+
+        const dx = toScreen.x - fromScreen.x;
+        const dy = toScreen.y - fromScreen.y;
+        const maxSegmentLength = Math.max(width, height) * 3.5;
+        const segmentLengthSq = (dx * dx) + (dy * dy);
+        if (!isFinite(segmentLengthSq) || segmentLengthSq > (maxSegmentLength * maxSegmentLength)) {
+            return null;
+        }
+
+        const len = Math.sqrt(segmentLengthSq) || 1;
+        return {
+            fromScreen,
+            toScreen,
+            nx: -dy / len,
+            ny: dx / len,
+        };
+    },
+
+    writeDegenerateEdgeQuad(positions, normals, baseIdx) {
+        for (let i = 0; i < 8; i++) {
+            positions[baseIdx + i] = 0;
+            normals[baseIdx + i] = 0;
+        }
+    },
+
     // Resize canvas to match container
     resize() {
         if (!this.canvas) return;
@@ -1868,6 +1917,7 @@ const WebGLRenderer = {
         this.canUseWebGL = true;
         this.indexType = needsUint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
         this.indexArrayType = needsUint32 ? Uint32Array : Uint16Array;
+        const { width, height } = getPresentationCanvasSize();
 
         // Each edge needs 4 vertices (2 triangles for thick line)
         // Position: x, y for each vertex
@@ -1878,22 +1928,24 @@ const WebGLRenderer = {
 
         for (let i = 0; i < edges.length; i++) {
             const edge = edges[i];
-            const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
-            const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
-
-            // Calculate perpendicular normal
-            const dx = toScreen.x - fromScreen.x;
-            const dy = toScreen.y - fromScreen.y;
-            const len = Math.sqrt(dx * dx + dy * dy) || 1;
-            const nx = -dy / len;
-            const ny = dx / len;
-
             // Edge key for heat lookup
             const edgeKey = `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`;
             this.edgeKeyToIndex.set(edgeKey, i);
 
             // 4 vertices per edge: from-left, from-right, to-left, to-right
             const baseIdx = i * 8;
+            const quad = this.computeProjectedEdgeQuad(edge, width, height);
+
+            if (!quad) {
+                this.writeDegenerateEdgeQuad(positions, normals, baseIdx);
+                this.heatData[i * 4 + 0] = -1;
+                this.heatData[i * 4 + 1] = -1;
+                this.heatData[i * 4 + 2] = -1;
+                this.heatData[i * 4 + 3] = -1;
+                continue;
+            }
+
+            const { fromScreen, toScreen, nx, ny } = quad;
 
             // From vertex - left side
             positions[baseIdx + 0] = fromScreen.x;
@@ -1988,19 +2040,19 @@ const WebGLRenderer = {
 
         const positions = new Float32Array(edges.length * 8);
         const normals = new Float32Array(edges.length * 8);
+        const { width, height } = getPresentationCanvasSize();
 
         for (let i = 0; i < edges.length; i++) {
             const edge = edges[i];
-            const fromScreen = map.project([edge.fromPos.lng, edge.fromPos.lat]);
-            const toScreen = map.project([edge.toPos.lng, edge.toPos.lat]);
-
-            const dx = toScreen.x - fromScreen.x;
-            const dy = toScreen.y - fromScreen.y;
-            const len = Math.sqrt(dx * dx + dy * dy) || 1;
-            const nx = -dy / len;
-            const ny = dx / len;
-
             const baseIdx = i * 8;
+            const quad = this.computeProjectedEdgeQuad(edge, width, height);
+
+            if (!quad) {
+                this.writeDegenerateEdgeQuad(positions, normals, baseIdx);
+                continue;
+            }
+
+            const { fromScreen, toScreen, nx, ny } = quad;
 
             positions[baseIdx + 0] = fromScreen.x;
             positions[baseIdx + 1] = fromScreen.y;
@@ -6174,6 +6226,7 @@ function markPathProjectionCachesDirty(paths = []) {
 
 function invalidateProjectedCaches() {
     ScreenCoordCache.invalidate();
+    GameState.presentationDirty = true;
     GameState.presentationSyncKey = null;
 
     if (typeof ExplorerHistory !== 'undefined') {
@@ -6195,16 +6248,22 @@ function invalidateProjectedCaches() {
     }
 }
 
-function syncProjectedLayers() {
+function syncProjectedLayers(force = false) {
     if (!GameState.map) return;
 
+    const presentationKey = getMapPresentationStateKey();
+    if (!force && !GameState.presentationDirty && presentationKey && GameState.presentationSyncKey === presentationKey) {
+        return;
+    }
+
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
-        WebGLRenderer.updateEdgePositions();
+        WebGLRenderer.updateEdgePositions(force);
     }
 
     updateMarkerPositions();
     redrawUserPath();
-    GameState.presentationSyncKey = getMapPresentationStateKey();
+    GameState.presentationDirty = false;
+    GameState.presentationSyncKey = presentationKey;
 }
 
 function ensureMapPresentationSync() {
@@ -6228,10 +6287,17 @@ function ensureMapPresentationSync() {
     }
 
     const presentationKey = getMapPresentationStateKey();
-    if (!presentationKey || GameState.presentationSyncKey === presentationKey) return;
+    if (!presentationKey) return;
 
-    invalidateProjectedCaches();
-    syncProjectedLayers();
+    const isMapMoving = typeof GameState.map.isMoving === 'function' && GameState.map.isMoving();
+    const forceSync = isMapMoving || GameState.mapWasMoving;
+    GameState.mapWasMoving = isMapMoving;
+
+    if (!forceSync && !GameState.presentationDirty && GameState.presentationSyncKey === presentationKey) {
+        return;
+    }
+
+    syncProjectedLayers(forceSync);
 }
 
 // =============================================================================
@@ -6467,7 +6533,9 @@ const GameState = {
     gamesCompleted: parseInt(localStorage.getItem('pathfindr_games_completed') || '0', 10),
     isLoading: true,
     roundTransitionInFlight: false,
+    presentationDirty: true,
     presentationSyncKey: null,
+    mapWasMoving: false,
     gameStarted: false,
     canDraw: false,
 
@@ -6659,18 +6727,27 @@ function initMap() {
     // Unified map change handler
     function onMapChange() {
         invalidateProjectedCaches();
-        syncProjectedLayers();
         // Let the main render loop handle drawing to avoid over-rendering during pan/zoom.
         if (!GameController.animationId) {
-            if (GameState.vizState.active) {
-                renderVisualization();
-            } else if (GameState.showCustomRoads) {
-                if (GameState.vizCtx) {
-                    GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
+            requestAnimationFrame(() => {
+                ensureMapPresentationSync();
+
+                if (GameState.vizState.active) {
+                    renderVisualization();
+                } else if (GameState.showCustomRoads) {
+                    if (GameState.vizCtx) {
+                        GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
+                    }
+                    drawRoadNetwork();
                 }
-                drawRoadNetwork();
-            }
+            });
         }
+    }
+
+    function onMapRender() {
+        if (GameController.animationId) return;
+        if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
+        ensureMapPresentationSync();
     }
 
     // MapLibre events - includes pitch and rotate
@@ -6679,6 +6756,7 @@ function initMap() {
     GameState.map.on('resize', onMapChange);
     GameState.map.on('pitch', onMapChange);
     GameState.map.on('rotate', onMapChange);
+    GameState.map.on('render', onMapRender);
 }
 
 function initCanvases() {
@@ -6735,7 +6813,7 @@ function resizeCanvases() {
 
 function refreshMapPresentation() {
     invalidateProjectedCaches();
-    syncProjectedLayers();
+    syncProjectedLayers(true);
 }
 
 function scheduleMapPresentationRefresh(options = {}) {
@@ -14675,6 +14753,22 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function isProjectedSegmentDrawable(from, to, width, height, padding = 100) {
+    if (!isFinite(from.x) || !isFinite(from.y) || !isFinite(to.x) || !isFinite(to.y)) {
+        return false;
+    }
+
+    if (from.x < -padding && to.x < -padding) return false;
+    if (from.x > width + padding && to.x > width + padding) return false;
+    if (from.y < -padding && to.y < -padding) return false;
+    if (from.y > height + padding && to.y > height + padding) return false;
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const maxSegmentLength = Math.max(width, height) * 3.5;
+    return ((dx * dx) + (dy * dy)) <= (maxSegmentLength * maxSegmentLength);
+}
+
 // =============================================================================
 // CUSTOM ROAD NETWORK RENDERING
 // =============================================================================
@@ -14707,10 +14801,7 @@ function buildVirtualEdgesForRender(width, height) {
             const from = GameState.map.project([nodePos.lng, nodePos.lat]);
             const to = GameState.map.project([neighborPos.lng, neighborPos.lat]);
 
-            if (from.x < -padding && to.x < -padding) continue;
-            if (from.x > width + padding && to.x > width + padding) continue;
-            if (from.y < -padding && to.y < -padding) continue;
-            if (from.y > height + padding && to.y > height + padding) continue;
+            if (!isProjectedSegmentDrawable(from, to, width, height, padding)) continue;
 
             visibleEdges.push({ from, to });
         }
@@ -14788,11 +14879,7 @@ function drawRoadNetwork(ctx) {
         const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
         const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
 
-        // Skip edges completely off-screen
-        if (from.x < -100 && to.x < -100) continue;
-        if (from.x > width + 100 && to.x > width + 100) continue;
-        if (from.y < -100 && to.y < -100) continue;
-        if (from.y > height + 100 && to.y > height + 100) continue;
+        if (!isProjectedSegmentDrawable(from, to, width, height, 100)) continue;
 
         visibleEdges.push({ from, to });
     }
@@ -14858,11 +14945,7 @@ function drawRoadNetworkScanning(ctx, time, pulsePhase) {
         const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
         const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
 
-        // Skip edges completely off-screen
-        if (from.x < -100 && to.x < -100) continue;
-        if (from.x > width + 100 && to.x > width + 100) continue;
-        if (from.y < -100 && to.y < -100) continue;
-        if (from.y > height + 100 && to.y > height + 100) continue;
+        if (!isProjectedSegmentDrawable(from, to, width, height, 100)) continue;
 
         visibleEdges.push({ from, to });
     }
