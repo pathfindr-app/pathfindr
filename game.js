@@ -6521,6 +6521,7 @@ function initMap() {
     // MapLibre events - includes pitch and rotate
     GameState.map.on('move', onMapChange);
     GameState.map.on('zoom', onMapChange);
+    GameState.map.on('resize', onMapChange);
     GameState.map.on('pitch', onMapChange);
     GameState.map.on('rotate', onMapChange);
 }
