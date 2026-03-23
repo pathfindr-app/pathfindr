@@ -6173,6 +6173,9 @@ const GameState = {
     previewCanvas: null,
     previewCtx: null,
     useWebGL: false,        // Whether WebGL rendering is available
+    containerResizeObserver: null,
+    pendingResizeSync: false,
+    lastCanvasSize: { width: 0, height: 0 },
 
     // Road network
     nodes: new Map(),
@@ -6310,6 +6313,7 @@ const GameState = {
     totalScore: 0,
     gamesCompleted: parseInt(localStorage.getItem('pathfindr_games_completed') || '0', 10),
     isLoading: true,
+    roundTransitionInFlight: false,
     gameStarted: false,
     canDraw: false,
 
@@ -6538,26 +6542,77 @@ function initCanvases() {
 
     resizeCanvases();
     window.addEventListener('resize', resizeCanvases);
+
+    const container = document.getElementById('map-container');
+    if (container && typeof ResizeObserver !== 'undefined' && !GameState.containerResizeObserver) {
+        GameState.containerResizeObserver = new ResizeObserver(() => {
+            if (GameState.pendingResizeSync) return;
+            GameState.pendingResizeSync = true;
+            requestAnimationFrame(() => {
+                GameState.pendingResizeSync = false;
+                resizeCanvases();
+            });
+        });
+        GameState.containerResizeObserver.observe(container);
+    }
 }
 
 function resizeCanvases() {
     const container = document.getElementById('map-container');
+    if (!container) return;
+
     const width = container.offsetWidth;
     const height = container.offsetHeight;
+    if (!width || !height) return;
 
-    GameState.drawCanvas.width = width;
-    GameState.drawCanvas.height = height;
-    GameState.vizCanvas.width = width;
-    GameState.vizCanvas.height = height;
-    GameState.previewCanvas.width = width;
-    GameState.previewCanvas.height = height;
+    const sizeUnchanged = GameState.lastCanvasSize.width === width &&
+        GameState.lastCanvasSize.height === height;
+
+    if (GameState.map?.resize) {
+        GameState.map.resize();
+    }
+
+    if (!sizeUnchanged) {
+        GameState.drawCanvas.width = width;
+        GameState.drawCanvas.height = height;
+        GameState.vizCanvas.width = width;
+        GameState.vizCanvas.height = height;
+        GameState.previewCanvas.width = width;
+        GameState.previewCanvas.height = height;
+
+        GameState.lastCanvasSize.width = width;
+        GameState.lastCanvasSize.height = height;
+    }
 
     // Resize WebGL canvas
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.resize();
     }
 
+    refreshMapPresentation();
+}
+
+function refreshMapPresentation() {
+    ScreenCoordCache.invalidate();
+
+    if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
+        WebGLRenderer.updateEdgePositions();
+    }
+
+    updateMarkerPositions();
     redrawUserPath();
+}
+
+function scheduleMapPresentationRefresh(options = {}) {
+    const { watchMoveEnd = false } = options;
+    const runSync = () => refreshMapPresentation();
+
+    requestAnimationFrame(runSync);
+    setTimeout(runSync, 120);
+
+    if (watchMoveEnd && GameState.map?.once && typeof GameState.map.isMoving === 'function' && GameState.map.isMoving()) {
+        GameState.map.once('moveend', () => requestAnimationFrame(runSync));
+    }
 }
 
 function initEventListeners() {
@@ -7162,7 +7217,7 @@ function startGame() {
     enableDrawing();
     selectRandomEndpoints();
 
-    // Start unified animation loop and enter PLAYING phase
+    // Start unified animation loop after the route and camera are ready
     GameController.startLoop();
     GameController.enterPhase(GamePhase.PLAYING);
 
@@ -7179,62 +7234,69 @@ function startGame() {
 }
 
 async function nextRound() {
-    // Check if interstitial ad should be shown after this round
-    const justCompletedRound = GameState.currentRound;
-    const shouldShowAd = typeof PathfindrAds !== 'undefined' &&
-                         PathfindrAds.shouldShowInterstitialAfterRound(justCompletedRound);
+    if (GameState.roundTransitionInFlight) return;
+    GameState.roundTransitionInFlight = true;
 
-    hideResults();
+    try {
+        // Check if interstitial ad should be shown after this round
+        const justCompletedRound = GameState.currentRound;
+        const shouldShowAd = typeof PathfindrAds !== 'undefined' &&
+                             PathfindrAds.shouldShowInterstitialAfterRound(justCompletedRound);
 
-    // Show interstitial ad if configured for this round
-    if (shouldShowAd) {
-        await PathfindrAds.showInterstitial();
-    }
+        hideResults();
+        GameController.enterPhase(GamePhase.IDLE);
 
-    clearVisualization();
-    clearUserPath();
-
-    // Reset comparison bars for next round
-    const userBar = document.getElementById('user-bar');
-    const optimalBar = document.getElementById('optimal-bar');
-    if (userBar) userBar.style.width = '0%';
-    if (optimalBar) optimalBar.style.width = '0%';
-
-    // Reset round score display
-    const roundScore = document.getElementById('round-score');
-    if (roundScore) roundScore.textContent = '0';
-
-    // Reset ambient visuals for new round
-    AmbientViz.reset();
-
-    if (GameState.currentRound < CONFIG.totalRounds) {
-        GameState.currentRound++;
-        updateRoundDisplay();
-
-        // Trigger preload earlier (round 2) if continuous play is enabled
-        if (GameState.currentRound === 2 && GameState.continuousPlay.enabled) {
-            preloadNextCity();
+        // Show interstitial ad if configured for this round
+        if (shouldShowAd) {
+            await PathfindrAds.showInterstitial();
         }
 
-        // Stay in same city, just pick new endpoints with increased distance
-        selectRandomEndpoints();
-        enableDrawing();
+        clearVisualization();
+        clearUserPath();
 
-        // Re-enter PLAYING phase for new round (critical for click radius indicator)
-        GameController.enterPhase(GamePhase.PLAYING);
+        // Reset comparison bars for next round
+        const userBar = document.getElementById('user-bar');
+        const optimalBar = document.getElementById('optimal-bar');
+        if (userBar) userBar.style.width = '0%';
+        if (optimalBar) optimalBar.style.width = '0%';
 
-        // Analytics: Track round start for rounds 2-5
-        if (typeof PathfindrAnalytics !== 'undefined') {
-            PathfindrAnalytics.trackRoundStart(GameState.currentRound, GameState.currentCity?.name || 'Unknown');
-        }
-    } else {
-        // End of 5 rounds - check for continuous play
-        if (GameState.continuousPlay.enabled) {
-            transitionToNextCity();
+        // Reset round score display
+        const roundScore = document.getElementById('round-score');
+        if (roundScore) roundScore.textContent = '0';
+
+        // Reset ambient visuals for new round
+        AmbientViz.reset();
+        scheduleMapPresentationRefresh();
+
+        if (GameState.currentRound < CONFIG.totalRounds) {
+            GameState.currentRound++;
+            updateRoundDisplay();
+
+            // Trigger preload earlier (round 2) if continuous play is enabled
+            if (GameState.currentRound === 2 && GameState.continuousPlay.enabled) {
+                preloadNextCity();
+            }
+
+            // Stay in same city, just pick new endpoints with increased distance
+            selectRandomEndpoints();
+            enableDrawing();
+            GameController.enterPhase(GamePhase.PLAYING);
+
+            // Analytics: Track round start for rounds 2-5
+            if (typeof PathfindrAnalytics !== 'undefined') {
+                PathfindrAnalytics.trackRoundStart(GameState.currentRound, GameState.currentCity?.name || 'Unknown');
+            }
         } else {
-            showGameOver();
-            AmbientViz.stop();
+            // End of 5 rounds - check for continuous play
+            if (GameState.continuousPlay.enabled) {
+                transitionToNextCity();
+            } else {
+                showGameOver();
+                AmbientViz.stop();
+            }
         }
+    } finally {
+        GameState.roundTransitionInFlight = false;
     }
 }
 
@@ -7368,14 +7430,19 @@ function selectRandomEndpoints(options = {}) {
             padding: 80,
             maxZoom: 16
         });
+        scheduleMapPresentationRefresh({ watchMoveEnd: true });
+    } else {
+        scheduleMapPresentationRefresh();
     }
 
     if (deferMarkerPlacement) {
         setTimeout(() => {
             placeMarkers();
+            scheduleMapPresentationRefresh();
         }, markerDelayMs);
     } else {
         placeMarkers();
+        scheduleMapPresentationRefresh();
     }
 }
 
@@ -13745,6 +13812,7 @@ function preloadTopChallenges(count = 3) {
 async function transitionToNextCity() {
     // For local mode, stay in the same location - just reset rounds
     if (GameState.locationMode === 'local') {
+        GameController.enterPhase(GamePhase.IDLE);
         GameState.continuousPlay.citiesCompleted++;
         GameState.currentRound = 1;
         GameState.totalScore = 0;
@@ -13768,6 +13836,8 @@ async function transitionToNextCity() {
         GameController.enterPhase(GamePhase.PLAYING);
         return;
     }
+
+    GameController.enterPhase(GamePhase.IDLE);
 
     // Store current city score
     GameState.continuousPlay.cityScores.push({
@@ -13819,8 +13889,8 @@ async function transitionToNextCity() {
     if (userBar) userBar.style.width = '0%';
     if (optimalBar) optimalBar.style.width = '0%';
 
-    // Clear round history for new city
-    GameState.roundHistory = [];
+    // Clear persistent competitive history so the old city's routes don't sit on top of the new map.
+    RoundHistory.clear();
 
     // Wait for transition effect
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -13834,6 +13904,10 @@ async function transitionToNextCity() {
     // Move map to new city
     GameState.currentCity = nextCity;
     GameState.map.jumpTo({ center: [nextCity.lng, nextCity.lat], zoom: nextCity.zoom || 15 });
+    if (GameState.map?.resize) {
+        GameState.map.resize();
+    }
+    scheduleMapPresentationRefresh();
     updateLocationDisplay(nextCity.name);
 
     // Update HUD with new city number
@@ -13845,6 +13919,7 @@ async function transitionToNextCity() {
 
         // Hide transition, start new round
         if (overlay) overlay.classList.add('hidden');
+        scheduleMapPresentationRefresh();
         selectRandomEndpoints();
         enableDrawing();
         GameController.enterPhase(GamePhase.PLAYING);
@@ -13880,6 +13955,10 @@ async function loadRoadNetworkForContinuous(location) {
         if (data.elements && data.elements.length > 0) {
             processRoadData(data);
             hideLoading();
+            if (GameState.map?.resize) {
+                GameState.map.resize();
+            }
+            scheduleMapPresentationRefresh();
             selectRandomEndpoints();
             enableDrawing();
             GameController.enterPhase(GamePhase.PLAYING);
