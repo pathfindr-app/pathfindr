@@ -739,21 +739,30 @@ const GameController = {
 
         ensureMapPresentationSync();
 
+        this.renderCurrentPhaseFrame(ctx, deltaTime, { advanceState: true });
+    },
+
+    renderCurrentPhaseFrame(ctx, deltaTime = 0, options = {}) {
+        if (!ctx) return;
+
+        const { advanceState = true } = options;
         const width = GameState.vizCanvas?.width || 0;
         const height = GameState.vizCanvas?.height || 0;
 
-        // Always update subsystems (they track their own state)
-        RoundHistory.update(deltaTime);
-        ExplorerHistory.update(deltaTime);
-        VisualizerHistory.update(deltaTime);
-        ElectricitySystem.update(deltaTime);
-        AmbientViz.updateProximityToEnd();
+        if (advanceState) {
+            // Always update subsystems (they track their own state)
+            RoundHistory.update(deltaTime);
+            ExplorerHistory.update(deltaTime);
+            VisualizerHistory.update(deltaTime);
+            ElectricitySystem.update(deltaTime);
+            AmbientViz.updateProximityToEnd();
+        }
 
         // Phase-specific rendering
         switch (this.phase) {
             case GamePhase.VISUALIZING:
                 // During A* visualization, renderVisualization handles everything
-                renderVisualization();
+                renderVisualization({ advanceState });
                 break;
 
             case GamePhase.PLAYING:
@@ -6745,27 +6754,16 @@ function initMap() {
     // Unified map change handler
     function onMapChange() {
         invalidateProjectedCaches();
-        // Let the main render loop handle drawing to avoid over-rendering during pan/zoom.
-        if (!GameController.animationId) {
-            requestAnimationFrame(() => {
-                ensureMapPresentationSync();
-
-                if (GameState.vizState.active) {
-                    renderVisualization();
-                } else if (GameState.showCustomRoads) {
-                    if (GameState.vizCtx) {
-                        GameState.vizCtx.clearRect(0, 0, GameState.vizCanvas.width, GameState.vizCanvas.height);
-                    }
-                    drawRoadNetwork();
-                }
-            });
-        }
     }
 
     function onMapRender() {
-        if (GameController.animationId) return;
         if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
         ensureMapPresentationSync();
+
+        const ctx = GameState.vizCtx;
+        if (!ctx) return;
+
+        GameController.renderCurrentPhaseFrame(ctx, 0, { advanceState: false });
     }
 
     // MapLibre events - includes pitch and rotate
@@ -9140,7 +9138,8 @@ function getCurrentVizTheme() {
     return CONFIG.color.getThemeByIndex(colorIndex);
 }
 
-function renderVisualization() {
+function renderVisualization(options = {}) {
+    const { advanceState = true } = options;
     const ctx = GameState.vizCtx;
     const viz = GameState.vizState;
     const width = GameState.vizCanvas.width;
@@ -9159,7 +9158,9 @@ function renderVisualization() {
         AmbientViz.renderRoundHistory(ctx, 16, true);
     }
 
-    viz.pulsePhase += CONFIG.viz.pulseSpeed;
+    if (advanceState) {
+        viz.pulsePhase += CONFIG.viz.pulseSpeed;
+    }
 
     const now = performance.now();
     const time = now * 0.001;
@@ -9218,7 +9219,7 @@ function renderVisualization() {
         : CONFIG.viz.heatFloor;
 
     // Only run CPU decay loop for Canvas 2D fallback
-    if (!GameState.useWebGL || !WebGLRenderer.canUseWebGL) {
+    if (advanceState && (!GameState.useWebGL || !WebGLRenderer.canUseWebGL)) {
         for (const [nodeId, heat] of viz.nodeHeat) {
             const newHeat = heat * settlingDecay;
             viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
@@ -9458,7 +9459,9 @@ function renderVisualization() {
     }
 
     // Update and draw particles
-    updateParticles();
+    if (advanceState) {
+        updateParticles();
+    }
     drawParticles(ctx);
 
     // Crossfade layer for phase handoffs (ambient->viz and viz->ambient).
