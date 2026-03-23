@@ -6173,9 +6173,6 @@ const GameState = {
     previewCanvas: null,
     previewCtx: null,
     useWebGL: false,        // Whether WebGL rendering is available
-    containerResizeObserver: null,
-    pendingResizeSync: false,
-    lastCanvasSize: { width: 0, height: 0 },
 
     // Road network
     nodes: new Map(),
@@ -6387,6 +6384,12 @@ function initMobileBrowserDetection() {
     });
 }
 
+function shouldUseLegacyMobileSync() {
+    return document.body?.classList.contains('mobile-browser') ||
+        window.matchMedia?.('(pointer: coarse)').matches ||
+        false;
+}
+
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
@@ -6542,19 +6545,6 @@ function initCanvases() {
 
     resizeCanvases();
     window.addEventListener('resize', resizeCanvases);
-
-    const container = document.getElementById('map-container');
-    if (container && typeof ResizeObserver !== 'undefined' && !GameState.containerResizeObserver) {
-        GameState.containerResizeObserver = new ResizeObserver(() => {
-            if (GameState.pendingResizeSync) return;
-            GameState.pendingResizeSync = true;
-            requestAnimationFrame(() => {
-                GameState.pendingResizeSync = false;
-                resizeCanvases();
-            });
-        });
-        GameState.containerResizeObserver.observe(container);
-    }
 }
 
 function resizeCanvases() {
@@ -6565,28 +6555,25 @@ function resizeCanvases() {
     const height = container.offsetHeight;
     if (!width || !height) return;
 
-    const sizeUnchanged = GameState.lastCanvasSize.width === width &&
-        GameState.lastCanvasSize.height === height;
-
-    if (GameState.map?.resize) {
+    if (!shouldUseLegacyMobileSync() && GameState.map?.resize) {
         GameState.map.resize();
     }
 
-    if (!sizeUnchanged) {
-        GameState.drawCanvas.width = width;
-        GameState.drawCanvas.height = height;
-        GameState.vizCanvas.width = width;
-        GameState.vizCanvas.height = height;
-        GameState.previewCanvas.width = width;
-        GameState.previewCanvas.height = height;
-
-        GameState.lastCanvasSize.width = width;
-        GameState.lastCanvasSize.height = height;
-    }
+    GameState.drawCanvas.width = width;
+    GameState.drawCanvas.height = height;
+    GameState.vizCanvas.width = width;
+    GameState.vizCanvas.height = height;
+    GameState.previewCanvas.width = width;
+    GameState.previewCanvas.height = height;
 
     // Resize WebGL canvas
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
         WebGLRenderer.resize();
+    }
+
+    if (shouldUseLegacyMobileSync()) {
+        redrawUserPath();
+        return;
     }
 
     refreshMapPresentation();
@@ -6604,6 +6591,8 @@ function refreshMapPresentation() {
 }
 
 function scheduleMapPresentationRefresh(options = {}) {
+    if (shouldUseLegacyMobileSync()) return;
+
     const { watchMoveEnd = false } = options;
     const runSync = () => refreshMapPresentation();
 
@@ -13904,7 +13893,7 @@ async function transitionToNextCity() {
     // Move map to new city
     GameState.currentCity = nextCity;
     GameState.map.jumpTo({ center: [nextCity.lng, nextCity.lat], zoom: nextCity.zoom || 15 });
-    if (GameState.map?.resize) {
+    if (!shouldUseLegacyMobileSync() && GameState.map?.resize) {
         GameState.map.resize();
     }
     scheduleMapPresentationRefresh();
@@ -13955,7 +13944,7 @@ async function loadRoadNetworkForContinuous(location) {
         if (data.elements && data.elements.length > 0) {
             processRoadData(data);
             hideLoading();
-            if (GameState.map?.resize) {
+            if (!shouldUseLegacyMobileSync() && GameState.map?.resize) {
                 GameState.map.resize();
             }
             scheduleMapPresentationRefresh();
