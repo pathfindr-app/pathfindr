@@ -313,6 +313,34 @@ const CONFIG = {
     randomCityUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-random-city',
 };
 
+const PLAYABLE_HIGHWAY_REGEX = '^(trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian|motorway_link)$';
+
+const SNAP_HIGHWAY_PENALTIES = Object.freeze({
+    motorway_link: 18,
+    trunk: 10,
+    trunk_link: 14,
+    primary_link: 8,
+    secondary_link: 6,
+    tertiary_link: 4,
+    service: 10,
+    pedestrian: 4,
+    living_street: 2,
+    unclassified: 1,
+});
+
+function buildRoadNetworkQuery(bounds) {
+    return `
+        [out:json][timeout:25];
+        (
+            way["highway"~"${PLAYABLE_HIGHWAY_REGEX}"]
+            (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+        );
+        out body;
+        >;
+        out skel qt;
+    `;
+}
+
 // =============================================================================
 // STREAM MODE (24/7 BROADCAST RUNTIME)
 // =============================================================================
@@ -611,6 +639,9 @@ const GameController = {
                     GameState.vizState.active = false;
                 }
                 break;
+            case GamePhase.RESULTS:
+                GameState.resultsPresentation.enteredAt = 0;
+                break;
         }
     },
 
@@ -635,6 +666,10 @@ const GameController = {
                 if (!AmbientViz.active) {
                     AmbientViz.start();
                 }
+                break;
+            case GamePhase.RESULTS:
+                GameState.resultsPresentation.enteredAt = performance.now();
+                GameState.snapPreview.active = false;
                 break;
         }
     },
@@ -739,12 +774,15 @@ const GameController = {
     },
 
     _renderAmbientFrame(ctx, width, height, deltaTime) {
+        const isResultsPhase = this.phase === GamePhase.RESULTS;
+        const roadOpacity = isResultsPhase ? 0.28 : 1.0;
+
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
 
         // Layer 0: WebGL road network
         if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.edgeList?.length > 0) {
-            WebGLRenderer.setGlobalOpacity(1.0);
+            WebGLRenderer.setGlobalOpacity(roadOpacity);
             WebGLRenderer.renderAmbient(performance.now());
         }
 
@@ -755,7 +793,10 @@ const GameController = {
 
         // Layer 1: Canvas 2D fallback
         if ((!GameState.useWebGL || !WebGLRenderer.canUseWebGL) && GameState.showCustomRoads) {
+            ctx.save();
+            ctx.globalAlpha = roadOpacity;
             drawRoadNetwork(ctx);
+            ctx.restore();
         }
 
         // Layer 2: History rendering based on game mode
@@ -763,6 +804,8 @@ const GameController = {
             AmbientViz.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
         } else if (GameState.gameMode === 'visualizer') {
             VisualizerVibeRenderer.render(ctx, width, height, false);
+        } else if (isResultsPhase) {
+            AmbientViz.renderRoundReview(ctx, deltaTime);
         } else {
             AmbientViz.renderRoundHistory(ctx, deltaTime, false);
         }
@@ -771,18 +814,22 @@ const GameController = {
             VisualizerPhaseBlend.render(ctx, width, height);
         }
 
-        // Layer 3: Ambient particles and marker auras
-        AmbientViz.render(ctx, width, height, deltaTime);
+        // Layer 3+: gameplay-only overlays
+        if (!isResultsPhase) {
+            AmbientViz.render(ctx, width, height, deltaTime);
+            ElectricitySystem.renderArcs(ctx);
+            renderTraceAnimation(ctx);
 
-        // Layer 4: Arc sparks
-        ElectricitySystem.renderArcs(ctx);
-
-        // Layer 5: Trace animation
-        renderTraceAnimation(ctx);
-
-        // Layer 6: User path
-        if (GameState.gameStarted && GameState.userPathNodes.length >= 2) {
-            redrawUserPath();
+            if (GameState.gameStarted && GameState.userPathNodes.length >= 2) {
+                redrawUserPath();
+            }
+        } else {
+            if (GameState.drawCtx && GameState.drawCanvas) {
+                GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+            }
+            if (GameState.previewCtx && GameState.previewCanvas) {
+                GameState.previewCtx.clearRect(0, 0, GameState.previewCanvas.width, GameState.previewCanvas.height);
+            }
         }
 
         ctx.globalCompositeOperation = 'source-over';
@@ -2330,6 +2377,11 @@ const SoundEngine = {
         soundtrack: null,
     },
 
+    previewCueState: {
+        signature: null,
+        lastAt: 0,
+    },
+
     // Initialize AudioContext on first user interaction
     init() {
         if (this.initialized) return;
@@ -2714,6 +2766,57 @@ const SoundEngine = {
 
         osc.start(now);
         osc.stop(now + 0.08);
+    },
+
+    // Hovering route preview lock chirp, derived from existing found sample.
+    previewLock(signature) {
+        if (!this.initialized || this.muted || !signature) return;
+
+        const nowMs = performance.now();
+        if (this.previewCueState.signature === signature && nowMs - this.previewCueState.lastAt < 320) {
+            return;
+        }
+        if (nowMs - this.previewCueState.lastAt < 90) {
+            return;
+        }
+
+        this.previewCueState.signature = signature;
+        this.previewCueState.lastAt = nowMs;
+
+        if (this.buffers.found) {
+            const now = this.ctx.currentTime;
+            const source = this.ctx.createBufferSource();
+            source.buffer = this.buffers.found;
+            source.playbackRate.value = 2.15 + Math.random() * 0.2;
+
+            const highpass = this.ctx.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 1200;
+
+            const bandpass = this.ctx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.frequency.value = 2400;
+            bandpass.Q.value = 1.4;
+
+            const gain = this.ctx.createGain();
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.09, now + 0.012);
+            gain.gain.setTargetAtTime(0.001, now + 0.05, 0.025);
+
+            source.connect(highpass);
+            highpass.connect(bandpass);
+            bandpass.connect(gain);
+            gain.connect(this.masterGain);
+
+            const offset = Math.min(0.045, Math.max(0, this.buffers.found.duration - 0.08));
+            const duration = Math.min(0.075, Math.max(0.03, this.buffers.found.duration - offset));
+            source.start(now, offset, duration);
+            source.stop(now + duration / source.playbackRate.value + 0.03);
+            return;
+        }
+
+        // Fallback if sample hasn't loaded yet.
+        this.hover();
     },
 
     // Helper: Play an audio buffer at specified volume
@@ -3826,6 +3929,198 @@ const AmbientViz = {
         ctx.globalAlpha = 1;
 
         this.animationId = requestAnimationFrame(() => this.loop());
+    },
+
+    projectNodePath(nodePath) {
+        if (!nodePath || nodePath.length < 2 || !GameState.map) return [];
+
+        return nodePath.map(nodeId => {
+            const pos = GameState.nodes.get(nodeId);
+            if (!pos) return null;
+
+            const point = GameState.map.project([pos.lng, pos.lat]);
+            if (!isFinite(point.x) || !isFinite(point.y)) return null;
+            return point;
+        }).filter(point => point !== null);
+    },
+
+    renderRoundReviewBackdrop(ctx, highlightedPaths, overlayAlpha = 0.52) {
+        const width = GameState.vizCanvas?.width || 0;
+        const height = GameState.vizCanvas?.height || 0;
+        if (width <= 0 || height <= 0) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(6, 8, 16, ${overlayAlpha})`;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.globalCompositeOperation = 'destination-out';
+
+        for (const points of highlightedPaths) {
+            if (!points || points.length < 2) continue;
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+            ctx.lineWidth = 92;
+            drawSmoothPath(ctx, points);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+            ctx.lineWidth = 58;
+            drawSmoothPath(ctx, points);
+            ctx.stroke();
+
+            const focusAnchors = [points[0], points[Math.floor(points.length * 0.5)], points[points.length - 1]];
+            for (const anchor of focusAnchors) {
+                if (!anchor) continue;
+                const gradient = ctx.createRadialGradient(anchor.x, anchor.y, 0, anchor.x, anchor.y, 82);
+                gradient.addColorStop(0, 'rgba(0, 0, 0, 0.42)');
+                gradient.addColorStop(0.55, 'rgba(0, 0, 0, 0.18)');
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(anchor.x, anchor.y, 82, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        ctx.restore();
+    },
+
+    renderResultsUserPath(ctx, points, intensity = 1) {
+        if (points.length < 2) return;
+
+        const time = performance.now() * 0.001;
+        const white = CONFIG.color.getUserPathColor();
+        const accent = { r: 255, g: 190, b: 122 };
+        const shimmer = 0.72 + 0.28 * Math.sin(time * 4.2);
+        const effectiveIntensity = Math.max(0, Math.min(1.25, intensity * shimmer));
+
+        const buildClippedPath = () => {
+            const maxSegmentLength = 3000;
+            ctx.beginPath();
+            let pathStarted = false;
+
+            for (let i = 0; i < points.length - 1; i++) {
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const segmentLength = Math.sqrt(dx * dx + dy * dy);
+
+                if (segmentLength < maxSegmentLength) {
+                    if (!pathStarted) {
+                        ctx.moveTo(p1.x, p1.y);
+                        pathStarted = true;
+                    }
+                    ctx.lineTo(p2.x, p2.y);
+                } else {
+                    pathStarted = false;
+                }
+            }
+        };
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = `rgba(0, 0, 0, ${0.52 + 0.2 * intensity})`;
+        ctx.lineWidth = 18;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(18, 20, 32, ${0.75 + 0.1 * intensity})`;
+        ctx.lineWidth = 12;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'lighter';
+
+        ctx.strokeStyle = `rgba(${white.r}, ${white.g}, ${white.b}, ${0.18 + 0.08 * effectiveIntensity})`;
+        ctx.lineWidth = 30;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${0.08 + 0.08 * effectiveIntensity})`;
+        ctx.lineWidth = 18;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${white.r}, ${white.g}, ${white.b}, ${0.9})`;
+        ctx.lineWidth = 8;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+        ctx.lineWidth = 4.5;
+        buildClippedPath();
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${0.3 + 0.18 * effectiveIntensity})`;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([16, 20]);
+        ctx.lineDashOffset = -time * 42;
+        buildClippedPath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const packetConfigs = [
+            { sprite: AmbientViz.sprites?.glowWhite, size: 28, alpha: 0.82, speed: 0.08, offset: 0.12 },
+            { sprite: AmbientViz.sprites?.glowOrange, size: 24, alpha: 0.55, speed: 0.06, offset: 0.58 },
+        ];
+
+        ctx.globalCompositeOperation = 'lighter';
+        for (const packet of packetConfigs) {
+            if (!packet.sprite) continue;
+            const point = getPointAlongPolyline(points, (time * packet.speed + packet.offset) % 1);
+            if (!point) continue;
+
+            const size = packet.size + shimmer * 6;
+            ctx.globalAlpha = packet.alpha;
+            ctx.drawImage(packet.sprite, point.x - size / 2, point.y - size / 2, size, size);
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    },
+
+    renderRoundReview(ctx, deltaTime) {
+        const rounds = RoundHistory.getRounds();
+        const round = rounds[rounds.length - 1];
+        if (!round) return;
+
+        const enteredAt = GameState.resultsPresentation.enteredAt || performance.now();
+        const elapsed = Math.max(0, performance.now() - enteredAt);
+        const userReveal = Math.max(0, Math.min(1, elapsed / 260));
+        const optimalReveal = Math.max(0, Math.min(1, (elapsed - 260) / 420));
+        const overlayAlpha = 0.54 - (0.08 * optimalReveal);
+
+        const userPoints = this.projectNodePath(round.userPath);
+        const optimalPoints = this.projectNodePath(round.optimalPath);
+
+        this.renderRoundReviewBackdrop(ctx, [userPoints, optimalPoints], overlayAlpha);
+
+        if (userPoints.length > 1) {
+            this.renderResultsUserPath(ctx, userPoints, 0.7 + 0.3 * userReveal);
+        }
+
+        if (optimalPoints.length > 1 && optimalReveal > 0) {
+            if (!round.resultsOptimalSweep) {
+                round.resultsOptimalSweep = ElectricitySystem.createSweep();
+            }
+
+            this.renderOptimalPathWithElectricity(
+                ctx,
+                optimalPoints,
+                CONFIG.color.getOptimalPathColor(),
+                0.25 + (0.75 * optimalReveal),
+                round.resultsOptimalSweep
+            );
+        }
     },
 
     // Render persisted rounds with electricity effects
@@ -5875,6 +6170,8 @@ const GameState = {
     drawCtx: null,
     vizCanvas: null,
     vizCtx: null,
+    previewCanvas: null,
+    previewCtx: null,
     useWebGL: false,        // Whether WebGL rendering is available
 
     // Road network
@@ -5945,6 +6242,17 @@ const GameState = {
     userDistance: 0,        // Distance in km (single value used everywhere)
     userPathLayer: null,
     virtualNodeIds: new Set(),
+    snapPreview: {
+        active: false,
+        point: null,
+        pathCoords: [],
+        inputType: null,
+        signature: null,
+    },
+    mobileClickHandlerAdded: false,
+    pathPreviewHandlersAdded: false,
+    touchPreviewActive: false,
+    suppressNextMapClickUntil: 0,
 
     // Electric trace animation for new path segments
     traceAnimation: {
@@ -5960,6 +6268,11 @@ const GameState = {
         pulses: [],         // Energy pulses traveling along path
         lastPulseTime: 0,   // For spawning new pulses
         phase: 0,           // Animation phase for wobble
+    },
+
+    // Results presentation timing
+    resultsPresentation: {
+        enteredAt: 0,
     },
 
     // A* results
@@ -6212,6 +6525,9 @@ function initCanvases() {
     GameState.vizCanvas = document.getElementById('viz-canvas');
     GameState.vizCtx = GameState.vizCanvas.getContext('2d');
 
+    GameState.previewCanvas = document.getElementById('preview-canvas');
+    GameState.previewCtx = GameState.previewCanvas.getContext('2d');
+
     // Initialize WebGL renderer
     if (!WebGLRenderer.init()) {
         console.warn('WebGL initialization failed, falling back to Canvas 2D');
@@ -6233,6 +6549,8 @@ function resizeCanvases() {
     GameState.drawCanvas.height = height;
     GameState.vizCanvas.width = width;
     GameState.vizCanvas.height = height;
+    GameState.previewCanvas.width = width;
+    GameState.previewCanvas.height = height;
 
     // Resize WebGL canvas
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
@@ -6508,15 +6826,15 @@ function updateMobileDistance(distance) {
 }
 
 /**
- * Setup improved touch handling for mobile
- * Uses MapLibre's native click handler for path drawing,
- * allowing two-finger gestures (pan/zoom) to work natively.
+ * Setup path input handling on top of the MapLibre surface.
+ * The draw canvas stays visual-only; clicks/touches land on the map beneath it.
  */
 function setupMobileTouchHandling() {
     const canvas = GameState.drawCanvas;
-    if (!canvas) return;
+    if (!canvas || !GameState.map) return;
+    const inputSurface = GameState.map.getCanvasContainer();
 
-    // Make canvas non-interactive - let touches pass through to MapLibre
+    // Make canvas non-interactive - let pointer/touch events reach MapLibre
     canvas.style.pointerEvents = 'none';
 
     // Remove any old touch listeners from canvas
@@ -6524,30 +6842,100 @@ function setupMobileTouchHandling() {
     canvas.removeEventListener('touchmove', handleTouchMove);
     canvas.removeEventListener('touchend', stopDrawing);
 
-    // Use MapLibre's click event for path drawing
-    // This fires for taps but allows two-finger gestures to work
+    // Desktop click/tap fallback via MapLibre click events
     if (!GameState.mobileClickHandlerAdded) {
         GameState.map.on('click', (e) => {
-            // Only handle during competitive or challenge game mode
-            if (!GameState.gameStarted || !GameState.canDraw) return;
-            if (GameState.vizState.active) return;
-            if (GameState.gameMode !== 'competitive' && GameState.gameMode !== 'challenge') return;
+            if (!shouldHandlePathInput()) return;
+            if (Date.now() < GameState.suppressNextMapClickUntil) return;
 
-            // MapLibre click event provides e.point (screen coords) directly
             const rect = canvas.getBoundingClientRect();
-
             handlePathClick({
                 clientX: rect.left + e.point.x,
                 clientY: rect.top + e.point.y
             });
 
-            // Light haptic feedback on mobile
             if (window.Capacitor?.Plugins?.Haptics) {
                 window.Capacitor.Plugins.Haptics.impact({ style: 'light' });
             }
         });
         GameState.mobileClickHandlerAdded = true;
     }
+
+    if (GameState.pathPreviewHandlersAdded) return;
+
+    inputSurface.addEventListener('mousemove', (e) => {
+        if (!shouldHandlePathInput()) {
+            clearSnapPreview();
+            return;
+        }
+
+        if ((e.buttons || 0) !== 0) {
+            clearSnapPreview();
+            return;
+        }
+        updateSnapPreviewFromClient(e.clientX, e.clientY, 'mouse');
+    });
+
+    inputSurface.addEventListener('mouseleave', () => {
+        clearSnapPreview();
+    });
+
+    inputSurface.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || !shouldHandlePathInput()) {
+            GameState.touchPreviewActive = false;
+            clearSnapPreview();
+            return;
+        }
+
+        const touch = e.touches[0];
+        GameState.touchPreviewActive = true;
+        updateSnapPreviewFromClient(touch.clientX, touch.clientY, 'touch');
+        e.preventDefault();
+    }, { passive: false });
+
+    inputSurface.addEventListener('touchmove', (e) => {
+        if (!GameState.touchPreviewActive || e.touches.length !== 1) {
+            if (e.touches.length > 1) {
+                GameState.touchPreviewActive = false;
+                clearSnapPreview();
+            }
+            return;
+        }
+
+        const touch = e.touches[0];
+        updateSnapPreviewFromClient(touch.clientX, touch.clientY, 'touch');
+        e.preventDefault();
+    }, { passive: false });
+
+    inputSurface.addEventListener('touchend', (e) => {
+        if (!GameState.touchPreviewActive) {
+            clearSnapPreview();
+            return;
+        }
+
+        GameState.touchPreviewActive = false;
+        const touch = e.changedTouches?.[0];
+        if (touch && shouldHandlePathInput()) {
+            GameState.suppressNextMapClickUntil = Date.now() + 400;
+            const { lat, lng } = getLatLngFromClient(touch.clientX, touch.clientY);
+            commitPathPoint(lat, lng);
+
+            if (window.Capacitor?.Plugins?.Haptics) {
+                window.Capacitor.Plugins.Haptics.impact({ style: 'light' });
+            }
+        } else {
+            clearSnapPreview();
+        }
+
+        e.preventDefault();
+    }, { passive: false });
+
+    inputSurface.addEventListener('touchcancel', () => {
+        GameState.touchPreviewActive = false;
+        clearSnapPreview();
+    }, { passive: true });
+
+    GameState.pathPreviewHandlersAdded = true;
 }
 
 // =============================================================================
@@ -6593,16 +6981,12 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, reques
 
     try {
         const bounds = GameState.map.getBounds();
-        const query = `
-            [out:json][timeout:25];
-            (
-                way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
-                (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
-            );
-            out body;
-            >;
-            out skel qt;
-        `;
+        const query = buildRoadNetworkQuery({
+            south: bounds.getSouth(),
+            west: bounds.getWest(),
+            north: bounds.getNorth(),
+            east: bounds.getEast(),
+        });
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
@@ -6699,6 +7083,7 @@ function processRoadData(data) {
 
     for (const element of data.elements) {
         if (element.type === 'way' && element.nodes) {
+            const tags = element.tags || {};
             for (let i = 0; i < element.nodes.length - 1; i++) {
                 const nodeA = element.nodes[i];
                 const nodeB = element.nodes[i + 1];
@@ -6706,7 +7091,7 @@ function processRoadData(data) {
                 if (!nodeMap.has(nodeA) || !nodeMap.has(nodeB)) continue;
 
                 // Create canonical edge key for deduplication
-                const edgeKey = nodeA < nodeB ? `${nodeA}-${nodeB}` : `${nodeB}-${nodeA}`;
+                const edgeKey = getCanonicalEdgeKey(nodeA, nodeB);
                 if (edgeSet.has(edgeKey)) continue;
                 edgeSet.add(edgeKey);
 
@@ -6727,7 +7112,13 @@ function processRoadData(data) {
                     from: nodeA,
                     to: nodeB,
                     fromPos: posA,
-                    toPos: posB
+                    toPos: posB,
+                    highway: tags.highway || null,
+                    name: tags.name || '',
+                    ref: tags.ref || '',
+                    bridge: tags.bridge || null,
+                    tunnel: tags.tunnel || null,
+                    layer: Number.isFinite(Number(tags.layer)) ? Number(tags.layer) : 0,
                 };
                 GameState.edgeList.push(edgeObj);
                 GameState.edgeLookup.set(edgeKey, edgeObj);
@@ -7096,16 +7487,209 @@ function disableDrawing() {
     GameState.drawCanvas.classList.remove('drawing-ready');
     GameState.drawCanvas.classList.remove('drawing-active');
     GameState.canDraw = false;
+    clearSnapPreview({ redraw: false });
 }
 
-/**
- * Handle click to add waypoint - uses micro A* routing to connect to last point.
- * This is the primary interaction method (no dragging needed).
- */
-function handlePathClick(e) {
-    if (e.button !== undefined && e.button !== 0) return;
-    if (!GameState.gameStarted || !GameState.canDraw) return;
-    if (GameState.vizState.active) return; // Don't allow clicks during A* visualization
+function shouldHandlePathInput() {
+    if (!GameState.gameStarted || !GameState.canDraw) return false;
+    if (GameState.vizState.active) return false;
+    return GameState.gameMode === 'competitive' || GameState.gameMode === 'challenge';
+}
+
+function getActivePathAnchorNode() {
+    if (GameState.userPathNodes.length > 0) {
+        return GameState.userPathNodes[GameState.userPathNodes.length - 1];
+    }
+
+    return GameState.startNode || null;
+}
+
+function getLatLngFromClient(clientX, clientY) {
+    const rect = GameState.drawCanvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const lngLat = GameState.map.unproject([x, y]);
+    return { lat: lngLat.lat, lng: lngLat.lng };
+}
+
+function getLatLngFromEvent(e) {
+    return getLatLngFromClient(e.clientX, e.clientY);
+}
+
+function buildNodePathCoords(nodeIds) {
+    return (nodeIds || [])
+        .map((nodeId) => GameState.nodes.get(nodeId))
+        .filter((pos) => !!pos)
+        .map((pos) => ({ lat: pos.lat, lng: pos.lng }));
+}
+
+function calculateCoordPathDistance(coords) {
+    if (!coords || coords.length < 2) return 0;
+
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        total += haversineDistance(
+            coords[i].lat,
+            coords[i].lng,
+            coords[i + 1].lat,
+            coords[i + 1].lng
+        );
+    }
+    return total;
+}
+
+function clearSnapPreview(options = {}) {
+    const { redraw = true } = options;
+
+    GameState.snapPreview.active = false;
+    GameState.snapPreview.point = null;
+    GameState.snapPreview.pathCoords = [];
+    GameState.snapPreview.inputType = null;
+    GameState.snapPreview.signature = null;
+
+    if (GameState.previewCtx && GameState.previewCanvas) {
+        GameState.previewCtx.clearRect(0, 0, GameState.previewCanvas.width, GameState.previewCanvas.height);
+    }
+
+    if (redraw && GameState.drawCtx) {
+        redrawUserPath();
+    }
+}
+
+function buildPreviewPathCoords(anchorNodeId, snapTarget) {
+    const anchorPos = GameState.nodes.get(anchorNodeId);
+    if (!anchorPos || !snapTarget) return [];
+
+    if (snapTarget.type === 'node') {
+        const targetNodeId = snapTarget.nodeId;
+        if (targetNodeId === anchorNodeId) return [];
+
+        const pathNodes = findShortestPathBetween(anchorNodeId, targetNodeId);
+        return buildNodePathCoords(pathNodes);
+    }
+
+    const edgeKey = getCanonicalEdgeKey(snapTarget.fromNode, snapTarget.toNode);
+    if (anchorPos.virtual && anchorPos.edgeKey === edgeKey) {
+        return [
+            { lat: anchorPos.lat, lng: anchorPos.lng },
+            { lat: snapTarget.point.lat, lng: snapTarget.point.lng },
+        ];
+    }
+
+    if (anchorNodeId === snapTarget.fromNode || anchorNodeId === snapTarget.toNode) {
+        return [
+            { lat: anchorPos.lat, lng: anchorPos.lng },
+            { lat: snapTarget.point.lat, lng: snapTarget.point.lng },
+        ];
+    }
+
+    const endpointOptions = [snapTarget.fromNode, snapTarget.toNode]
+        .map((endpointNodeId) => {
+            const endpointPos = GameState.nodes.get(endpointNodeId);
+            if (!endpointPos) return null;
+
+            const pathNodes = findShortestPathBetween(anchorNodeId, endpointNodeId);
+            if (pathNodes.length === 0) return null;
+
+            const nodePathCoords = buildNodePathCoords(pathNodes);
+            const segmentToSnap = haversineDistance(
+                endpointPos.lat,
+                endpointPos.lng,
+                snapTarget.point.lat,
+                snapTarget.point.lng
+            );
+
+            return {
+                totalDistance: calculateNodePathDistance(pathNodes) + segmentToSnap,
+                coords: [
+                    ...nodePathCoords,
+                    { lat: snapTarget.point.lat, lng: snapTarget.point.lng },
+                ],
+            };
+        })
+        .filter((option) => !!option)
+        .sort((a, b) => a.totalDistance - b.totalDistance);
+
+    return endpointOptions[0]?.coords || [];
+}
+
+function updateSnapPreview(lat, lng, inputType = 'mouse') {
+    if (!shouldHandlePathInput()) {
+        clearSnapPreview();
+        return null;
+    }
+
+    const anchorContext = getAnchorSnapContext();
+    const anchorNodeId = anchorContext?.anchorNodeId || getActivePathAnchorNode();
+    const anchorPos = anchorContext?.anchorPos || (anchorNodeId ? GameState.nodes.get(anchorNodeId) : null);
+    if (!anchorPos) {
+        clearSnapPreview();
+        return null;
+    }
+
+    const snapTarget = findSnapTarget(lat, lng);
+    if (!snapTarget) {
+        clearSnapPreview();
+        return null;
+    }
+
+    const previewPoint = snapTarget.type === 'node'
+        ? GameState.nodes.get(snapTarget.nodeId)
+        : snapTarget.point;
+
+    if (!previewPoint) {
+        clearSnapPreview();
+        return null;
+    }
+
+    const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    const clickDistance = haversineDistance(anchorPos.lat, anchorPos.lng, previewPoint.lat, previewPoint.lng);
+    if (GameState.gameMode !== 'explorer' && clickDistance > maxDistance) {
+        clearSnapPreview();
+        return null;
+    }
+
+    const pathCoords = buildPreviewPathCoords(anchorNodeId, snapTarget);
+    if (pathCoords.length < 2) {
+        clearSnapPreview();
+        return null;
+    }
+
+    if (GameState.gameMode !== 'explorer') {
+        const routedDistance = calculateCoordPathDistance(pathCoords);
+        const maxRouteDistance = getMaxRoutedSegmentDistanceKm(clickDistance, snapTarget, anchorContext);
+        if (routedDistance > maxRouteDistance) {
+            clearSnapPreview();
+            return null;
+        }
+    }
+
+    const previewSignature = snapTarget.type === 'node'
+        ? `node:${snapTarget.nodeId}`
+        : `edge:${snapTarget.fromNode}:${snapTarget.toNode}:${previewPoint.lat.toFixed(4)}:${previewPoint.lng.toFixed(4)}`;
+    const shouldPlayPreviewCue = GameState.snapPreview.signature !== previewSignature;
+
+    GameState.snapPreview.active = true;
+    GameState.snapPreview.point = { lat: previewPoint.lat, lng: previewPoint.lng };
+    GameState.snapPreview.pathCoords = pathCoords;
+    GameState.snapPreview.inputType = inputType;
+    GameState.snapPreview.signature = previewSignature;
+
+    if (shouldPlayPreviewCue && typeof SoundEngine !== 'undefined') {
+        SoundEngine.previewLock(previewSignature);
+    }
+
+    redrawUserPath();
+    return GameState.snapPreview;
+}
+
+function updateSnapPreviewFromClient(clientX, clientY, inputType = 'mouse') {
+    const { lat, lng } = getLatLngFromClient(clientX, clientY);
+    return updateSnapPreview(lat, lng, inputType);
+}
+
+function commitPathPoint(lat, lng) {
+    if (!shouldHandlePathInput()) return false;
 
     // Start challenge timer on first click (for fair timing)
     if (GameState.gameMode === 'challenge' && !GameState.challengeState.startTime) {
@@ -7124,18 +7708,30 @@ function handlePathClick(e) {
         updateAllDistanceDisplays();
     }
 
-    // Add the clicked point (micro A* routing happens inside addPointToUserPath)
-    const point = getLatLngFromEvent(e);
-    GameState.userDrawnPoints.push({ lat: point.lat, lng: point.lng });
+    GameState.userDrawnPoints.push({ lat, lng });
+    clearSnapPreview({ redraw: false });
 
-    if (addPointToUserPath(point.lat, point.lng)) {
+    if (addPointToUserPath(lat, lng)) {
         redrawUserPath();
-        // Audio and visual feedback
-        SoundEngine.init();   // Initialize audio from user gesture (required for challenge mode)
+        SoundEngine.init();
         SoundEngine.click();
         GameState.drawCanvas.classList.add('click-feedback');
         setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
+        return true;
     }
+
+    redrawUserPath();
+    return false;
+}
+
+/**
+ * Handle click to add waypoint - uses micro A* routing to connect to last point.
+ * This is the primary interaction method (no dragging needed).
+ */
+function handlePathClick(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    const point = getLatLngFromEvent(e);
+    commitPathPoint(point.lat, point.lng);
 }
 
 /**
@@ -7180,26 +7776,18 @@ function handleTouchMove(e) {
     }
 }
 
-function getLatLngFromEvent(e) {
-    const rect = GameState.drawCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    // MapLibre unproject() takes [x, y] and returns LngLat object
-    const lngLat = GameState.map.unproject([x, y]);
-    return { lat: lngLat.lat, lng: lngLat.lng };
-}
-
 function redrawUserPath() {
     const ctx = GameState.drawCtx;
     ctx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+    if (GameState.previewCtx && GameState.previewCanvas) {
+        GameState.previewCtx.clearRect(0, 0, GameState.previewCanvas.width, GameState.previewCanvas.height);
+    }
+    const time = performance.now() * 0.001;
 
-    // Always render click radius indicator during PLAYING phase, even with just start node
-    if (GameController.phase === GamePhase.PLAYING && GameState.userPathNodes.length >= 1) {
-        const time = performance.now() * 0.001;
+    // Always render click radius indicator during PLAYING phase, even before the first click
+    if (GameController.phase === GamePhase.PLAYING && getActivePathAnchorNode()) {
         renderClickRadiusIndicator(ctx, time);
     }
-
-    if (GameState.userPathNodes.length < 2) return;
 
     const points = [];
     for (let i = 0; i < GameState.userPathNodes.length; i++) {
@@ -7209,102 +7797,97 @@ function redrawUserPath() {
         points.push(GameState.map.project([pos.lng, pos.lat]));
     }
 
-    if (points.length < 2) return;
+    if (points.length >= 2) {
+        // ALWAYS use consistent warm orange for user path - instant recognition across all rounds
+        const uc = CONFIG.color.getUserPathColor();
 
-    // ALWAYS use consistent warm orange for user path - instant recognition across all rounds
-    const uc = CONFIG.color.getUserPathColor();
+        // Get animation state
+        const elec = GameState.userPathElectricity;
+        elec.phase = time;
 
-    // Get animation state
-    const elec = GameState.userPathElectricity;
-    const now = performance.now();
-    const time = now * 0.001;
-    elec.phase = time;
+        // Organic flicker - more pronounced for "human" feel
+        const flicker = 0.88 + Math.sin(time * 18) * 0.04 + Math.sin(time * 5) * 0.04 + (Math.random() - 0.5) * 0.04;
 
-    // Organic flicker - more pronounced for "human" feel
-    const flicker = 0.88 + Math.sin(time * 18) * 0.04 + Math.sin(time * 5) * 0.04 + (Math.random() - 0.5) * 0.04;
+        // Add subtle wobble to points for "hand-drawn" feel
+        const wobblePoints = points.map((p, i) => {
+            // More wobble in the middle, less at endpoints
+            const edgeFactor = Math.min(i, points.length - 1 - i) / (points.length / 2);
+            const wobbleAmount = 1.5 * Math.min(edgeFactor, 1);
+            const wobbleX = Math.sin(time * 3 + i * 0.7) * wobbleAmount;
+            const wobbleY = Math.cos(time * 2.3 + i * 0.5) * wobbleAmount;
+            return { x: p.x + wobbleX, y: p.y + wobbleY };
+        });
 
-    // Add subtle wobble to points for "hand-drawn" feel
-    const wobblePoints = points.map((p, i) => {
-        // More wobble in the middle, less at endpoints
-        const edgeFactor = Math.min(i, points.length - 1 - i) / (points.length / 2);
-        const wobbleAmount = 1.5 * Math.min(edgeFactor, 1);
-        const wobbleX = Math.sin(time * 3 + i * 0.7) * wobbleAmount;
-        const wobbleY = Math.cos(time * 2.3 + i * 0.5) * wobbleAmount;
-        return { x: p.x + wobbleX, y: p.y + wobbleY };
-    });
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+        // === DARK OUTLINE ===
+        // Draw a dark outline FIRST (underneath everything) to make path pop against round history
+        ctx.globalCompositeOperation = 'source-over';
 
-    // === DARK OUTLINE ===
-    // Draw a dark outline FIRST (underneath everything) to make path pop against round history
-    ctx.globalCompositeOperation = 'source-over';
+        // Outer dark edge - creates separation from background paths
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.lineWidth = 10;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Outer dark edge - creates separation from background paths
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.lineWidth = 10;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // Inner dark edge - sharper contrast
+        ctx.strokeStyle = 'rgba(20, 10, 30, 0.85)';
+        ctx.lineWidth = 6;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Inner dark edge - sharper contrast
-    ctx.strokeStyle = 'rgba(20, 10, 30, 0.85)';
-    ctx.lineWidth = 6;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // Use lighter composite for glow
+        ctx.globalCompositeOperation = 'lighter';
 
-    // Use lighter composite for glow
-    ctx.globalCompositeOperation = 'lighter';
+        // Outer atmospheric glow - warm orange haze
+        ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.08 * flicker})`;
+        ctx.lineWidth = 20;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Outer atmospheric glow - warm orange haze
-    ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.08 * flicker})`;
-    ctx.lineWidth = 20;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // Outer glow with flicker
+        ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.18 * flicker})`;
+        ctx.lineWidth = 12;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Outer glow with flicker
-    ctx.strokeStyle = `rgba(${uc.r}, ${uc.g}, ${uc.b}, ${0.18 * flicker})`;
-    ctx.lineWidth = 12;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // Mid glow - slightly brighter, warmer
+        ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 20)}, ${uc.b}, ${0.35 * flicker})`;
+        ctx.lineWidth = 7;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Mid glow - slightly brighter, warmer
-    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 20)}, ${uc.b}, ${0.35 * flicker})`;
-    ctx.lineWidth = 7;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // Inner glow - brightest
+        ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 40)}, ${uc.b}, ${0.55 * flicker})`;
+        ctx.lineWidth = 4;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Inner glow - brightest
-    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 40)}, ${uc.b}, ${0.55 * flicker})`;
-    ctx.lineWidth = 4;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
 
-    ctx.globalCompositeOperation = 'source-over';
+        // Core line - bright warm orange with flicker
+        ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 30)}, ${uc.b}, ${0.95})`;
+        ctx.lineWidth = 2.5;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // Core line - bright warm orange with flicker
-    ctx.strokeStyle = `rgba(${uc.r}, ${Math.min(255, uc.g + 30)}, ${uc.b}, ${0.95})`;
-    ctx.lineWidth = 2.5;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
+        // White hot center for extra pop
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 * flicker})`;
+        ctx.lineWidth = 1;
+        drawWobblyPath(ctx, wobblePoints);
+        ctx.stroke();
 
-    // White hot center for extra pop
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 * flicker})`;
-    ctx.lineWidth = 1;
-    drawWobblyPath(ctx, wobblePoints);
-    ctx.stroke();
-
-    // Energy pulses traveling along the path
-    renderUserPathPulses(ctx, points, time, uc);
-
-    // Click radius indicator - only show during active drawing phase
-    if (GameController.phase === GamePhase.PLAYING && points.length >= 1) {
-        renderClickRadiusIndicator(ctx, time);
+        // Energy pulses traveling along the path
+        renderUserPathPulses(ctx, points, time, uc);
     }
+
+    renderSnapPreview(time);
 }
 
 // Render click radius indicator around last path node
 function renderClickRadiusIndicator(ctx, time) {
-    const lastNodeId = GameState.userPathNodes[GameState.userPathNodes.length - 1];
+    const lastNodeId = getActivePathAnchorNode();
     if (!lastNodeId) return;
 
     const lastPos = GameState.nodes.get(lastNodeId);
@@ -7370,6 +7953,217 @@ function renderClickRadiusIndicator(ctx, time) {
         ctx.drawImage(sprite, screen.x - size / 2, screen.y - size / 2, size, size);
         ctx.globalAlpha = 1;
     }
+}
+
+function getPointAlongPolyline(points, progress) {
+    if (!points || points.length === 0) return null;
+    if (points.length === 1) return points[0];
+
+    const clamped = Math.max(0, Math.min(1, progress));
+    const segmentLengths = [];
+    let totalLength = 0;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const dx = points[i + 1].x - points[i].x;
+        const dy = points[i + 1].y - points[i].y;
+        const len = Math.sqrt((dx * dx) + (dy * dy));
+        segmentLengths.push(len);
+        totalLength += len;
+    }
+
+    if (totalLength === 0) return points[0];
+
+    const targetDistance = totalLength * clamped;
+    let accumulated = 0;
+
+    for (let i = 0; i < segmentLengths.length; i++) {
+        const segLen = segmentLengths[i];
+        if (accumulated + segLen >= targetDistance) {
+            const segmentProgress = (targetDistance - accumulated) / segLen;
+            return {
+                x: points[i].x + (points[i + 1].x - points[i].x) * segmentProgress,
+                y: points[i].y + (points[i + 1].y - points[i].y) * segmentProgress,
+            };
+        }
+        accumulated += segLen;
+    }
+
+    return points[points.length - 1];
+}
+
+function renderSnapPreview(time) {
+    const ctx = GameState.previewCtx;
+    const preview = GameState.snapPreview;
+    if (!ctx || !preview.active || !preview.point || !GameState.map) return;
+
+    const previewPoints = preview.pathCoords
+        .map((pos) => GameState.map.project([pos.lng, pos.lat]));
+
+    const previewColor = { r: 115, g: 248, b: 255 };
+    const accentColor = { r: 255, g: 90, b: 214 };
+    const pulse = 0.65 + 0.35 * Math.sin(time * 4.6);
+    const shimmer = 0.55 + 0.45 * Math.sin(time * 8.4 + 0.8);
+
+    if (previewPoints.length >= 2) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.globalCompositeOperation = 'source-over';
+        for (let i = 0; i <= 10; i++) {
+            const point = getPointAlongPolyline(previewPoints, i / 10);
+            if (!point) continue;
+            const corridor = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 42);
+            corridor.addColorStop(0, 'rgba(4, 3, 12, 0.18)');
+            corridor.addColorStop(0.45, 'rgba(4, 3, 12, 0.10)');
+            corridor.addColorStop(1, 'rgba(4, 3, 12, 0)');
+            ctx.fillStyle = corridor;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 42, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(${previewColor.r}, ${previewColor.g}, ${previewColor.b}, ${0.1 + 0.12 * pulse})`;
+        ctx.lineWidth = 16;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${accentColor.r}, ${accentColor.g}, ${accentColor.b}, ${0.05 + 0.08 * shimmer})`;
+        ctx.lineWidth = 10;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.16 + 0.12 * pulse})`;
+        ctx.lineWidth = 7;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.98)';
+        ctx.lineWidth = 3.4;
+        ctx.setLineDash([]);
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${previewColor.r}, ${previewColor.g}, ${previewColor.b}, 0.98)`;
+        ctx.lineWidth = 2.3;
+        ctx.setLineDash([14, 10]);
+        ctx.lineDashOffset = -time * 82;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${accentColor.r}, ${accentColor.g}, ${accentColor.b}, 0.88)`;
+        ctx.lineWidth = 1.35;
+        ctx.setLineDash([3, 16]);
+        ctx.lineDashOffset = time * 64;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.52 + 0.28 * shimmer})`;
+        ctx.lineWidth = 1.1;
+        ctx.setLineDash([1.5, 20]);
+        ctx.lineDashOffset = -time * 120;
+        drawWobblyPath(ctx, previewPoints);
+        ctx.stroke();
+
+        const spriteTrail = [
+            { sprite: AmbientViz.sprites?.glowWhite, size: 26, alpha: 0.92, speed: 0.54, offset: 0.00 },
+            { sprite: AmbientViz.sprites?.glowCyan,  size: 22, alpha: 0.82, speed: 0.41, offset: 0.22 },
+            { sprite: AmbientViz.sprites?.glowPink,  size: 20, alpha: 0.62, speed: 0.31, offset: 0.47 },
+            { sprite: AmbientViz.sprites?.glowWhite, size: 18, alpha: 0.52, speed: 0.22, offset: 0.74 },
+        ];
+
+        ctx.globalCompositeOperation = 'lighter';
+        for (const trail of spriteTrail) {
+            if (!trail.sprite) continue;
+            const point = getPointAlongPolyline(previewPoints, (time * trail.speed + trail.offset) % 1);
+            if (!point) continue;
+            const size = trail.size + pulse * 7;
+            ctx.globalAlpha = trail.alpha;
+            ctx.drawImage(trail.sprite, point.x - size / 2, point.y - size / 2, size, size);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    const targetScreen = GameState.map.project([preview.point.lng, preview.point.lat]);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    const targetDim = ctx.createRadialGradient(targetScreen.x, targetScreen.y, 0, targetScreen.x, targetScreen.y, 52);
+    targetDim.addColorStop(0, 'rgba(4, 3, 12, 0.20)');
+    targetDim.addColorStop(0.5, 'rgba(4, 3, 12, 0.10)');
+    targetDim.addColorStop(1, 'rgba(4, 3, 12, 0)');
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = targetDim;
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 52, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'lighter';
+    if (AmbientViz.sprites?.glowWhite) {
+        const size = 58 + pulse * 12;
+        ctx.globalAlpha = 0.7;
+        ctx.drawImage(AmbientViz.sprites.glowWhite, targetScreen.x - size / 2, targetScreen.y - size / 2, size, size);
+    }
+    if (AmbientViz.sprites?.glowCyan) {
+        const size = 46 + pulse * 10;
+        ctx.globalAlpha = 0.82;
+        ctx.drawImage(AmbientViz.sprites.glowCyan, targetScreen.x - size / 2, targetScreen.y - size / 2, size, size);
+    }
+    if (AmbientViz.sprites?.glowPink) {
+        const size = 34 + shimmer * 8;
+        ctx.globalAlpha = 0.56;
+        ctx.drawImage(AmbientViz.sprites.glowPink, targetScreen.x - size / 2, targetScreen.y - size / 2, size, size);
+    }
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 22 + pulse * 5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${previewColor.r}, ${previewColor.g}, ${previewColor.b}, ${0.12 + 0.08 * pulse})`;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 17 + pulse * 3, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + 0.25 * shimmer})`;
+    ctx.lineWidth = 1.75;
+    ctx.setLineDash([6, 8]);
+    ctx.lineDashOffset = -time * 85;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 10 + pulse * 2, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${accentColor.r}, ${accentColor.g}, ${accentColor.b}, ${0.8 + 0.15 * shimmer})`;
+    ctx.lineWidth = 2.3;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 6.5, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${previewColor.r}, ${previewColor.g}, ${previewColor.b}, 0.95)`;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 3.8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.55 + 0.25 * pulse})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - 18, targetScreen.y);
+    ctx.lineTo(targetScreen.x - 6, targetScreen.y);
+    ctx.moveTo(targetScreen.x + 6, targetScreen.y);
+    ctx.lineTo(targetScreen.x + 18, targetScreen.y);
+    ctx.moveTo(targetScreen.x, targetScreen.y - 18);
+    ctx.lineTo(targetScreen.x, targetScreen.y - 6);
+    ctx.moveTo(targetScreen.x, targetScreen.y + 6);
+    ctx.lineTo(targetScreen.x, targetScreen.y + 18);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.restore();
 }
 
 // Helper to draw a slightly wobbly path (human feel)
@@ -8655,8 +9449,11 @@ function clearVisualization() {
  * This ensures the path always follows valid roads.
  */
 function addPointToUserPath(lat, lng) {
+    const anchorContext = getAnchorSnapContext();
     const snapTarget = findSnapTarget(lat, lng);
     if (!snapTarget) return false;
+
+    let clickDistance = 0;
 
     const targetNode = snapTarget.type === 'node'
         ? snapTarget.nodeId
@@ -8678,7 +9475,7 @@ function addPointToUserPath(lat, lng) {
         const lastPos = GameState.nodes.get(lastNode);
         const targetPos = GameState.nodes.get(targetNode);
         if (lastPos && targetPos) {
-            const clickDistance = haversineDistance(lastPos.lat, lastPos.lng, targetPos.lat, targetPos.lng);
+            clickDistance = haversineDistance(lastPos.lat, lastPos.lng, targetPos.lat, targetPos.lng);
             const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
             if (clickDistance > maxDistance) {
                 showDistanceRejectionFeedback();
@@ -8693,8 +9490,7 @@ function addPointToUserPath(lat, lng) {
     // Check actual routed distance (prevents highway detours)
     if (microPath.length > 1 && GameState.gameMode !== 'explorer') {
         const routedDistance = calculateNodePathDistance(microPath);
-        const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
-        const maxRouteDistance = maxDistance * 3; // Allow 3x click distance for actual route
+        const maxRouteDistance = getMaxRoutedSegmentDistanceKm(clickDistance, snapTarget, anchorContext);
 
         if (routedDistance > maxRouteDistance) {
             showDistanceRejectionFeedback();
@@ -8977,6 +9773,8 @@ function resetUserPath() {
     GameState.userPathNodes = [];
     GameState.userDrawnPoints = [];  // Reset raw drawn points
     GameState.userDistance = 0;
+    GameState.touchPreviewActive = false;
+    clearSnapPreview({ redraw: false });
     if (GameState.drawCtx) {
         GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
     }
@@ -9199,7 +9997,175 @@ async function animateScoreCountUp(targetScore, targetEfficiency) {
 function getSnapRadiusMeters() {
     const maxDistanceKm = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
     const maxDistanceMeters = maxDistanceKm * 1000;
-    return Math.min(120, Math.max(40, maxDistanceMeters * 0.6));
+    return Math.min(220, Math.max(85, maxDistanceMeters * 0.85));
+}
+
+function getCanonicalEdgeKey(nodeA, nodeB) {
+    return nodeA < nodeB ? `${nodeA}-${nodeB}` : `${nodeB}-${nodeA}`;
+}
+
+function normalizeLayerValue(layer) {
+    const parsed = Number(layer);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getEdgeStructureSignature(edge) {
+    if (!edge) return 'surface:0';
+
+    if (edge.tunnel) return `tunnel:${normalizeLayerValue(edge.layer)}`;
+    if (edge.bridge) return `bridge:${normalizeLayerValue(edge.layer)}`;
+    return `surface:${normalizeLayerValue(edge.layer)}`;
+}
+
+function getHighwaySnapPenalty(highway) {
+    if (!highway) return 0;
+    return SNAP_HIGHWAY_PENALTIES[highway] || 0;
+}
+
+function getAnchorSnapContext() {
+    const anchorNodeId = getActivePathAnchorNode();
+    if (!anchorNodeId) return null;
+
+    const anchorPos = GameState.nodes.get(anchorNodeId);
+    if (!anchorPos) return null;
+
+    let previousNodeId = null;
+    if (GameState.userPathNodes.length >= 2 && GameState.userPathNodes[GameState.userPathNodes.length - 1] === anchorNodeId) {
+        previousNodeId = GameState.userPathNodes[GameState.userPathNodes.length - 2];
+    }
+
+    let edgeKey = null;
+    if (anchorPos.virtual && anchorPos.edgeKey) {
+        edgeKey = anchorPos.edgeKey;
+    } else if (previousNodeId != null) {
+        edgeKey = getCanonicalEdgeKey(previousNodeId, anchorNodeId);
+    }
+
+    const edge = edgeKey ? GameState.edgeLookup.get(edgeKey) : null;
+    let forward = null;
+
+    if (previousNodeId != null) {
+        const previousPos = GameState.nodes.get(previousNodeId);
+        if (previousPos) {
+            const scale = Math.cos(anchorPos.lat * Math.PI / 180);
+            const dx = (anchorPos.lng - previousPos.lng) * scale;
+            const dy = anchorPos.lat - previousPos.lat;
+            const length = Math.sqrt((dx * dx) + (dy * dy));
+            if (length > 0) {
+                forward = { x: dx / length, y: dy / length };
+            }
+        }
+    }
+
+    return {
+        anchorNodeId,
+        anchorPos,
+        previousNodeId,
+        edgeKey,
+        edge,
+        structure: getEdgeStructureSignature(edge),
+        forward,
+    };
+}
+
+function scoreSnapEdgeCandidate(edge, distanceMeters, snappedPoint, anchorContext) {
+    let score = distanceMeters;
+    if (!edge) return score;
+
+    const anchorEdge = anchorContext?.edge;
+    const candidateEdgeKey = getCanonicalEdgeKey(edge.from, edge.to);
+    const candidateStructure = getEdgeStructureSignature(edge);
+    const sameStructure = !!anchorEdge && candidateStructure === anchorContext.structure;
+    const sameName = !!anchorEdge?.name && !!edge.name && anchorEdge.name === edge.name;
+    const sameHighway = !!anchorEdge?.highway && anchorEdge.highway === edge.highway;
+
+    if (candidateEdgeKey === anchorContext?.edgeKey) score -= 34;
+    if (sameName) score -= 18;
+    if (sameHighway) score -= 8;
+    if (sameStructure && candidateStructure !== 'surface:0') score -= 16;
+
+    let highwayPenalty = getHighwaySnapPenalty(edge.highway);
+    if (sameName || sameHighway || candidateEdgeKey === anchorContext?.edgeKey) {
+        highwayPenalty *= 0.35;
+    }
+    score += highwayPenalty;
+
+    if (anchorContext?.forward && snappedPoint) {
+        const scale = Math.cos(anchorContext.anchorPos.lat * Math.PI / 180);
+        const dx = (snappedPoint.lng - anchorContext.anchorPos.lng) * scale;
+        const dy = snappedPoint.lat - anchorContext.anchorPos.lat;
+        const length = Math.sqrt((dx * dx) + (dy * dy));
+
+        if (length > 0) {
+            const alignment = ((dx / length) * anchorContext.forward.x) + ((dy / length) * anchorContext.forward.y);
+            if (alignment >= 0) {
+                score -= alignment * 10;
+            } else {
+                score += Math.abs(alignment) * 16;
+            }
+        }
+    }
+
+    return score;
+}
+
+function getSnapEdgeMeta(snapTarget) {
+    if (!snapTarget || snapTarget.type !== 'edge') return null;
+    return GameState.edgeLookup.get(getCanonicalEdgeKey(snapTarget.fromNode, snapTarget.toNode)) || null;
+}
+
+function getMaxRoutedSegmentDistanceKm(clickDistanceKm, snapTarget, anchorContext) {
+    const maxDistanceKm = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    let maxRouteDistanceKm = maxDistanceKm * 3;
+
+    const snapEdge = getSnapEdgeMeta(snapTarget);
+    const anchorEdge = anchorContext?.edge;
+    const sameNamedRoad = !!anchorEdge?.name && !!snapEdge?.name && anchorEdge.name === snapEdge.name;
+    const sameStructuredRoad = !!anchorEdge && !!snapEdge &&
+        getEdgeStructureSignature(anchorEdge) === getEdgeStructureSignature(snapEdge) &&
+        getEdgeStructureSignature(snapEdge) !== 'surface:0';
+
+    if (sameNamedRoad || sameStructuredRoad) {
+        maxRouteDistanceKm = Math.max(maxRouteDistanceKm, maxDistanceKm * 4.5);
+    } else if (snapEdge?.highway?.endsWith('_link')) {
+        maxRouteDistanceKm = Math.max(maxRouteDistanceKm, maxDistanceKm * 3.75);
+    }
+
+    return Math.max(maxRouteDistanceKm, clickDistanceKm + 0.12);
+}
+
+function upsertEdgeNeighbor(nodeId, neighborId, weight) {
+    if (!GameState.edges.has(nodeId)) GameState.edges.set(nodeId, []);
+
+    const neighbors = GameState.edges.get(nodeId);
+    const existing = neighbors.find((edge) => edge.neighbor === neighborId);
+    if (existing) {
+        existing.weight = Math.min(existing.weight, weight);
+        return;
+    }
+
+    neighbors.push({ neighbor: neighborId, weight });
+}
+
+function connectNodesBidirectionally(nodeA, nodeB, weight) {
+    upsertEdgeNeighbor(nodeA, nodeB, weight);
+    upsertEdgeNeighbor(nodeB, nodeA, weight);
+}
+
+function findReusableVirtualNode(point, edgeKey) {
+    const reuseThresholdKm = 0.005; // 5 meters keeps repeated clicks on the same spot stable
+
+    for (const nodeId of GameState.virtualNodeIds) {
+        const nodePos = GameState.nodes.get(nodeId);
+        if (!nodePos?.virtual || nodePos.edgeKey !== edgeKey) continue;
+
+        const dist = haversineDistance(point.lat, point.lng, nodePos.lat, nodePos.lng);
+        if (dist <= reuseThresholdKm) {
+            return nodeId;
+        }
+    }
+
+    return null;
 }
 
 function findNearestNodeWithDist(lat, lng, options = {}) {
@@ -9215,7 +10181,7 @@ function findNearestNodeWithDist(lat, lng, options = {}) {
         if (validNodes instanceof Set && !validNodes.has(nodeId)) continue;
         if (ignoreVirtual && pos?.virtual) continue;
 
-        const dist = haversineDistance(lat, lng, pos.lat, pos.lng);
+        const dist = haversineDistance(lat, lng, pos.lat, pos.lng) * 1000; // meters
         if (dist < nearestDist) {
             nearestDist = dist;
             nearestNode = nodeId;
@@ -9229,7 +10195,8 @@ function findNearestNode(lat, lng) {
     return findNearestNodeWithDist(lat, lng).nodeId;
 }
 
-function findNearestEdgePoint(lat, lng, maxDistanceMeters) {
+function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
+    const { anchorContext = null } = options;
     const originLat = lat;
     const originLng = lng;
     const originLatRad = originLat * Math.PI / 180;
@@ -9241,6 +10208,7 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters) {
 
     let best = null;
     let bestDist = Infinity;
+    let bestScore = Infinity;
 
     const validNodes = GameState.debug.largestComponentNodes;
 
@@ -9275,16 +10243,22 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters) {
         const cx = ax + abx * t;
         const cy = ay + aby * t;
         const dist = Math.sqrt((cx * cx) + (cy * cy));
+        if (dist > maxDistanceMeters) continue;
 
-        if (dist < bestDist) {
-            const snappedLat = originLat + (cy / metersPerDegLat);
-            const snappedLng = originLng + (cx / metersPerDegLng);
+        const snappedLat = originLat + (cy / metersPerDegLat);
+        const snappedLng = originLng + (cx / metersPerDegLng);
+        const snappedPoint = { lat: snappedLat, lng: snappedLng };
+        const score = scoreSnapEdgeCandidate(edge, dist, snappedPoint, anchorContext);
+
+        if (score < bestScore || (score === bestScore && dist < bestDist)) {
             bestDist = dist;
+            bestScore = score;
             best = {
                 fromNode: edge.from,
                 toNode: edge.to,
-                point: { lat: snappedLat, lng: snappedLng },
-                distance: dist
+                point: snappedPoint,
+                distance: dist,
+                score,
             };
         }
     }
@@ -9294,15 +10268,20 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters) {
 
 function findSnapTarget(lat, lng) {
     const maxSnapDist = getSnapRadiusMeters();
+    const anchorContext = getAnchorSnapContext();
     const nearestNode = findNearestNodeWithDist(lat, lng, { ignoreVirtual: true });
-    const nearestEdge = findNearestEdgePoint(lat, lng, maxSnapDist);
+    const nearestEdge = findNearestEdgePoint(lat, lng, maxSnapDist, { anchorContext });
 
     if (!nearestEdge && (!nearestNode.nodeId || nearestNode.distance > maxSnapDist)) {
         return null;
     }
 
-    if (nearestEdge && nearestEdge.distance <= maxSnapDist &&
-        (!nearestNode.nodeId || nearestEdge.distance < nearestNode.distance)) {
+    const nodeLockMeters = Math.min(14, Math.max(8, maxSnapDist * 0.12));
+    if (nearestNode.nodeId && nearestNode.distance <= nodeLockMeters) {
+        return { type: 'node', nodeId: nearestNode.nodeId };
+    }
+
+    if (nearestEdge && nearestEdge.distance <= maxSnapDist) {
         return {
             type: 'edge',
             fromNode: nearestEdge.fromNode,
@@ -9319,26 +10298,44 @@ function findSnapTarget(lat, lng) {
 }
 
 function createVirtualNode(point, fromNode, toNode) {
+    const edgeKey = getCanonicalEdgeKey(fromNode, toNode);
+    const reusableNodeId = findReusableVirtualNode(point, edgeKey);
+    if (reusableNodeId) return reusableNodeId;
+
     const nodeId = `virtual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    GameState.nodes.set(nodeId, { lat: point.lat, lng: point.lng, virtual: true });
-    GameState.virtualNodeIds.add(nodeId);
+    GameState.nodes.set(nodeId, {
+        lat: point.lat,
+        lng: point.lng,
+        virtual: true,
+        edgeKey,
+        fromNode,
+        toNode,
+    });
 
     const posA = GameState.nodes.get(fromNode);
     const posB = GameState.nodes.get(toNode);
-    if (!posA || !posB) return nodeId;
+    if (!posA || !posB) {
+        GameState.virtualNodeIds.add(nodeId);
+        return nodeId;
+    }
 
     const weightA = haversineDistance(point.lat, point.lng, posA.lat, posA.lng);
     const weightB = haversineDistance(point.lat, point.lng, posB.lat, posB.lng);
 
-    if (!GameState.edges.has(nodeId)) GameState.edges.set(nodeId, []);
-    if (!GameState.edges.has(fromNode)) GameState.edges.set(fromNode, []);
-    if (!GameState.edges.has(toNode)) GameState.edges.set(toNode, []);
+    connectNodesBidirectionally(nodeId, fromNode, weightA);
+    connectNodesBidirectionally(nodeId, toNode, weightB);
 
-    GameState.edges.get(nodeId).push({ neighbor: fromNode, weight: weightA });
-    GameState.edges.get(nodeId).push({ neighbor: toNode, weight: weightB });
+    // Virtual points on the same base edge must connect directly; otherwise
+    // repeated clicks along a long street can detour via an endpoint and get rejected.
+    for (const existingNodeId of GameState.virtualNodeIds) {
+        const existingNode = GameState.nodes.get(existingNodeId);
+        if (!existingNode?.virtual || existingNode.edgeKey !== edgeKey) continue;
 
-    GameState.edges.get(fromNode).push({ neighbor: nodeId, weight: weightA });
-    GameState.edges.get(toNode).push({ neighbor: nodeId, weight: weightB });
+        const directWeight = haversineDistance(point.lat, point.lng, existingNode.lat, existingNode.lng);
+        connectNodesBidirectionally(nodeId, existingNodeId, directWeight);
+    }
+
+    GameState.virtualNodeIds.add(nodeId);
 
     return nodeId;
 }
@@ -12643,16 +13640,7 @@ function preloadNextCity() {
     };
 
     // Build the query
-    const query = `
-        [out:json][timeout:25];
-        (
-            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
-            (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-        );
-        out body;
-        >;
-        out skel qt;
-    `;
+    const query = buildRoadNetworkQuery(bounds);
 
     // Fetch in background
     const servers = CONFIG.overpassServers;
@@ -12707,16 +13695,7 @@ function preloadChallengeCity(challenge) {
     };
 
     // Build the Overpass query
-    const query = `
-        [out:json][timeout:25];
-        (
-            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
-            (${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-        );
-        out body;
-        >;
-        out skel qt;
-    `;
+    const query = buildRoadNetworkQuery(bounds);
 
     // Fetch in background
     const servers = CONFIG.overpassServers;
@@ -12882,16 +13861,12 @@ async function loadRoadNetworkForContinuous(location) {
     const server = servers[Math.floor(Math.random() * servers.length)];
 
     const bounds = GameState.map.getBounds();
-    const query = `
-        [out:json][timeout:25];
-        (
-            way["highway"~"^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian)$"]
-            (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
-        );
-        out body;
-        >;
-        out skel qt;
-    `;
+    const query = buildRoadNetworkQuery({
+        south: bounds.getSouth(),
+        west: bounds.getWest(),
+        north: bounds.getNorth(),
+        east: bounds.getEast(),
+    });
 
     try {
         const response = await fetch(server, {
