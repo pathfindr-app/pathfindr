@@ -732,8 +732,14 @@ const GameController = {
 
         const frameStart = now;
 
-        // Dispatch rendering based on current phase
-        this._renderFrame(deltaTime);
+        try {
+            // Dispatch rendering based on current phase
+            this._renderFrame(deltaTime);
+        } catch (error) {
+            console.error('[GameController] Render loop recovered from error:', error);
+            invalidateProjectedCaches();
+            clearScreenSpaceTransientEffects({ preservePreview: shouldRenderInteractivePathOverlay() });
+        }
 
         // Track frame budget (for debugging performance)
         const frameTime = performance.now() - frameStart;
@@ -6740,6 +6746,8 @@ function initMap() {
     function onMapRender() {
         if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
         ensureMapPresentationSync();
+
+        if (GameController.animationId) return;
 
         const ctx = GameState.vizCtx;
         if (!ctx) return;
