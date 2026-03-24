@@ -6738,12 +6738,13 @@ function initMap() {
     }
 
     function onMapRender() {
-        // Map render should never be a second canvas writer during gameplay.
-        // The unified GameController RAF owns visual output; map render only
-        // nudges presentation sync when the game loop is not active yet.
-        if (GameController.animationId) return;
-        if (!GameState.presentationDirty) return;
+        if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
         ensureMapPresentationSync();
+
+        const ctx = GameState.vizCtx;
+        if (!ctx) return;
+
+        GameController.renderCurrentPhaseFrame(ctx, 0, { advanceState: false });
     }
 
     // MapLibre events - includes pitch and rotate
