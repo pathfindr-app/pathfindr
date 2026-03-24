@@ -652,15 +652,18 @@ const GameController = {
                 if (GameState.gameMode !== 'visualizer') {
                     VisualizerPhaseBlend.clear();
                 }
+                clearScreenSpaceTransientEffects();
                 clearInteractivePathOverlay();
                 break;
             case GamePhase.VISUALIZING:
                 if (GameState.vizState) {
                     GameState.vizState.active = true;
                 }
+                clearScreenSpaceTransientEffects({ preservePreview: false });
                 clearInteractivePathOverlay();
                 break;
             case GamePhase.MENU:
+                clearScreenSpaceTransientEffects();
                 VisualizerPhaseBlend.clear();
                 clearInteractivePathOverlay();
                 break;
@@ -671,11 +674,13 @@ const GameController = {
                 }
                 break;
             case GamePhase.RESULTS:
+                clearScreenSpaceTransientEffects();
                 clearInteractivePathOverlay();
                 GameState.resultsPresentation.enteredAt = performance.now();
                 GameState.snapPreview.active = false;
                 break;
             case GamePhase.IDLE:
+                clearScreenSpaceTransientEffects();
                 clearInteractivePathOverlay();
                 break;
         }
@@ -5881,6 +5886,10 @@ const ElectricitySystem = {
         }
     },
 
+    clearArcs() {
+        this.arcs = [];
+    },
+
     // Get flicker multiplier for organic pulsing - enhanced with more natural variation
     getFlicker() {
         const t = this.time;
@@ -6159,6 +6168,40 @@ function getMapPresentationStateKey() {
     ].join('|');
 }
 
+function clearScreenSpaceTransientEffects(options = {}) {
+    const { preservePreview = false } = options;
+
+    if (typeof ElectricitySystem !== 'undefined' &&
+        typeof ElectricitySystem.clearArcs === 'function') {
+        ElectricitySystem.clearArcs();
+    }
+
+    if (typeof ExplorerHistory !== 'undefined') {
+        ExplorerHistory.sparks = [];
+    }
+
+    if (typeof VisualizerHistory !== 'undefined') {
+        VisualizerHistory.sparks = [];
+    }
+
+    if (typeof VisualizerPhaseBlend !== 'undefined' &&
+        typeof VisualizerPhaseBlend.clear === 'function') {
+        VisualizerPhaseBlend.clear();
+    }
+
+    GameState.traceAnimation = {
+        active: false,
+        segments: [],
+        progress: 0,
+        startTime: 0,
+        duration: GameState.traceAnimation?.duration || 150,
+    };
+
+    if (!preservePreview) {
+        clearSnapPreview({ redraw: false });
+    }
+}
+
 function markPathProjectionCachesDirty(paths = []) {
     for (const path of paths) {
         path.cacheValid = false;
@@ -6173,6 +6216,7 @@ function invalidateProjectedCaches() {
     ScreenCoordCache.invalidate();
     GameState.presentationDirty = true;
     GameState.presentationSyncKey = null;
+    clearScreenSpaceTransientEffects({ preservePreview: shouldRenderInteractivePathOverlay() });
 
     if (typeof ExplorerHistory !== 'undefined') {
         markPathProjectionCachesDirty(ExplorerHistory.paths);
@@ -6694,13 +6738,12 @@ function initMap() {
     }
 
     function onMapRender() {
-        if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
+        // Map render should never be a second canvas writer during gameplay.
+        // The unified GameController RAF owns visual output; map render only
+        // nudges presentation sync when the game loop is not active yet.
+        if (GameController.animationId) return;
+        if (!GameState.presentationDirty) return;
         ensureMapPresentationSync();
-
-        const ctx = GameState.vizCtx;
-        if (!ctx) return;
-
-        GameController.renderCurrentPhaseFrame(ctx, 0, { advanceState: false });
     }
 
     // MapLibre events - includes pitch and rotate
@@ -7321,6 +7364,7 @@ function processRoadData(data) {
     GameState.edgeList = [];
     GameState.edgeLookup.clear();
     GameState.virtualNodeIds.clear();
+    clearScreenSpaceTransientEffects();
 
     const nodeMap = new Map();
     for (const element of data.elements) {
@@ -9819,6 +9863,7 @@ function clearVisualization() {
     }
 
     clearVisualizationState();
+    clearScreenSpaceTransientEffects({ preservePreview: shouldRenderInteractivePathOverlay() });
 
     // Clear visualization canvas
     if (GameState.vizCtx) {
