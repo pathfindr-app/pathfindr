@@ -792,8 +792,8 @@ const GameController = {
     },
 
     _renderAmbientFrame(ctx, width, height, deltaTime) {
-        const isResultsPhase = this.phase === GamePhase.RESULTS;
-        const roadOpacity = isResultsPhase ? 0.28 : 1.0;
+        const scene = getVisualSceneState();
+        const roadOpacity = scene.roadOpacity;
 
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
@@ -818,22 +818,22 @@ const GameController = {
         }
 
         // Layer 2: History rendering based on game mode
-        if (GameState.gameMode === 'explorer') {
+        if (scene.isExplorerMode) {
             AmbientViz.renderPathHistory(ctx, deltaTime, ExplorerHistory.getPaths(), false);
-        } else if (GameState.gameMode === 'visualizer') {
+        } else if (scene.isVisualizerMode) {
             VisualizerVibeRenderer.render(ctx, width, height, false);
-        } else if (isResultsPhase) {
+        } else if (scene.showRoundReview) {
             AmbientViz.renderRoundReview(ctx, deltaTime);
         } else {
             AmbientViz.renderRoundHistory(ctx, deltaTime, false);
         }
 
-        if (GameState.gameMode === 'visualizer') {
+        if (scene.isVisualizerMode) {
             VisualizerPhaseBlend.render(ctx, width, height);
         }
 
         // Layer 3+: gameplay-only overlays
-        if (!isResultsPhase) {
+        if (!scene.isResultsPhase) {
             AmbientViz.render(ctx, width, height, deltaTime);
             ElectricitySystem.renderArcs(ctx);
             renderTraceAnimation(ctx);
@@ -4020,17 +4020,21 @@ const AmbientViz = {
         this.animationId = requestAnimationFrame(() => this.loop());
     },
 
-    projectNodePath(nodePath) {
-        if (!nodePath || nodePath.length < 2 || !GameState.map) return [];
+    projectNodePath(nodePath, pathCoords = null) {
+        if (pathCoords && pathCoords.length > 1) {
+            return projectPathCoordsToScreen(pathCoords);
+        }
 
-        return nodePath.map(nodeId => {
-            const pos = GameState.nodes.get(nodeId);
-            if (!pos) return null;
+        if (!nodePath || nodePath.length < 2) return [];
+        return projectPathCoordsToScreen(buildNodePathCoords(nodePath));
+    },
 
-            const point = GameState.map.project([pos.lng, pos.lat]);
-            if (!isFinite(point.x) || !isFinite(point.y)) return null;
-            return point;
-        }).filter(point => point !== null);
+    projectEdgeHistory(exploredSegments = null, exploredEdges = null) {
+        if (exploredSegments && exploredSegments.length > 0) {
+            return projectEdgeSegmentsToScreen(exploredSegments);
+        }
+
+        return projectEdgeSegmentsToScreen(captureExploredSegments(exploredEdges));
     },
 
     renderRoundReviewBackdrop(ctx, highlightedPaths, overlayAlpha = 0.52) {
@@ -4188,8 +4192,8 @@ const AmbientViz = {
         const optimalReveal = Math.max(0, Math.min(1, (elapsed - 260) / 420));
         const overlayAlpha = 0.54 - (0.08 * optimalReveal);
 
-        const userPoints = this.projectNodePath(round.userPath);
-        const optimalPoints = this.projectNodePath(round.optimalPath);
+        const userPoints = this.projectNodePath(round.userPath, round.userPathCoords);
+        const optimalPoints = this.projectNodePath(round.optimalPath, round.optimalPathCoords);
 
         this.renderRoundReviewBackdrop(ctx, [userPoints, optimalPoints], overlayAlpha);
 
@@ -4220,20 +4224,7 @@ const AmbientViz = {
         const vizDimFactor = isVizActive ? 0.6 : 1.0;  // BUMPED from 0.4 for better visibility
 
         for (const round of rounds) {
-            // Convert explored edges to screen coordinates (O(1) lookup via edgeLookup)
-            const screenEdges = [];
-            for (const edgeKey of round.exploredEdges) {
-                const edge = GameState.edgeLookup.get(edgeKey);
-
-                if (edge) {
-                    const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
-                    const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
-                    // Skip edges with NaN/Infinity coordinates
-                    if (isFinite(from.x) && isFinite(from.y) && isFinite(to.x) && isFinite(to.y)) {
-                        screenEdges.push({ from, to });
-                    }
-                }
-            }
+            const screenEdges = this.projectEdgeHistory(round.exploredSegments, round.exploredEdges);
 
             // Render explored edges with electricity (dimmed during active viz)
             const isActive = round.state === 'rising' && !isVizActive;
@@ -4241,16 +4232,8 @@ const AmbientViz = {
             ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
             // Render optimal path with distinct optimal color (dimmed during active viz)
-            if (round.optimalPath.length > 1) {
-                const optimalPoints = round.optimalPath.map(nodeId => {
-                    const pos = GameState.nodes.get(nodeId);
-                    if (pos) {
-                        const p = GameState.map.project([pos.lng, pos.lat]);
-                        if (isFinite(p.x) && isFinite(p.y)) return p;
-                    }
-                    return null;
-                }).filter(p => p !== null);
-
+            if (round.optimalPath.length > 1 || round.optimalPathCoords?.length > 1) {
+                const optimalPoints = this.projectNodePath(round.optimalPath, round.optimalPathCoords);
                 if (optimalPoints.length > 1) {
                     // Use round-specific hot color for optimal path
                     const pathColor = round.hotColor || round.color;
@@ -4263,16 +4246,8 @@ const AmbientViz = {
             }
 
             // Render user path with distinct electricity (dimmed during active viz)
-            if (round.userPath.length > 1) {
-                const userPoints = round.userPath.map(nodeId => {
-                    const pos = GameState.nodes.get(nodeId);
-                    if (pos) {
-                        const p = GameState.map.project([pos.lng, pos.lat]);
-                        if (isFinite(p.x) && isFinite(p.y)) return p;
-                    }
-                    return null;
-                }).filter(p => p !== null);
-
+            if (round.userPath.length > 1 || round.userPathCoords?.length > 1) {
+                const userPoints = this.projectNodePath(round.userPath, round.userPathCoords);
                 if (userPoints.length > 1) {
                     // Use stored userPathColor from round theme
                     ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity, round.midColor);
@@ -4316,42 +4291,15 @@ const AmbientViz = {
             // OPTIMIZATION: Use cached screen coordinates if map hasn't moved
             if (!path.cacheValid || path.lastMapState !== mapState) {
                 // Rebuild cache
-                path.screenEdgesCache = [];
-                for (const edgeKey of path.exploredEdges) {
-                    const edge = GameState.edgeLookup.get(edgeKey);
-                    if (edge) {
-                        const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
-                        const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
-                        // Skip edges outside viewport (3D pitch clipping)
-                        if (isInBounds(from) || isInBounds(to)) {
-                            path.screenEdgesCache.push({ from, to });
-                        }
-                    }
-                }
+                path.screenEdgesCache = projectEdgeSegmentsToScreen(path.exploredSegments, { padding }).filter((edge) =>
+                    isInBounds(edge.from) || isInBounds(edge.to)
+                );
 
                 // Cache optimal path points (only filter NaN/Infinity - keep all finite points)
-                if (path.optimalPath.length > 1) {
-                    path.optimalPointsCache = path.optimalPath.map(nodeId => {
-                        const pos = GameState.nodes.get(nodeId);
-                        if (pos) {
-                            const p = GameState.map.project([pos.lng, pos.lat]);
-                            if (isFinite(p.x) && isFinite(p.y)) return p;
-                        }
-                        return null;
-                    }).filter(p => p !== null);
-                }
+                path.optimalPointsCache = this.projectNodePath(path.optimalPath, path.optimalPathCoords);
 
                 // Cache user path points (Explorer mode) - only filter NaN/Infinity
-                if (path.userPath && path.userPath.length > 1) {
-                    path.userPointsCache = path.userPath.map(nodeId => {
-                        const pos = GameState.nodes.get(nodeId);
-                        if (pos) {
-                            const p = GameState.map.project([pos.lng, pos.lat]);
-                            if (isFinite(p.x) && isFinite(p.y)) return p;
-                        }
-                        return null;
-                    }).filter(p => p !== null);
-                }
+                path.userPointsCache = this.projectNodePath(path.userPath, path.userPathCoords);
 
                 path.lastMapState = mapState;
                 path.cacheValid = true;
@@ -4850,12 +4798,11 @@ const RoundHistory = {
     // Add completed round to history
     addRound(roundNumber, exploredEdges, optimalPath, userPath) {
         const theme = CONFIG.color.getTheme(roundNumber);
+        const snapshot = createHistoryVisualSnapshot(exploredEdges, optimalPath, userPath);
 
         this.rounds.push({
             roundNumber,
-            exploredEdges: new Set(exploredEdges),  // Set of edge keys
-            optimalPath: [...optimalPath],           // Array of node IDs
-            userPath: [...userPath],                 // Array of node IDs
+            ...snapshot,
             color: theme.base,                // Base color (for heatmap/exploration)
             hotColor: theme.hot,              // Hot shade (optimal path - brightest)
             midColor: theme.mid,              // Mid shade (user path)
@@ -4930,11 +4877,10 @@ const ExplorerHistory = {
 
         // OPTIMIZATION: Only store a SAMPLE of explored edges (every 3rd edge)
         const sampledEdges = exploredEdges.filter((_, i) => i % 3 === 0);
+        const snapshot = createHistoryVisualSnapshot(sampledEdges, optimalPath, userPath);
 
         this.paths.push({
-            exploredEdges: new Set(sampledEdges),
-            optimalPath: [...optimalPath],
-            userPath: [...userPath],
+            ...snapshot,
             color: theme.base,            // Base color (for heatmap/exploration)
             hotColor: theme.hot,          // Hot shade (optimal path - brightest)
             midColor: theme.mid,          // Mid shade (user path)
@@ -5101,10 +5047,10 @@ const VisualizerHistory = {
         // Store more edges for better visual coverage (every 2nd edge)
         // Visualizer mode benefits from denser networks for the neural effect
         const sampledEdges = exploredEdges.filter((_, i) => i % 2 === 0);
+        const snapshot = createHistoryVisualSnapshot(sampledEdges, optimalPath);
 
         this.paths.push({
-            exploredEdges: new Set(sampledEdges),
-            optimalPath: [...optimalPath],
+            ...snapshot,
             color: theme.base,            // Base color (for heatmap/exploration)
             hotColor: theme.hot,          // Hot shade (optimal path - brightest)
             coolColor: theme.cool,        // Cool shade (ambient history falloff)
@@ -5417,7 +5363,7 @@ const VisualizerVibeRenderer = {
         if (!this.coreCtx || !this.glowCtx || !GameState.map) return;
         const vibe = this.getVibeColor(path.color);
         const maxSegmentLengthSq = 3000 * 3000;
-        const edgeCount = path.exploredEdges ? path.exploredEdges.size : 0;
+        const edgeCount = path.exploredSegments ? path.exploredSegments.length : 0;
         const stride = this.getAdaptiveStride(edgeCount, VisualizerHistory.paths.length, isMoving);
         const segments = [];
         const padding = 180;
@@ -5427,13 +5373,10 @@ const VisualizerVibeRenderer = {
         const maxY = this.height + padding;
 
         let index = 0;
-        for (const edgeKey of path.exploredEdges) {
+        for (const segment of (path.exploredSegments || [])) {
             if ((index++ % stride) !== 0) continue;
-            const edge = GameState.edgeLookup.get(edgeKey);
-            if (!edge) continue;
-
-            const from = GameState.map.project([edge.fromPos.lng, edge.fromPos.lat]);
-            const to = GameState.map.project([edge.toPos.lng, edge.toPos.lat]);
+            const from = GameState.map.project([segment.from.lng, segment.from.lat]);
+            const to = GameState.map.project([segment.to.lng, segment.to.lat]);
             if (!isFinite(from.x) || !isFinite(from.y) || !isFinite(to.x) || !isFinite(to.y)) continue;
 
             const dx = to.x - from.x;
@@ -5485,14 +5428,8 @@ const VisualizerVibeRenderer = {
             core.stroke();
         }
 
-        if (path.optimalPath && path.optimalPath.length > 1) {
-            const points = [];
-            for (const nodeId of path.optimalPath) {
-                const pos = GameState.nodes.get(nodeId);
-                if (!pos) continue;
-                const p = GameState.map.project([pos.lng, pos.lat]);
-                if (isFinite(p.x) && isFinite(p.y)) points.push(p);
-            }
+        if ((path.optimalPathCoords && path.optimalPathCoords.length > 1) || (path.optimalPath && path.optimalPath.length > 1)) {
+            const points = projectPathCoordsToScreen(path.optimalPathCoords || buildNodePathCoords(path.optimalPath));
             if (points.length > 1) {
                 const hot = path.hotColor || vibe;
                 const glow = this.glowCtx;
@@ -7849,6 +7786,82 @@ function buildNodePathCoords(nodeIds) {
         .map((pos) => ({ lat: pos.lat, lng: pos.lng }));
 }
 
+function cloneLatLng(coord) {
+    if (!coord) return null;
+    return { lat: coord.lat, lng: coord.lng };
+}
+
+function capturePathCoords(nodeIds) {
+    return buildNodePathCoords(nodeIds).map(cloneLatLng).filter(Boolean);
+}
+
+function captureExploredSegments(edgeKeys, options = {}) {
+    const { sampleStride = 1 } = options;
+    const keys = Array.from(edgeKeys || []);
+    const segments = [];
+
+    for (let i = 0; i < keys.length; i++) {
+        if ((i % sampleStride) !== 0) continue;
+
+        const edge = GameState.edgeLookup.get(keys[i]);
+        if (!edge) continue;
+
+        segments.push({
+            from: { lat: edge.fromPos.lat, lng: edge.fromPos.lng },
+            to: { lat: edge.toPos.lat, lng: edge.toPos.lng },
+        });
+    }
+
+    return segments;
+}
+
+function createHistoryVisualSnapshot(exploredEdges, optimalPath, userPath = [], options = {}) {
+    const { sampleStride = 1 } = options;
+    const exploredEdgeKeys = Array.from(exploredEdges || []);
+
+    return {
+        // Historical rendering must not depend on mutable live graph state.
+        exploredEdges: new Set(exploredEdgeKeys),
+        exploredSegments: captureExploredSegments(exploredEdgeKeys, { sampleStride }),
+        optimalPath: [...(optimalPath || [])],
+        optimalPathCoords: capturePathCoords(optimalPath),
+        userPath: [...(userPath || [])],
+        userPathCoords: capturePathCoords(userPath),
+    };
+}
+
+function projectPathCoordsToScreen(pathCoords) {
+    if (!pathCoords || pathCoords.length < 2 || !GameState.map) return [];
+
+    return pathCoords
+        .map((coord) => {
+            const point = GameState.map.project([coord.lng, coord.lat]);
+            if (!isFinite(point.x) || !isFinite(point.y)) return null;
+            return point;
+        })
+        .filter(Boolean);
+}
+
+function projectEdgeSegmentsToScreen(segments, options = {}) {
+    if (!segments || segments.length === 0 || !GameState.map) return [];
+
+    const { width, height } = getPresentationCanvasSize();
+    const padding = options.padding ?? 100;
+    const visibleSegments = [];
+
+    for (const segment of segments) {
+        if (!segment?.from || !segment?.to) continue;
+
+        const from = GameState.map.project([segment.from.lng, segment.from.lat]);
+        const to = GameState.map.project([segment.to.lng, segment.to.lat]);
+
+        if (!isProjectedSegmentDrawable(from, to, width, height, padding)) continue;
+        visibleSegments.push({ from, to });
+    }
+
+    return visibleSegments;
+}
+
 function calculateCoordPathDistance(coords) {
     if (!coords || coords.length < 2) return 0;
 
@@ -7892,10 +7905,29 @@ function clearInteractivePathOverlay() {
     }
 }
 
+function getVisualSceneState() {
+    const phase = GameController.phase;
+    const gameMode = GameState.gameMode;
+    const isResultsPhase = phase === GamePhase.RESULTS;
+    const isVisualizerMode = gameMode === 'visualizer';
+    const isExplorerMode = gameMode === 'explorer';
+
+    return {
+        phase,
+        gameMode,
+        isResultsPhase,
+        isVisualizerMode,
+        isExplorerMode,
+        roadOpacity: isResultsPhase ? 0.28 : 1.0,
+        showRoundReview: isResultsPhase && !isExplorerMode && !isVisualizerMode,
+        showInteractivePath: phase === GamePhase.PLAYING &&
+            GameState.gameStarted &&
+            (GameState.canDraw || GameState.pathLockInActive),
+    };
+}
+
 function shouldRenderInteractivePathOverlay() {
-    return GameController.phase === GamePhase.PLAYING &&
-        GameState.gameStarted &&
-        (GameState.canDraw || GameState.pathLockInActive);
+    return getVisualSceneState().showInteractivePath;
 }
 
 function syncInteractivePathOverlay() {
@@ -8625,6 +8657,7 @@ function undoLastSegment() {
     if (GameState.userPathNodes.length > 1) {
         // Remove last few nodes
         GameState.userPathNodes.splice(-Math.min(5, GameState.userPathNodes.length - 1));
+        pruneUnusedVirtualNodes(getReferencedVirtualNodeIds(GameState.userPathNodes));
         recalculateUserDistance();
         updateAllDistanceDisplays();
         redrawUserPath();
@@ -9171,16 +9204,17 @@ function renderVisualization(options = {}) {
     const viz = GameState.vizState;
     const width = GameState.vizCanvas.width;
     const height = GameState.vizCanvas.height;
+    const scene = getVisualSceneState();
 
     ctx.clearRect(0, 0, width, height);
 
     // Render persistent history FIRST (underneath current visualization)
     // This ensures previous paths stay visible during new visualizations
-    if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
+    if (scene.isExplorerMode && ExplorerHistory.hasHistory()) {
         AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), true);
-    } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
+    } else if (scene.isVisualizerMode && VisualizerHistory.hasHistory()) {
         VisualizerVibeRenderer.render(ctx, width, height, true);
-    } else if (GameState.gameMode === 'competitive') {
+    } else if (!scene.isExplorerMode && !scene.isVisualizerMode) {
         // Competitive mode - render round history
         AmbientViz.renderRoundHistory(ctx, 16, true);
     }
@@ -9203,7 +9237,7 @@ function renderVisualization(options = {}) {
     let settleProgress = 0;
     let heatOpacity = 1.0;
     let ambientOpacity = 0.0;
-    const isVisualizerMode = GameState.gameMode === 'visualizer';
+    const isVisualizerMode = scene.isVisualizerMode;
 
     if (viz.phase === 'settling') {
         const elapsed = performance.now() - viz.settleStartTime;
@@ -9263,11 +9297,11 @@ function renderVisualization(options = {}) {
         ctx.globalAlpha = ambientOpacity;
 
         // Render ambient history layer
-        if (GameState.gameMode === 'explorer' && ExplorerHistory.hasHistory()) {
+        if (scene.isExplorerMode && ExplorerHistory.hasHistory()) {
             AmbientViz.renderPathHistory(ctx, 16, ExplorerHistory.getPaths(), false);
-        } else if (GameState.gameMode === 'visualizer' && VisualizerHistory.hasHistory()) {
+        } else if (scene.isVisualizerMode && VisualizerHistory.hasHistory()) {
             VisualizerVibeRenderer.render(ctx, width, height, false);
-        } else if (GameState.gameMode === 'competitive') {
+        } else if (!scene.isExplorerMode && !scene.isVisualizerMode) {
             AmbientViz.renderRoundHistory(ctx, 16, false);
         }
 
@@ -10128,6 +10162,7 @@ function updateAllDistanceDisplays() {
  * Clear the user's path completely.
  */
 function resetUserPath() {
+    pruneUnusedVirtualNodes();
     GameState.userPathNodes = [];
     GameState.userDrawnPoints = [];  // Reset raw drawn points
     GameState.userDistance = 0;
@@ -10508,6 +10543,49 @@ function upsertEdgeNeighbor(nodeId, neighborId, weight) {
 function connectNodesBidirectionally(nodeA, nodeB, weight) {
     upsertEdgeNeighbor(nodeA, nodeB, weight);
     upsertEdgeNeighbor(nodeB, nodeA, weight);
+}
+
+function removeEdgeNeighbor(nodeId, neighborId) {
+    const neighbors = GameState.edges.get(nodeId);
+    if (!neighbors) return;
+
+    const filtered = neighbors.filter((edge) => edge.neighbor !== neighborId);
+    if (filtered.length === 0) {
+        GameState.edges.delete(nodeId);
+        return;
+    }
+
+    GameState.edges.set(nodeId, filtered);
+}
+
+function getReferencedVirtualNodeIds(nodeIds = []) {
+    const keep = new Set();
+
+    for (const nodeId of nodeIds) {
+        if (GameState.nodes.get(nodeId)?.virtual) {
+            keep.add(nodeId);
+        }
+    }
+
+    return keep;
+}
+
+function pruneUnusedVirtualNodes(keepNodeIds = new Set()) {
+    if (!GameState.virtualNodeIds || GameState.virtualNodeIds.size === 0) return;
+
+    const removableNodeIds = Array.from(GameState.virtualNodeIds).filter((nodeId) => !keepNodeIds.has(nodeId));
+    if (removableNodeIds.length === 0) return;
+
+    for (const nodeId of removableNodeIds) {
+        const neighbors = [...(GameState.edges.get(nodeId) || [])];
+        for (const edge of neighbors) {
+            removeEdgeNeighbor(edge.neighbor, nodeId);
+        }
+
+        GameState.edges.delete(nodeId);
+        GameState.nodes.delete(nodeId);
+        GameState.virtualNodeIds.delete(nodeId);
+    }
 }
 
 function findReusableVirtualNode(point, edgeKey) {
