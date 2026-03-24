@@ -652,14 +652,17 @@ const GameController = {
                 if (GameState.gameMode !== 'visualizer') {
                     VisualizerPhaseBlend.clear();
                 }
+                clearInteractivePathOverlay();
                 break;
             case GamePhase.VISUALIZING:
                 if (GameState.vizState) {
                     GameState.vizState.active = true;
                 }
+                clearInteractivePathOverlay();
                 break;
             case GamePhase.MENU:
                 VisualizerPhaseBlend.clear();
+                clearInteractivePathOverlay();
                 break;
             case GamePhase.PLAYING:
                 // Ensure ambient viz is running for gameplay
@@ -668,8 +671,12 @@ const GameController = {
                 }
                 break;
             case GamePhase.RESULTS:
+                clearInteractivePathOverlay();
                 GameState.resultsPresentation.enteredAt = performance.now();
                 GameState.snapPreview.active = false;
+                break;
+            case GamePhase.IDLE:
+                clearInteractivePathOverlay();
                 break;
         }
     },
@@ -830,17 +837,9 @@ const GameController = {
             AmbientViz.render(ctx, width, height, deltaTime);
             ElectricitySystem.renderArcs(ctx);
             renderTraceAnimation(ctx);
-
-            if (GameState.gameStarted && GameState.userPathNodes.length >= 2) {
-                redrawUserPath();
-            }
+            syncInteractivePathOverlay();
         } else {
-            if (GameState.drawCtx && GameState.drawCanvas) {
-                GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
-            }
-            if (GameState.previewCtx && GameState.previewCanvas) {
-                GameState.previewCtx.clearRect(0, 0, GameState.previewCanvas.width, GameState.previewCanvas.height);
-            }
+            clearInteractivePathOverlay();
         }
 
         ctx.globalCompositeOperation = 'source-over';
@@ -6270,7 +6269,7 @@ function syncProjectedLayers(force = false) {
     }
 
     updateMarkerPositions();
-    redrawUserPath();
+    syncInteractivePathOverlay();
     GameState.presentationDirty = false;
     GameState.presentationSyncKey = presentationKey;
 }
@@ -6483,6 +6482,7 @@ const GameState = {
 
     // User drawing - SINGLE SOURCE OF TRUTH
     isDrawing: false,
+    pathLockInActive: false,
     userPathNodes: [],      // Array of node IDs (snapped to road network)
     userDrawnPoints: [],    // Raw lat/lng points (actual mouse path for distance calc)
     userDistance: 0,        // Distance in km (single value used everywhere)
@@ -7882,6 +7882,31 @@ function clearSnapPreview(options = {}) {
     }
 }
 
+function clearInteractivePathOverlay() {
+    if (GameState.drawCtx && GameState.drawCanvas) {
+        GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
+    }
+
+    if (GameState.previewCtx && GameState.previewCanvas) {
+        GameState.previewCtx.clearRect(0, 0, GameState.previewCanvas.width, GameState.previewCanvas.height);
+    }
+}
+
+function shouldRenderInteractivePathOverlay() {
+    return GameController.phase === GamePhase.PLAYING &&
+        GameState.gameStarted &&
+        (GameState.canDraw || GameState.pathLockInActive);
+}
+
+function syncInteractivePathOverlay() {
+    if (!shouldRenderInteractivePathOverlay()) {
+        clearInteractivePathOverlay();
+        return;
+    }
+
+    redrawUserPath();
+}
+
 function buildPreviewPathCoords(anchorNodeId, snapTarget) {
     const anchorPos = GameState.nodes.get(anchorNodeId);
     if (!anchorPos || !snapTarget) return [];
@@ -8771,6 +8796,7 @@ async function playUserPathLockInAnimation() {
     const uc = CONFIG.color.getUserPathColor();
     const duration = 600; // ms
     const startTime = performance.now();
+    GameState.pathLockInActive = true;
 
     // Animate flash and lock-in
     return new Promise(resolve => {
@@ -8828,6 +8854,7 @@ async function playUserPathLockInAnimation() {
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
+                GameState.pathLockInActive = false;
                 resolve();
             }
         }
@@ -14832,11 +14859,20 @@ function buildVirtualEdgesForRender(width, height) {
         return [];
     }
 
+    if (!shouldRenderInteractivePathOverlay()) {
+        return [];
+    }
+
+    const activeVirtualNodeIds = GameState.userPathNodes.filter((nodeId) => GameState.nodes.get(nodeId)?.virtual);
+    if (activeVirtualNodeIds.length === 0) {
+        return [];
+    }
+
     const visibleEdges = [];
     const seen = new Set();
     const padding = 100;
 
-    for (const nodeId of GameState.virtualNodeIds) {
+    for (const nodeId of activeVirtualNodeIds) {
         const nodePos = GameState.nodes.get(nodeId);
         if (!nodePos) continue;
 
