@@ -933,24 +933,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // Initialize auth (will restore session if exists)
-            await PathfindrAuth.init();
-
-            // Update Pro status after auth init
-            updateProUserStatus();
-
-            // Initialize analytics (after auth so we have user info)
-            if (typeof PathfindrAnalytics !== 'undefined') {
-                PathfindrAnalytics.init();
-            }
-
-            // Initialize ads (after user interaction for audio policy)
-            document.body.addEventListener('click', async function initAdsOnInteraction() {
-                await PathfindrAds.init();
-                document.body.removeEventListener('click', initAdsOnInteraction);
-            }, { once: true });
-
-            // Wire up auth UI
+            // Wire up auth UI immediately. Auth init can stall on network/session restore,
+            // but the modal still needs to be interactive if it opens before init completes.
             const userBtn = document.getElementById('user-btn');
             const authCloseBtn = document.getElementById('auth-close-btn');
             const authForm = document.getElementById('auth-form');
@@ -1152,6 +1136,23 @@
             // Initial UI update
             updateAuthUI();
             updateProUserStatus();
+
+            // Initialize auth after UI handlers are live.
+            await PathfindrAuth.init();
+
+            // Update Pro status after auth init
+            updateProUserStatus();
+
+            // Initialize analytics (after auth so we have user info)
+            if (typeof PathfindrAnalytics !== 'undefined') {
+                PathfindrAnalytics.init();
+            }
+
+            // Initialize ads (after user interaction for audio policy)
+            document.body.addEventListener('click', async function initAdsOnInteraction() {
+                await PathfindrAds.init();
+                document.body.removeEventListener('click', initAdsOnInteraction);
+            }, { once: true });
         });
     </script>
 </body>
