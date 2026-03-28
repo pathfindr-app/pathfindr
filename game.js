@@ -11327,8 +11327,7 @@ async function showPremiumRequired(modeName) {
         // Check if logged in
         if (typeof PathfindrAuth !== 'undefined' && !PathfindrAuth.isLoggedIn()) {
             // Show auth modal first
-            const authModal = document.getElementById('auth-modal');
-            if (authModal) authModal.classList.remove('hidden');
+            PathfindrAuth.showAuthModal('login');
             return;
         }
         // Trigger purchase
@@ -11350,8 +11349,7 @@ async function showPremiumRequired(modeName) {
         loginLink.addEventListener('click', (e) => {
             e.preventDefault();
             modal.remove();
-            const authModal = document.getElementById('auth-modal');
-            if (authModal) authModal.classList.remove('hidden');
+            PathfindrAuth.showAuthModal('login');
         });
     }
 

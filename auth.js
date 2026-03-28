@@ -46,6 +46,20 @@ const PathfindrAuth = {
   listeners: [],
   needsCallsign: false,
 
+  setAuthModalInteractivity(isOpen) {
+    const authModal = document.getElementById('auth-modal');
+    const mapContainer = document.getElementById('map-container');
+
+    if (authModal) {
+      authModal.classList.toggle('hidden', !isOpen);
+    }
+
+    document.body.classList.toggle('auth-modal-open', !!isOpen);
+    if (mapContainer) {
+      mapContainer.classList.toggle('auth-modal-open', !!isOpen);
+    }
+  },
+
   /**
    * Initialize Supabase client and restore session
    */
@@ -413,8 +427,8 @@ const PathfindrAuth = {
       return;
     }
 
-    // Show the modal
-    authModal.classList.remove('hidden');
+    // Show the modal and disable map interaction beneath it.
+    this.setAuthModalInteractivity(true);
 
     // Configure for signup or login mode
     const isSignUp = mode === 'signup';
@@ -438,6 +452,10 @@ const PathfindrAuth = {
     window._pathfindrAuthIsSignUp = isSignUp;
 
     console.log('[Auth] Showing auth modal in', mode, 'mode');
+  },
+
+  hideAuthModal() {
+    this.setAuthModalInteractivity(false);
   },
 
   /**

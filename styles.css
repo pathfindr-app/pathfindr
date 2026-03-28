@@ -2213,6 +2213,23 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     animation: fade-in 0.35s ease-out;
 }
 
+#auth-modal,
+#auth-modal .overlay-content,
+#auth-modal button {
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#map-container.auth-modal-open #map,
+#map-container.auth-modal-open #webgl-canvas,
+#map-container.auth-modal-open #draw-canvas,
+#map-container.auth-modal-open #viz-canvas,
+#map-container.auth-modal-open #preview-canvas,
+#map-container.auth-modal-open #marker-container {
+    pointer-events: none !important;
+}
+
 /* =============================================================================
    LOADING OVERLAY - Shows map with elegant floating card
    ============================================================================= */

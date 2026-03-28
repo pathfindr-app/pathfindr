@@ -952,7 +952,6 @@
 
             // Wire up auth UI
             const userBtn = document.getElementById('user-btn');
-            const authModal = document.getElementById('auth-modal');
             const authCloseBtn = document.getElementById('auth-close-btn');
             const authForm = document.getElementById('auth-form');
             const authSwitchBtn = document.getElementById('auth-switch-btn');
@@ -966,19 +965,41 @@
                 set: (val) => { _isSignUp = val; }
             });
 
+            const bindPress = (element, handler) => {
+                if (!element) return;
+
+                let lastTouchEnd = 0;
+                const wrappedHandler = async (event) => {
+                    if (event.type === 'click' && (Date.now() - lastTouchEnd) < 500) {
+                        return;
+                    }
+
+                    if (event.type === 'touchend') {
+                        lastTouchEnd = Date.now();
+                    }
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await handler(event);
+                };
+
+                element.addEventListener('click', wrappedHandler);
+                element.addEventListener('touchend', wrappedHandler, { passive: false });
+            };
+
             // Open auth modal
-            userBtn?.addEventListener('click', () => {
-                authModal.classList.remove('hidden');
+            bindPress(userBtn, () => {
+                PathfindrAuth.showAuthModal(_isSignUp ? 'signup' : 'login');
                 updateAuthUI();
             });
 
             // Close auth modal
-            authCloseBtn?.addEventListener('click', () => {
-                authModal.classList.add('hidden');
+            bindPress(authCloseBtn, () => {
+                PathfindrAuth.hideAuthModal();
             });
 
             // Switch between login/signup
-            authSwitchBtn?.addEventListener('click', () => {
+            bindPress(authSwitchBtn, () => {
                 _isSignUp = !_isSignUp;
                 document.getElementById('auth-title').textContent = _isSignUp ? 'Sign Up' : 'Sign In';
                 document.getElementById('auth-submit-btn').textContent = _isSignUp ? 'Sign Up' : 'Sign In';
@@ -1027,7 +1048,7 @@
 
             // Social login buttons
             document.querySelectorAll('.social-btn').forEach(btn => {
-                btn.addEventListener('click', async () => {
+                bindPress(btn, async () => {
                     const provider = btn.dataset.provider;
                     const result = await PathfindrAuth.signInWithProvider(provider);
                     if (!result.success && result.error) {
@@ -1062,17 +1083,17 @@
 
             // Mode switching buttons in profile
             document.getElementById('profile-mode-menu')?.addEventListener('click', () => {
-                document.getElementById('auth-modal').classList.add('hidden');
+                PathfindrAuth.hideAuthModal();
                 if (typeof exitToMenu === 'function') exitToMenu();
             });
 
             document.getElementById('profile-mode-explorer')?.addEventListener('click', () => {
-                document.getElementById('auth-modal').classList.add('hidden');
+                PathfindrAuth.hideAuthModal();
                 if (typeof switchToExplorerMode === 'function') switchToExplorerMode();
             });
 
             document.getElementById('profile-mode-visualizer')?.addEventListener('click', () => {
-                document.getElementById('auth-modal').classList.add('hidden');
+                PathfindrAuth.hideAuthModal();
                 if (typeof switchToVisualizerMode === 'function') switchToVisualizerMode();
             });
 
