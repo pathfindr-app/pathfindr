@@ -7845,12 +7845,6 @@ html, body {
     color: #ff2a6d;
 }
 
-.challenge-card-players {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
 .challenge-card-top {
     font-family: var(--font-mono);
     font-size: 0.75rem;
