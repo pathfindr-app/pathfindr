@@ -757,7 +757,26 @@ const GameController = {
 
         ensureMapPresentationSync();
 
+        if (this.shouldUseMapDrivenVisualSync()) {
+            this.advancePhaseState(deltaTime);
+            return;
+        }
+
         this.renderCurrentPhaseFrame(ctx, deltaTime, { advanceState: true });
+    },
+
+    advancePhaseState(deltaTime = 0) {
+        RoundHistory.update(deltaTime);
+        ExplorerHistory.update(deltaTime);
+        VisualizerHistory.update(deltaTime);
+        ElectricitySystem.update(deltaTime);
+        AmbientViz.updateProximityToEnd();
+    },
+
+    shouldUseMapDrivenVisualSync() {
+        return !shouldUseLegacyMobileSync() &&
+            typeof GameState.map?.isMoving === 'function' &&
+            GameState.map.isMoving();
     },
 
     renderCurrentPhaseFrame(ctx, deltaTime = 0, options = {}) {
@@ -768,12 +787,7 @@ const GameController = {
         const height = GameState.vizCanvas?.height || 0;
 
         if (advanceState) {
-            // Always update subsystems (they track their own state)
-            RoundHistory.update(deltaTime);
-            ExplorerHistory.update(deltaTime);
-            VisualizerHistory.update(deltaTime);
-            ElectricitySystem.update(deltaTime);
-            AmbientViz.updateProximityToEnd();
+            this.advancePhaseState(deltaTime);
         }
 
         // Phase-specific rendering
@@ -5510,7 +5524,8 @@ const VisualizerVibeRenderer = {
         }
 
         if (mapChanged) {
-            if (!versionChanged &&
+            if (shouldUseLegacyMobileSync() &&
+                !versionChanged &&
                 moving &&
                 this.canApproximateWithPanOffset(this.lastMapSnapshot, mapSnapshot) &&
                 (now - this.lastRebuildTime) < this.rebuildIntervalMs) {
@@ -6744,13 +6759,17 @@ function initMap() {
     }
 
     function onMapRender() {
-        if (!GameState.presentationDirty && !(GameState.map?.isMoving && GameState.map.isMoving())) return;
+        const isMapMoving = typeof GameState.map?.isMoving === 'function' && GameState.map.isMoving();
+        const shouldMapDriveRender = !shouldUseLegacyMobileSync() && isMapMoving;
+        if (!GameState.presentationDirty && !isMapMoving) return;
         ensureMapPresentationSync();
-
-        if (GameController.animationId) return;
 
         const ctx = GameState.vizCtx;
         if (!ctx) return;
+
+        if (GameController.animationId && !shouldMapDriveRender) {
+            return;
+        }
 
         GameController.renderCurrentPhaseFrame(ctx, 0, { advanceState: false });
     }
