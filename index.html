@@ -248,8 +248,9 @@
                             muted
                             playsinline
                             preload="auto"
+                            poster="Visual Assets/logo.png"
                         >
-                            <source src="visual assets/Intro Video Splash.mp4" type="video/mp4">
+                            <source src="Visual Assets/Intro Video Splash.mp4" type="video/mp4">
                         </video>
                         <div class="splash-video-scrim"></div>
                         <div class="splash-video-brand">
@@ -263,7 +264,19 @@
                         <div class="splash-welcome-shell">
                             <div class="splash-visual-panel">
                                 <div class="splash-logo-frame">
-                                    <img src="visual assets/logo.png" alt="Pathfindr logo" class="splash-logo">
+                                    <video
+                                        id="splash-logo-video"
+                                        class="splash-logo-video"
+                                        autoplay
+                                        muted
+                                        loop
+                                        playsinline
+                                        preload="metadata"
+                                        poster="Visual Assets/logo.png"
+                                    >
+                                        <source src="Visual Assets/Intro Video Splash.mp4" type="video/mp4">
+                                    </video>
+                                    <img src="Visual Assets/logo.png" alt="Pathfindr logo" class="splash-logo-fallback">
                                 </div>
                                 <p class="splash-visual-caption">A route-guessing game where your instinct races the algorithm.</p>
                             </div>
@@ -283,24 +296,87 @@
                                     <span class="splash-pill">Algorithm reveal</span>
                                 </div>
 
-                                <div class="splash-feature-grid">
-                                    <div class="splash-feature-card">
-                                        <span class="splash-feature-label">Draw</span>
-                                        <p>Use your own geometric intuition to connect start and end.</p>
+                                <div class="splash-mode-panel">
+                                    <div class="mode-options">
+                                        <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
+                                            <span id="challenge-badge" class="challenge-badge">HOURLY</span>
+                                            <div class="mode-bg"></div>
+                                            <div class="mode-content">
+                                                <div class="mode-icon">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                        <path d="M2 17l10 5 10-5"/>
+                                                        <path d="M2 12l10 5 10-5"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="mode-title">Hourly Challenge</span>
+                                                <span id="challenge-desc" class="mode-desc">Compete globally · New challenge every hour</span>
+                                            </div>
+                                        </button>
+                                        <button class="mode-btn mode-classic" data-mode="competitive">
+                                            <div class="mode-bg"></div>
+                                            <div class="mode-content">
+                                                <div class="mode-icon">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
+                                                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
+                                                        <path d="M4 22h16"/>
+                                                        <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
+                                                        <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="mode-title">Pathfindr Classic</span>
+                                                <span class="mode-desc">5 cities · 5 chances · Find the shortest path</span>
+                                            </div>
+                                        </button>
+                                        <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
+                                            <span class="premium-tag">PRO</span>
+                                            <div class="mode-bg"></div>
+                                            <div class="mode-content">
+                                                <div class="mode-icon">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="10"/>
+                                                        <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="mode-title">Explorer</span>
+                                                <span class="mode-desc">Drop your markers, free roam, perfect</span>
+                                            </div>
+                                        </button>
+                                        <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
+                                            <span class="premium-tag">PRO</span>
+                                            <div class="mode-bg"></div>
+                                            <div class="mode-content">
+                                                <div class="mode-icon">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                                                        <circle cx="12" cy="12" r="3"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="mode-title">Visualizer</span>
+                                                <span class="mode-desc">Randomized, endless stream of locations</span>
+                                            </div>
+                                        </button>
                                     </div>
-                                    <div class="splash-feature-card">
-                                        <span class="splash-feature-label">Compare</span>
-                                        <p>See your route against the optimal path on the same streets.</p>
-                                    </div>
-                                    <div class="splash-feature-card">
-                                        <span class="splash-feature-label">Compete</span>
-                                        <p>Move through cities, hourly challenges, and score-driven rounds.</p>
+
+                                    <div class="difficulty-selector">
+                                        <span class="difficulty-label">Draw Precision</span>
+                                        <div class="difficulty-options">
+                                            <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
+                                                <span class="diff-name">Hard</span>
+                                                <span class="diff-desc">Precise</span>
+                                            </button>
+                                            <button class="difficulty-btn active" data-difficulty="medium" title="500m max click distance">
+                                                <span class="diff-name">Medium</span>
+                                                <span class="diff-desc">Balanced</span>
+                                            </button>
+                                            <button class="difficulty-btn" data-difficulty="easy" title="1km max click distance">
+                                                <span class="diff-name">Easy</span>
+                                                <span class="diff-desc">Relaxed</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <button id="splash-continue-btn" class="btn btn-primary btn-glow splash-btn">
-                                    Enter Pathfindr
-                                </button>
 
                                 <p class="splash-disclaimer">Early alpha build. Expect active tuning on visuals, mobile, and challenge systems.</p>
                             </div>
@@ -319,92 +395,7 @@
                 </div>
 
                 <!-- Mode Selector Overlay -->
-                <div id="mode-selector" class="overlay hidden">
-                    <div class="overlay-content mode-select">
-                        <h2>Select Mode</h2>
-                        <p class="mode-subtitle">How do you want to play?</p>
-                        <div class="mode-options">
-                            <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
-                                <span id="challenge-badge" class="challenge-badge">HOURLY</span>
-                                <div class="mode-bg"></div>
-                                <div class="mode-content">
-                                    <div class="mode-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="M2 17l10 5 10-5"/>
-                                            <path d="M2 12l10 5 10-5"/>
-                                        </svg>
-                                    </div>
-                                    <span class="mode-title">Hourly Challenge</span>
-                                    <span id="challenge-desc" class="mode-desc">Compete globally · New challenge every hour</span>
-                                </div>
-                            </button>
-                            <button class="mode-btn mode-classic" data-mode="competitive">
-                                <div class="mode-bg"></div>
-                                <div class="mode-content">
-                                    <div class="mode-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
-                                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
-                                            <path d="M4 22h16"/>
-                                            <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
-                                            <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
-                                        </svg>
-                                    </div>
-                                    <span class="mode-title">Pathfindr Classic</span>
-                                    <span class="mode-desc">5 cities · 5 chances · Find the shortest path</span>
-                                </div>
-                            </button>
-                            <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
-                                <span class="premium-tag">PRO</span>
-                                <div class="mode-bg"></div>
-                                <div class="mode-content">
-                                    <div class="mode-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10"/>
-                                            <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
-                                        </svg>
-                                    </div>
-                                    <span class="mode-title">Explorer</span>
-                                    <span class="mode-desc">Drop your markers, free roam, perfect</span>
-                                </div>
-                            </button>
-                            <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
-                                <span class="premium-tag">PRO</span>
-                                <div class="mode-bg"></div>
-                                <div class="mode-content">
-                                    <div class="mode-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-                                            <circle cx="12" cy="12" r="3"/>
-                                        </svg>
-                                    </div>
-                                    <span class="mode-title">Visualizer</span>
-                                    <span class="mode-desc">Randomized, endless stream of locations</span>
-                                </div>
-                            </button>
-                        </div>
-
-                        <!-- Difficulty Selector -->
-                        <div class="difficulty-selector">
-                            <span class="difficulty-label">Draw Precision</span>
-                            <div class="difficulty-options">
-                                <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
-                                    <span class="diff-name">Hard</span>
-                                    <span class="diff-desc">Precise</span>
-                                </button>
-                                <button class="difficulty-btn active" data-difficulty="medium" title="500m max click distance">
-                                    <span class="diff-name">Medium</span>
-                                    <span class="diff-desc">Balanced</span>
-                                </button>
-                                <button class="difficulty-btn" data-difficulty="easy" title="1km max click distance">
-                                    <span class="diff-name">Easy</span>
-                                    <span class="diff-desc">Relaxed</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <div id="mode-selector" class="overlay hidden" aria-hidden="true"></div>
 
                 <!-- Streaming Facts Ticker (Explorer/Visualizer) -->
                 <div id="facts-ticker" class="facts-ticker hidden">

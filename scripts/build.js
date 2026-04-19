@@ -27,7 +27,7 @@ const FILES = [
 // Directories to copy
 const DIRS = [
     'public',
-    'visual assets',
+    'Visual Assets',
     'worldcities',
 ];
 

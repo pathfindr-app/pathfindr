@@ -11111,8 +11111,8 @@ function setDifficulty(difficulty) {
 
 function initSplashScreen() {
     const splashScreen = document.getElementById('splash-screen');
-    const continueBtn = document.getElementById('splash-continue-btn');
     const introVideo = document.getElementById('splash-intro-video');
+    const logoVideo = document.getElementById('splash-logo-video');
     const skipBtn = document.getElementById('splash-skip-btn');
 
     if (shouldAutostartStreamVisualizer()) {
@@ -11123,7 +11123,7 @@ function initSplashScreen() {
         return;
     }
 
-    if (!splashScreen || !continueBtn) {
+    if (!splashScreen) {
         // If splash screen doesn't exist, go straight to mode selector
         showModeSelector();
         return;
@@ -11154,6 +11154,14 @@ function initSplashScreen() {
 
         if (introVideo) {
             introVideo.pause();
+        }
+
+        if (logoVideo) {
+            logoVideo.currentTime = 0;
+            const loopPromise = logoVideo.play();
+            if (loopPromise && typeof loopPromise.catch === 'function') {
+                loopPromise.catch(() => {});
+            }
         }
 
         if (immediate) {
@@ -11195,35 +11203,33 @@ function initSplashScreen() {
             revealWelcome();
         });
     }
-
-    // Handle continue button click
-    continueBtn.addEventListener('click', () => {
-        SoundEngine.init();
-        SoundEngine.click();
-
-        // Mark as seen (optional)
-        // localStorage.setItem('pathfindr_seen_splash_v01', 'true');
-
-        // Hide splash and show mode selector
-        if (introVideo) {
-            introVideo.pause();
-            introVideo.currentTime = 0;
-        }
-        splashScreen.classList.add('hidden');
-        showModeSelector();
-    });
-
-    // Add hover sound to continue button
-    continueBtn.addEventListener('mouseenter', () => {
-        SoundEngine.init();
-        SoundEngine.hover();
-    });
 }
 
 function showModeSelector() {
     if (StreamConfig.enabled) return;
     document.getElementById('loading-overlay').classList.add('hidden');
-    document.getElementById('mode-selector').classList.remove('hidden');
+    const splashScreen = document.getElementById('splash-screen');
+    const introVideo = document.getElementById('splash-intro-video');
+    const logoVideo = document.getElementById('splash-logo-video');
+    document.getElementById('mode-selector').classList.add('hidden');
+
+    if (splashScreen) {
+        splashScreen.classList.remove('hidden');
+        splashScreen.classList.add('splash-show-welcome');
+    }
+
+    if (introVideo) {
+        introVideo.pause();
+        introVideo.currentTime = 0;
+    }
+
+    if (logoVideo) {
+        const loopPromise = logoVideo.play();
+        if (loopPromise && typeof loopPromise.catch === 'function') {
+            loopPromise.catch(() => {});
+        }
+    }
+
     SoundEngine.uiTransition();
 
     // Fetch and display active challenge info
@@ -11232,6 +11238,10 @@ function showModeSelector() {
 
 function hideModeSelector() {
     document.getElementById('mode-selector').classList.add('hidden');
+    const splashScreen = document.getElementById('splash-screen');
+    const logoVideo = document.getElementById('splash-logo-video');
+    if (splashScreen) splashScreen.classList.add('hidden');
+    if (logoVideo) logoVideo.pause();
 }
 
 // Local dev-only premium bypass:
@@ -11483,6 +11493,7 @@ function selectGameMode(mode) {
             return;
         }
         // Show challenge list (multi-challenge UI)
+        hideModeSelector();
         showChallengeList();
         return;
     }
