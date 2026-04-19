@@ -11112,6 +11112,8 @@ function setDifficulty(difficulty) {
 function initSplashScreen() {
     const splashScreen = document.getElementById('splash-screen');
     const continueBtn = document.getElementById('splash-continue-btn');
+    const introVideo = document.getElementById('splash-intro-video');
+    const skipBtn = document.getElementById('splash-skip-btn');
 
     if (shouldAutostartStreamVisualizer()) {
         if (splashScreen) splashScreen.classList.add('hidden');
@@ -11138,6 +11140,62 @@ function initSplashScreen() {
     // Show splash screen
     splashScreen.classList.remove('hidden');
 
+    let welcomeVisible = false;
+    let introFallbackTimer = null;
+
+    const revealWelcome = ({ immediate = false } = {}) => {
+        if (welcomeVisible) return;
+        welcomeVisible = true;
+
+        if (introFallbackTimer) {
+            clearTimeout(introFallbackTimer);
+            introFallbackTimer = null;
+        }
+
+        if (introVideo) {
+            introVideo.pause();
+        }
+
+        if (immediate) {
+            splashScreen.classList.add('splash-no-motion');
+            splashScreen.classList.add('splash-show-welcome');
+            requestAnimationFrame(() => {
+                splashScreen.classList.remove('splash-no-motion');
+            });
+            return;
+        }
+
+        splashScreen.classList.add('splash-show-welcome');
+    };
+
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    if (!introVideo || prefersReducedMotion) {
+        revealWelcome({ immediate: true });
+    } else {
+        introVideo.currentTime = 0;
+
+        introVideo.addEventListener('ended', () => revealWelcome(), { once: true });
+        introVideo.addEventListener('error', () => revealWelcome({ immediate: true }), { once: true });
+
+        introFallbackTimer = setTimeout(() => {
+            revealWelcome({ immediate: true });
+        }, 15000);
+
+        const playPromise = introVideo.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => revealWelcome({ immediate: true }));
+        }
+    }
+
+    if (skipBtn) {
+        skipBtn.addEventListener('click', () => {
+            SoundEngine.init();
+            SoundEngine.uiClick();
+            revealWelcome();
+        });
+    }
+
     // Handle continue button click
     continueBtn.addEventListener('click', () => {
         SoundEngine.init();
@@ -11147,6 +11205,10 @@ function initSplashScreen() {
         // localStorage.setItem('pathfindr_seen_splash_v01', 'true');
 
         // Hide splash and show mode selector
+        if (introVideo) {
+            introVideo.pause();
+            introVideo.currentTime = 0;
+        }
         splashScreen.classList.add('hidden');
         showModeSelector();
     });

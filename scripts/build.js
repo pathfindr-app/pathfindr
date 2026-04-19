@@ -27,6 +27,7 @@ const FILES = [
 // Directories to copy
 const DIRS = [
     'public',
+    'visual assets',
     'worldcities',
 ];
 
@@ -62,6 +63,7 @@ function copyDir(src, dest) {
 
     const entries = fs.readdirSync(srcPath, { withFileTypes: true });
     for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
         const srcEntry = path.join(src, entry.name);
         if (entry.isDirectory()) {
             copyDir(srcEntry);
