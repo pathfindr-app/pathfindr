@@ -2467,18 +2467,42 @@ const WebGLRenderer = {
 // SOUND ENGINE - Pure Web Audio API Synthesis
 // =============================================================================
 
+const MUSIC_TRACKS = [
+    { id: 'pathfindr', src: 'Pathfindr1.wav', title: 'Pathfindr' },
+    { id: 'cloud-veil', src: 'Music/Cloud Veil.mp3', title: 'Cloud Veil' },
+    { id: 'coral-mirage', src: 'Music/Coral Mirage.mp3', title: 'Coral Mirage' },
+    { id: 'infinite-little-pathways', src: 'Music/Infinite Little Pathways.mp3', title: 'Infinite Little Pathways' },
+    { id: 'moondrift-circuit', src: 'Music/Moondrift Circuit.mp3', title: 'Moondrift Circuit' },
+    { id: 'moonglass-echo', src: 'Music/Moonglass Echo.mp3', title: 'Moonglass Echo' },
+    { id: 'nebula-paths', src: 'Music/Nebula Paths.mp3', title: 'Nebula Paths' },
+    { id: 'palm-circuit', src: 'Music/Palm Circuit.mp3', title: 'Palm Circuit' },
+    { id: 'tiki-afterhours', src: 'Music/Tiki Afterhours.mp3', title: 'Tiki Afterhours' },
+    { id: 'velvet-combo-run', src: 'Music/Velvet Combo Run.mp3', title: 'Velvet Combo Run' },
+    { id: 'velvet-gravity', src: 'Music/Velvet Gravity.mp3', title: 'Velvet Gravity' },
+    { id: 'velvet-neon-drift', src: 'Music/Velvet Neon Drift.mp3', title: 'Velvet Neon Drift' },
+    { id: 'velvet-orbit', src: 'Music/Velvet Orbit.mp3', title: 'Velvet Orbit' },
+];
+
+const SOUNDTRACK_VOLUME = 0.68;
+
 const SoundEngine = {
     ctx: null,
     masterGain: null,
     muted: false,
     initialized: false,
     ambientNodes: null,
+    musicPlayer: null,
+    musicTrackQueue: [],
+    currentMusicTrack: null,
+    musicStartedOnce: false,
+    pendingMusicStart: false,
+    musicWasPlayingBeforePause: false,
+    soundtrackFadeToken: 0,
 
     // Audio file buffers
     buffers: {
         scanning: null,
         found: null,
-        soundtrack: null,
         // UI sounds
         click: null,
         tick: null,
@@ -2488,7 +2512,6 @@ const SoundEngine = {
     // Active audio sources (so we can stop them)
     activeSources: {
         scanning: null,
-        soundtrack: null,
     },
 
     previewCueState: {
@@ -2513,6 +2536,10 @@ const SoundEngine = {
         this.loadAudioFiles();
 
         this.initialized = true;
+
+        if (this.pendingMusicStart && !this.muted) {
+            setTimeout(() => this.playSoundtrack(), 0);
+        }
     },
 
     // Load external audio files
@@ -2571,74 +2598,221 @@ const SoundEngine = {
 
     // Load soundtrack (separate to not block other audio)
     async loadSoundtrack() {
-        try {
-            const response = await fetch('Pathfindr1.wav');
-            const data = await response.arrayBuffer();
-            this.buffers.soundtrack = await this.ctx.decodeAudioData(data);
-            console.log('Soundtrack loaded successfully');
+        this.musicTrackQueue = this.createMusicQueue({ openingTrackFirst: true });
+        this.primeMusicTrack({ openingTrackFirst: true });
+        console.log('[Sound] Music playlist ready');
+    },
 
-            // Auto-start soundtrack if not muted
-            if (!this.muted) {
-                this.playSoundtrack();
-            }
-        } catch (e) {
-            console.warn('Could not load soundtrack:', e);
+    shuffleTracks(tracks) {
+        const shuffled = [...tracks];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    },
+
+    createMusicQueue({ openingTrackFirst = false } = {}) {
+        const tracks = [...MUSIC_TRACKS];
+        if (!openingTrackFirst) {
+            return this.shuffleTracks(tracks);
+        }
+
+        const [openingTrack, ...rest] = tracks;
+        return [openingTrack, ...this.shuffleTracks(rest)];
+    },
+
+    syncMutePreference() {
+        const storedMuted = localStorage.getItem('pathfindr_muted');
+        if (storedMuted !== null) {
+            this.muted = storedMuted === 'true';
         }
     },
 
-    // Play background soundtrack (looped)
+    nudgeMusicPlayback() {
+        if (this.muted) return;
+        if (this.pendingMusicStart || (this.musicPlayer && this.musicPlayer.paused)) {
+            this.playSoundtrack();
+        }
+    },
+
+    ensureMusicPlayer() {
+        if (this.musicPlayer) return this.musicPlayer;
+
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.loop = false;
+        audio.volume = SOUNDTRACK_VOLUME;
+
+        audio.addEventListener('ended', () => {
+            if (this.soundtrackFadeToken !== 0) return;
+            this.currentMusicTrack = null;
+            this.playNextTrack();
+        });
+
+        audio.addEventListener('error', () => {
+            const failedTrack = this.currentMusicTrack?.title || 'unknown track';
+            console.warn(`[Sound] Music track failed: ${failedTrack}`);
+            this.currentMusicTrack = null;
+            this.playNextTrack();
+        });
+
+        this.musicPlayer = audio;
+        return audio;
+    },
+
+    getNextMusicTrack({ openingTrackFirst = false } = {}) {
+        if (this.musicTrackQueue.length === 0) {
+            this.musicTrackQueue = this.createMusicQueue({
+                openingTrackFirst: openingTrackFirst && !this.musicStartedOnce,
+            });
+        }
+        return this.musicTrackQueue.shift();
+    },
+
+    primeMusicTrack({ openingTrackFirst = false } = {}) {
+        if (this.currentMusicTrack) return;
+
+        const nextTrack = this.getNextMusicTrack({ openingTrackFirst });
+        if (!nextTrack) return;
+
+        const audio = this.ensureMusicPlayer();
+        audio.src = encodeURI(nextTrack.src);
+        audio.load();
+        this.currentMusicTrack = nextTrack;
+    },
+
+    async playMusicPlayer() {
+        this.syncMutePreference();
+        if (this.muted) return false;
+
+        const audio = this.ensureMusicPlayer();
+
+        try {
+            await audio.play();
+            audio.volume = SOUNDTRACK_VOLUME;
+            this.pendingMusicStart = false;
+            this.musicWasPlayingBeforePause = false;
+            this.musicStartedOnce = true;
+            return true;
+        } catch (e) {
+            this.pendingMusicStart = true;
+            return false;
+        }
+    },
+
+    // Play background soundtrack rotation
     playSoundtrack() {
-        if (!this.initialized || !this.buffers.soundtrack) return;
+        this.syncMutePreference();
+        if (this.muted) return;
 
-        // Don't restart if already playing
-        if (this.activeSources.soundtrack) return;
+        const audio = this.ensureMusicPlayer();
 
-        const source = this.ctx.createBufferSource();
-        source.buffer = this.buffers.soundtrack;
-        source.loop = true;  // Loop the soundtrack
+        if (!this.currentMusicTrack || !audio.getAttribute('src')) {
+            this.primeMusicTrack({ openingTrackFirst: !this.musicStartedOnce });
+        }
 
-        // Create gain node for soundtrack volume (slightly quieter than SFX)
-        const gainNode = this.ctx.createGain();
-        gainNode.gain.value = 0.7;  // 70% volume for background music
+        this.soundtrackFadeToken = 0;
+        this.playMusicPlayer();
+    },
 
-        source.connect(gainNode);
-        gainNode.connect(this.masterGain);
-        source.start();
+    playNextTrack() {
+        this.syncMutePreference();
+        if (this.muted) return;
 
-        this.activeSources.soundtrack = { source, gainNode };
+        const nextTrack = this.getNextMusicTrack();
+        if (!nextTrack) return;
+
+        const audio = this.ensureMusicPlayer();
+        audio.pause();
+        audio.src = encodeURI(nextTrack.src);
+        audio.currentTime = 0;
+        audio.load();
+        this.currentMusicTrack = nextTrack;
+        this.soundtrackFadeToken = 0;
+        this.playMusicPlayer();
+    },
+
+    pauseMusic({ rememberState = true } = {}) {
+        if (!this.musicPlayer) return;
+
+        if (rememberState) {
+            this.musicWasPlayingBeforePause = this.pendingMusicStart || !this.musicPlayer.paused;
+        }
+
+        this.soundtrackFadeToken = 0;
+        this.musicPlayer.pause();
+    },
+
+    resumeMusic() {
+        if (this.muted) return;
+
+        if (!this.musicPlayer || !this.currentMusicTrack || !this.musicPlayer.getAttribute('src')) {
+            this.playSoundtrack();
+            return;
+        }
+
+        if (this.pendingMusicStart || this.musicWasPlayingBeforePause || this.musicPlayer.paused) {
+            this.playMusicPlayer();
+        }
     },
 
     // Stop soundtrack (abrupt)
-    stopSoundtrack() {
-        if (this.activeSources.soundtrack) {
-            try {
-                this.activeSources.soundtrack.source.stop();
-            } catch (e) {}
-            this.activeSources.soundtrack = null;
+    stopSoundtrack({ reset = true, preservePosition = false } = {}) {
+        if (!this.musicPlayer) return;
+
+        this.soundtrackFadeToken = 0;
+        this.pendingMusicStart = false;
+        this.musicWasPlayingBeforePause = false;
+        this.musicPlayer.pause();
+
+        if (!preservePosition) {
+            this.musicPlayer.currentTime = 0;
+        }
+
+        if (reset) {
+            this.musicPlayer.removeAttribute('src');
+            this.musicPlayer.load();
+            this.currentMusicTrack = null;
         }
     },
 
     // Fade out soundtrack smoothly
     fadeOutSoundtrack(duration = 1000) {
-        if (!this.activeSources.soundtrack) return Promise.resolve();
+        if (!this.musicPlayer || this.musicPlayer.paused) return Promise.resolve();
 
         return new Promise(resolve => {
-            const { source, gainNode } = this.activeSources.soundtrack;
-            const now = this.ctx.currentTime;
-            const fadeTime = duration / 1000;
+            const audio = this.musicPlayer;
+            const startVolume = audio.volume;
+            const fadeToken = performance.now();
+            this.soundtrackFadeToken = fadeToken;
 
-            // Smoothly fade to 0
-            gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-            gainNode.gain.linearRampToValueAtTime(0, now + fadeTime);
+            const startedAt = performance.now();
+            const step = () => {
+                if (this.soundtrackFadeToken !== fadeToken) {
+                    resolve();
+                    return;
+                }
 
-            // Stop after fade completes
-            setTimeout(() => {
-                try {
-                    source.stop();
-                } catch (e) {}
-                this.activeSources.soundtrack = null;
+                const progress = Math.min(1, (performance.now() - startedAt) / duration);
+                audio.volume = startVolume * (1 - progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+
+                audio.pause();
+                audio.currentTime = 0;
+                audio.removeAttribute('src');
+                audio.load();
+                audio.volume = SOUNDTRACK_VOLUME;
+                this.soundtrackFadeToken = 0;
+                this.currentMusicTrack = null;
                 resolve();
-            }, duration + 50);
+            };
+
+            requestAnimationFrame(step);
         });
     },
 
@@ -2766,12 +2940,15 @@ const SoundEngine = {
                 0.1
             );
 
-            // Start/stop soundtrack based on mute state
             if (this.muted) {
-                this.stopSoundtrack();
-            } else if (this.buffers.soundtrack) {
-                this.playSoundtrack();
+                this.pauseMusic();
+            } else {
+                this.resumeMusic();
             }
+        } else if (this.muted) {
+            this.pauseMusic();
+        } else {
+            this.resumeMusic();
         }
         return this.muted;
     },
@@ -2822,6 +2999,7 @@ const SoundEngine = {
 
     // 2. CLICK - UI button click (uses custom audio if available)
     click() {
+        this.nudgeMusicPlayback();
         if (!this.initialized || this.muted) return;
 
         // Use custom click sound if loaded
@@ -3260,9 +3438,10 @@ const SoundEngine = {
 
     // Pause all audio (when app goes to background)
     pauseAll() {
+        this.pauseMusic();
+
         if (!this.initialized || !this.ctx) return;
 
-        // Suspend the audio context (stops all audio processing)
         if (this.ctx.state === 'running') {
             this.ctx.suspend().catch(e => console.warn('Audio suspend failed:', e));
         }
@@ -3270,9 +3449,10 @@ const SoundEngine = {
 
     // Resume audio (when app returns to foreground)
     resumeAll() {
+        this.resumeMusic();
+
         if (!this.initialized || !this.ctx) return;
 
-        // Resume the audio context
         if (this.ctx.state === 'suspended') {
             this.ctx.resume().catch(e => console.warn('Audio resume failed:', e));
         }
@@ -3309,6 +3489,7 @@ const SoundEngine = {
 
     // Satisfying click sound - crisp, warm tactile feel
     uiClick() {
+        this.nudgeMusicPlayback();
         if (!this.initialized || this.muted) return;
 
         const now = this.ctx.currentTime;
@@ -3347,6 +3528,7 @@ const SoundEngine = {
 
     // Smooth transition whoosh - rising sweep
     uiTransition() {
+        this.nudgeMusicPlayback();
         if (!this.initialized || this.muted) return;
 
         const now = this.ctx.currentTime;
@@ -11170,6 +11352,8 @@ function initSplashScreen() {
             }
         }
 
+        SoundEngine.playSoundtrack();
+
         if (immediate) {
             splashScreen.classList.add('splash-no-motion');
             splashScreen.classList.add('splash-show-welcome');
@@ -11266,6 +11450,7 @@ function showModeSelector() {
         }
     }
 
+    SoundEngine.playSoundtrack();
     SoundEngine.uiTransition();
 
     // Fetch and display active challenge info
@@ -12554,7 +12739,6 @@ function stopVisualizerMode() {
     // Fade out sounds smoothly
     if (typeof SoundEngine !== 'undefined') {
         SoundEngine.fadeOutScanning(400);
-        SoundEngine.fadeOutSoundtrack(800);
     }
 
     // Reset state

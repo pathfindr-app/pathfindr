@@ -28,6 +28,7 @@ const FILES = [
 const DIRS = [
     'public',
     'Visual Assets',
+    'Music',
     'worldcities',
 ];
 
