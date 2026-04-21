@@ -252,12 +252,9 @@
                             <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
                         </video>
                         <div class="splash-video-scrim"></div>
-                        <button id="splash-start-audio-btn" class="splash-start-audio-btn hidden" type="button">
-                            Tap for intro sound
-                        </button>
                         <div class="splash-video-brand">
-                            <div class="splash-version">ALPHA v0.1</div>
-                            <p class="splash-video-copy">Real streets. Neon routes. One clean line to chase.</p>
+                            <span class="splash-video-label">Pathfindr Lobby</span>
+                            <p class="splash-video-copy">Soundtrack live. Dashboard syncing.</p>
                         </div>
                         <button id="splash-skip-btn" class="splash-skip-btn" type="button">Skip intro</button>
                     </div>
@@ -265,32 +262,18 @@
                     <div class="overlay-content splash-content">
                         <div class="splash-welcome-shell">
                             <div class="splash-copy-panel">
-                                <div class="splash-version">ALPHA v0.1</div>
-                                <p class="splash-overline">ALPHA route challenge</p>
                                 <h1 class="splash-title">Welcome, Pathfindr</h1>
                                 <p class="splash-lead">
-                                    Visit a real city, read the streets fast, and draw the cleanest route from point A to point B before the clock and scoreline leave you behind.
+                                    Visit a real city, trust your instincts, and race from point A to point B as fast as you can before the cleanest possible line beats you there.
+                                </p>
+                                <p class="splash-support-copy">
+                                    A route-guessing game where city awareness, spatial awareness, and competitive precision all meet in the chase for the highest score.
                                 </p>
 
                                 <div class="splash-pill-row">
-                                    <span class="splash-pill">Live challenge cadence</span>
-                                    <span class="splash-pill">Global scoring</span>
-                                    <span class="splash-pill">Precision route play</span>
-                                </div>
-
-                                <div class="splash-kpi-strip" aria-label="Pathfindr highlights">
-                                    <div class="splash-kpi">
-                                        <span class="splash-kpi-value">24/7</span>
-                                        <span class="splash-kpi-label">Rotating challenge loop</span>
-                                    </div>
-                                    <div class="splash-kpi">
-                                        <span class="splash-kpi-value">5</span>
-                                        <span class="splash-kpi-label">Classic cities per run</span>
-                                    </div>
-                                    <div class="splash-kpi">
-                                        <span class="splash-kpi-value">1 line</span>
-                                        <span class="splash-kpi-label">Your fastest route instinct</span>
-                                    </div>
+                                    <span class="splash-pill">Daily Challenges</span>
+                                    <span class="splash-pill">Global Scoreboard</span>
+                                    <span class="splash-pill">Community Driven</span>
                                 </div>
 
                                 <div class="splash-mode-panel">
@@ -375,33 +358,44 @@
                                     </div>
                                 </div>
 
-                                <p class="splash-disclaimer">Early alpha build. Expect active tuning on visuals, mobile, and challenge systems.</p>
+                                <p class="splash-disclaimer">Use the lobby as your route dashboard, challenge board, and session checkpoint.</p>
                             </div>
 
                             <aside class="splash-side-stack">
-                                <div class="splash-visual-panel">
-                                    <div class="splash-logo-frame">
-                                        <video
-                                            id="splash-logo-video"
-                                            class="splash-logo-video"
-                                            autoplay
-                                            muted
-                                            loop
-                                            playsinline
-                                            preload="metadata"
-                                            poster="Visual Assets/logo.png"
-                                        >
-                                            <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
-                                        </video>
-                                        <img src="Visual Assets/logo.png" alt="Pathfindr logo" class="splash-logo-fallback">
-                                        <div class="splash-logo-overlay">
-                                            <span class="splash-signal-dot"></span>
-                                            <span>Routing signal stable</span>
+                                <div class="splash-dashboard-panel">
+                                    <div class="dashboard-viewport-card">
+                                        <div class="dashboard-viewport-header">
+                                            <div class="dashboard-viewport-heading">
+                                                <span class="dashboard-viewport-eyebrow">Pathfindr Atlas</span>
+                                                <h2>Community Globe</h2>
+                                            </div>
+                                            <div class="dashboard-toggle-group" role="tablist" aria-label="Dashboard viewport">
+                                                <button id="dashboard-show-globe-btn" class="dashboard-toggle-btn is-active" type="button">Globe</button>
+                                                <button id="dashboard-show-map-btn" class="dashboard-toggle-btn" type="button">Current Map</button>
+                                            </div>
+                                        </div>
+                                        <div class="dashboard-viewport-shell">
+                                            <canvas id="dashboard-globe-canvas" class="dashboard-viewport-layer"></canvas>
+                                            <div id="dashboard-map-preview" class="dashboard-map-preview dashboard-viewport-layer hidden"></div>
+                                            <div id="dashboard-map-empty" class="dashboard-map-empty hidden">
+                                                Open any run, hit menu, and your current map will dock here with a wider tactical view.
+                                            </div>
+                                            <div class="dashboard-viewport-overlay">
+                                                <span class="dashboard-status-pill">
+                                                    <span class="dashboard-status-dot"></span>
+                                                    Community pins online
+                                                </span>
+                                                <span id="dashboard-active-city" class="dashboard-active-city">Lobby overview</span>
+                                            </div>
+                                        </div>
+                                        <div class="dashboard-viewport-footer">
+                                            <p id="dashboard-viewport-copy">Cities pulse across the globe so the lobby feels alive before you even launch a run.</p>
+                                            <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">Resume Run</button>
                                         </div>
                                     </div>
                                     <div class="splash-visual-caption">
                                         <span class="splash-caption-label">Current brief</span>
-                                        <p>A route-guessing game where city awareness, spatial awareness, and competitive precision come together in a race for the highest score.</p>
+                                        <p>A route-guessing game where city awareness, spatial awareness, and competitive precision all meet to compete for the highest score.</p>
                                     </div>
                                 </div>
 
@@ -410,11 +404,11 @@
                                         <div class="player-card-header">
                                             <div>
                                                 <span class="player-card-eyebrow">Player Card</span>
-                                                <h2 id="splash-player-heading" class="player-card-title">Log in to track your route record.</h2>
+                                                <h2 id="splash-player-heading" class="player-card-title">Sign in to build your navigator license.</h2>
                                             </div>
                                             <span id="splash-player-tier" class="player-card-tier">Guest</span>
                                         </div>
-                                        <p class="player-card-copy">Save your callsign, compare runs globally, and build a navigation log that follows you from city to city.</p>
+                                        <p class="player-card-copy">Save your callsign, compare runs globally, and turn the lobby into a living dashboard of your cities, route stats, and latest movement.</p>
                                         <div class="player-card-actions">
                                             <button id="splash-auth-login-btn" class="splash-auth-btn splash-auth-btn-primary" type="button">Sign In</button>
                                             <button id="splash-auth-signup-btn" class="splash-auth-btn" type="button">Create Account</button>
@@ -537,35 +531,6 @@
                                                 </div>
                                                 <div class="nav-log-fade"></div>
                                                 <div class="nav-log-scanline"></div>
-                                            </div>
-                                        </div>
-
-                                        <div class="profile-mode-actions splash-profile-mode-actions">
-                                            <span class="mode-actions-label">Switch Mode</span>
-                                            <div class="mode-action-buttons">
-                                                <button id="splash-profile-mode-menu" class="mode-action-btn" title="Back to Menu">
-                                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                                                        <polyline points="9 22 9 12 15 12 15 22"/>
-                                                    </svg>
-                                                    Menu
-                                                </button>
-                                                <button id="splash-profile-mode-explorer" class="mode-action-btn premium-mode-btn" title="Explorer Mode (Premium)">
-                                                    <span class="mode-premium-badge">PRO</span>
-                                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <circle cx="12" cy="12" r="10"/>
-                                                        <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
-                                                    </svg>
-                                                    Explorer
-                                                </button>
-                                                <button id="splash-profile-mode-visualizer" class="mode-action-btn premium-mode-btn" title="Visualizer Mode (Premium)">
-                                                    <span class="mode-premium-badge">PRO</span>
-                                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-                                                        <circle cx="12" cy="12" r="3"/>
-                                                    </svg>
-                                                    Visualizer
-                                                </button>
                                             </div>
                                         </div>
 
@@ -1164,10 +1129,35 @@
             const splashSignupBtn = document.getElementById('splash-auth-signup-btn');
             const splashSignoutBtn = document.getElementById('splash-auth-signout-btn');
             const splashEditCallsignBtn = document.getElementById('splash-edit-callsign-btn');
-            const splashModeMenuBtn = document.getElementById('splash-profile-mode-menu');
-            const splashModeExplorerBtn = document.getElementById('splash-profile-mode-explorer');
-            const splashModeVisualizerBtn = document.getElementById('splash-profile-mode-visualizer');
             const splashRemoveAdsBtn = document.getElementById('splash-remove-ads-btn');
+            const splashScreen = document.getElementById('splash-screen');
+            const dashboardGlobeCanvas = document.getElementById('dashboard-globe-canvas');
+            const dashboardMapPreview = document.getElementById('dashboard-map-preview');
+            const dashboardMapEmpty = document.getElementById('dashboard-map-empty');
+            const dashboardShowGlobeBtn = document.getElementById('dashboard-show-globe-btn');
+            const dashboardShowMapBtn = document.getElementById('dashboard-show-map-btn');
+            const dashboardResumeBtn = document.getElementById('dashboard-resume-btn');
+            const dashboardViewportCopy = document.getElementById('dashboard-viewport-copy');
+            const dashboardActiveCity = document.getElementById('dashboard-active-city');
+
+            const DASHBOARD_FALLBACK_PINS = [
+                { lat: 42.296, lng: -71.294, name: 'Wellesley, MA, United States' },
+                { lat: 33.516, lng: -82.076, name: 'Martinez, GA, United States' },
+                { lat: 37.585, lng: -122.365, name: 'Burlingame, CA, United States' },
+                { lat: 38.907, lng: -77.037, name: 'Washington, DC, United States' },
+                { lat: 51.507, lng: -0.128, name: 'London, United Kingdom' },
+                { lat: 35.676, lng: 139.650, name: 'Tokyo, Japan' },
+                { lat: -33.869, lng: 151.209, name: 'Sydney, Australia' },
+                { lat: -23.550, lng: -46.633, name: 'Sao Paulo, Brazil' }
+            ];
+
+            const dashboardState = {
+                view: 'globe',
+                miniMap: null,
+                pins: DASHBOARD_FALLBACK_PINS,
+                animationFrame: null,
+                overlayMode: 'lobby'
+            };
 
             // Use getter/setter to sync with PathfindrAuth.showAuthModal
             let _isSignUp = false;
@@ -1196,6 +1186,267 @@
 
                 element.addEventListener('click', wrappedHandler);
                 element.addEventListener('touchend', wrappedHandler, { passive: false });
+            };
+
+            const getDashboardMapStyle = () => ({
+                version: 8,
+                sources: {
+                    osm: {
+                        type: 'raster',
+                        tiles: [CONFIG.tileUrl.replace('{s}', 'a')],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm'
+                }]
+            });
+
+            const hasLiveSession = () => {
+                if (typeof GameState === 'undefined') return false;
+                return Boolean(
+                    GameState.gameStarted ||
+                    GameState.gameMode === 'challenge' ||
+                    GameState.gameMode === 'explorer' ||
+                    GameState.gameMode === 'visualizer'
+                );
+            };
+
+            const setDashboardPins = (locations = []) => {
+                dashboardState.pins = Array.isArray(locations) && locations.length
+                    ? locations.slice(-60)
+                    : DASHBOARD_FALLBACK_PINS;
+            };
+
+            const resizeDashboardGlobe = () => {
+                if (!dashboardGlobeCanvas) return;
+                const rect = dashboardGlobeCanvas.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                const width = Math.max(1, Math.round(rect.width * dpr));
+                const height = Math.max(1, Math.round(rect.height * dpr));
+                if (dashboardGlobeCanvas.width !== width || dashboardGlobeCanvas.height !== height) {
+                    dashboardGlobeCanvas.width = width;
+                    dashboardGlobeCanvas.height = height;
+                }
+            };
+
+            const drawDashboardGlobe = (now = 0) => {
+                if (!dashboardGlobeCanvas) return;
+                resizeDashboardGlobe();
+
+                const ctx = dashboardGlobeCanvas.getContext('2d');
+                const width = dashboardGlobeCanvas.width;
+                const height = dashboardGlobeCanvas.height;
+                const cx = width / 2;
+                const cy = height / 2;
+                const radius = Math.min(width, height) * 0.3;
+                const rotation = now * 0.00012;
+
+                ctx.clearRect(0, 0, width, height);
+
+                const background = ctx.createRadialGradient(cx * 0.92, cy * 0.76, radius * 0.2, cx, cy, radius * 2.4);
+                background.addColorStop(0, 'rgba(84, 232, 225, 0.16)');
+                background.addColorStop(0.45, 'rgba(255, 95, 166, 0.08)');
+                background.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = background;
+                ctx.fillRect(0, 0, width, height);
+
+                const sphere = ctx.createRadialGradient(cx - radius * 0.35, cy - radius * 0.45, radius * 0.08, cx, cy, radius * 1.2);
+                sphere.addColorStop(0, 'rgba(237, 244, 248, 0.95)');
+                sphere.addColorStop(0.12, 'rgba(118, 224, 229, 0.9)');
+                sphere.addColorStop(0.55, 'rgba(28, 41, 62, 0.94)');
+                sphere.addColorStop(1, 'rgba(7, 11, 18, 0.98)');
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.fillStyle = sphere;
+                ctx.fill();
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.clip();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = Math.max(1.2, radius * 0.008);
+
+                for (let i = -2; i <= 2; i++) {
+                    const latY = cy + (i / 2.7) * radius * 0.58;
+                    const latRx = Math.sqrt(Math.max(radius * radius - (latY - cy) * (latY - cy), 0));
+                    ctx.beginPath();
+                    ctx.ellipse(cx, latY, latRx, latRx * 0.2, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                for (let i = 0; i < 8; i++) {
+                    const angle = rotation + (i / 8) * Math.PI * 2;
+                    const axisScale = Math.cos(angle) * 0.92;
+                    ctx.beginPath();
+                    ctx.ellipse(cx, cy, Math.abs(axisScale) * radius, radius, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(115, 233, 224, ${0.06 + Math.abs(axisScale) * 0.08})`;
+                    ctx.stroke();
+                }
+
+                const pins = dashboardState.pins || [];
+                pins.forEach((pin, index) => {
+                    const lat = (pin.lat || 0) * Math.PI / 180;
+                    const lng = ((pin.lng || 0) * Math.PI / 180) + rotation;
+                    const x3d = Math.cos(lat) * Math.sin(lng);
+                    const y3d = Math.sin(lat);
+                    const z3d = Math.cos(lat) * Math.cos(lng);
+
+                    if (z3d < -0.24) return;
+
+                    const px = cx + x3d * radius;
+                    const py = cy - y3d * radius;
+                    const scale = 0.55 + ((z3d + 1) / 2) * 0.85;
+                    const pulse = 0.75 + 0.25 * Math.sin(now * 0.002 + index * 0.9);
+                    const pinRadius = Math.max(2.2, radius * 0.022 * scale);
+
+                    ctx.beginPath();
+                    ctx.arc(px, py, pinRadius * 2.4 * pulse, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 96, 166, ${0.06 + scale * 0.12})`;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.arc(px, py, pinRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = z3d > 0.35 ? 'rgba(111, 240, 226, 0.96)' : 'rgba(255, 152, 205, 0.9)';
+                    ctx.shadowColor = z3d > 0.35 ? 'rgba(111, 240, 226, 0.65)' : 'rgba(255, 96, 166, 0.62)';
+                    ctx.shadowBlur = pinRadius * 4;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                });
+
+                ctx.restore();
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+                ctx.lineWidth = Math.max(2, radius * 0.012);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * 1.08, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(115, 233, 224, 0.12)';
+                ctx.lineWidth = Math.max(1, radius * 0.006);
+                ctx.stroke();
+
+                dashboardState.animationFrame = requestAnimationFrame(drawDashboardGlobe);
+            };
+
+            const ensureDashboardGlobe = () => {
+                if (!dashboardGlobeCanvas || dashboardState.animationFrame) return;
+                dashboardState.animationFrame = requestAnimationFrame(drawDashboardGlobe);
+            };
+
+            const ensureDashboardMiniMap = () => {
+                if (dashboardState.miniMap || !dashboardMapPreview || typeof maplibregl === 'undefined') return dashboardState.miniMap;
+
+                dashboardState.miniMap = new maplibregl.Map({
+                    container: 'dashboard-map-preview',
+                    style: getDashboardMapStyle(),
+                    center: [CONFIG.defaultLocation.lng, CONFIG.defaultLocation.lat],
+                    zoom: Math.max(1.5, CONFIG.defaultLocation.zoom - 2.2),
+                    pitch: 0,
+                    bearing: 0,
+                    interactive: false,
+                    attributionControl: false
+                });
+
+                return dashboardState.miniMap;
+            };
+
+            const syncDashboardMiniMap = () => {
+                const mapExists = typeof GameState !== 'undefined' && GameState.map && typeof GameState.map.getCenter === 'function';
+
+                if (!dashboardMapEmpty || !dashboardMapPreview) return;
+
+                if (!mapExists) {
+                    dashboardMapEmpty.classList.remove('hidden');
+                    dashboardMapPreview.classList.add('hidden');
+                    if (dashboardActiveCity) dashboardActiveCity.textContent = 'Lobby overview';
+                    if (dashboardViewportCopy && dashboardState.view === 'map') {
+                        dashboardViewportCopy.textContent = 'Open any run, hit menu, and your active city will zoom out into this panel.';
+                    }
+                    return;
+                }
+
+                const previewMap = ensureDashboardMiniMap();
+                const center = GameState.map.getCenter();
+                const zoom = typeof GameState.map.getZoom === 'function' ? GameState.map.getZoom() : CONFIG.defaultLocation.zoom;
+                const cityName = GameState.currentCity?.name || GameState.challengeState?.activeChallenge?.city_name || 'Active route';
+
+                dashboardMapEmpty.classList.add('hidden');
+                dashboardMapPreview.classList.remove('hidden');
+                if (dashboardActiveCity) dashboardActiveCity.textContent = cityName;
+
+                if (previewMap) {
+                    previewMap.resize();
+                    previewMap.jumpTo({
+                        center: [center.lng, center.lat],
+                        zoom: Math.max(1.5, zoom - 1.4),
+                        bearing: 0,
+                        pitch: 0
+                    });
+                }
+
+                if (dashboardViewportCopy && dashboardState.view === 'map') {
+                    dashboardViewportCopy.textContent = 'Your current route zooms out here so the lobby doubles as a tactical pause surface.';
+                }
+            };
+
+            const setDashboardView = (view = 'globe') => {
+                dashboardState.view = view;
+                const showingMap = view === 'map';
+
+                if (dashboardShowGlobeBtn) dashboardShowGlobeBtn.classList.toggle('is-active', !showingMap);
+                if (dashboardShowMapBtn) dashboardShowMapBtn.classList.toggle('is-active', showingMap);
+                if (dashboardGlobeCanvas) dashboardGlobeCanvas.classList.toggle('hidden', showingMap);
+
+                if (showingMap) {
+                    syncDashboardMiniMap();
+                } else {
+                    if (dashboardMapPreview) dashboardMapPreview.classList.add('hidden');
+                    if (dashboardMapEmpty) dashboardMapEmpty.classList.add('hidden');
+                    if (dashboardViewportCopy) dashboardViewportCopy.textContent = 'Cities pulse across the globe so the lobby feels alive before you even launch a run.';
+                    if (dashboardActiveCity) dashboardActiveCity.textContent = 'Lobby overview';
+                }
+            };
+
+            const setDashboardOverlayState = ({ activeGame = false, preferredView = 'globe' } = {}) => {
+                dashboardState.overlayMode = activeGame ? 'paused' : 'lobby';
+                if (splashScreen) {
+                    splashScreen.classList.toggle('dashboard-overlay-active', activeGame);
+                    splashScreen.classList.add('splash-show-welcome');
+                    splashScreen.classList.remove('hidden');
+                }
+                if (dashboardResumeBtn) dashboardResumeBtn.classList.toggle('hidden', !activeGame);
+                setDashboardView(activeGame ? preferredView : 'globe');
+            };
+
+            const hideDashboardOverlay = () => {
+                if (splashScreen) {
+                    splashScreen.classList.remove('dashboard-overlay-active');
+                    splashScreen.classList.add('hidden');
+                }
+            };
+
+            window.PathfindrDashboard = {
+                show({ view = 'globe', activeGame = false } = {}) {
+                    setDashboardOverlayState({ activeGame, preferredView: view });
+                },
+                hide() {
+                    hideDashboardOverlay();
+                },
+                refreshMapPreview() {
+                    syncDashboardMiniMap();
+                },
+                showLobby() {
+                    setDashboardOverlayState({ activeGame: false, preferredView: 'globe' });
+                }
             };
 
             function renderSplashNavigationLog(locations) {
@@ -1263,8 +1514,9 @@
                 if (!PathfindrAuth.isLoggedIn()) {
                     guestState.classList.remove('hidden');
                     memberState.classList.add('hidden');
-                    headingEl.textContent = 'Log in to track your route record.';
+                    headingEl.textContent = 'Sign in to build your navigator license.';
                     tierEl.textContent = 'Guest';
+                    setDashboardPins(DASHBOARD_FALLBACK_PINS);
                     return;
                 }
 
@@ -1274,7 +1526,7 @@
                 const username = PathfindrAuth.getUsername() || 'Path Pilot';
                 const isPremium = PathfindrAuth.hasPurchased();
 
-                headingEl.textContent = 'Log in to track your route record.';
+                headingEl.textContent = 'Sign in to build your navigator license.';
                 tierEl.textContent = isPremium ? 'Pro' : 'Member';
 
                 const nameEl = document.getElementById('splash-profile-username');
@@ -1312,6 +1564,10 @@
                     if (efficiencyBar) efficiencyBar.style.setProperty('--fill-percent', `${stats.avgEfficiency || 0}%`);
 
                     renderSplashNavigationLog(stats.locations);
+                    setDashboardPins(stats.locations);
+                    if (dashboardState.view === 'map') {
+                        syncDashboardMiniMap();
+                    }
                 } catch (error) {
                     console.error('[Splash] Failed to refresh player card stats:', error);
                 }
@@ -1399,28 +1655,6 @@
                 }
             });
 
-            bindPress(splashModeMenuBtn, () => {
-                if (typeof exitToMenu === 'function') exitToMenu();
-            });
-
-            bindPress(splashModeExplorerBtn, () => {
-                if (!PathfindrAuth.hasPurchased()) {
-                    PathfindrAuth.showAuthModal('login');
-                    updateAuthUI();
-                    return;
-                }
-                if (typeof switchToExplorerMode === 'function') switchToExplorerMode();
-            });
-
-            bindPress(splashModeVisualizerBtn, () => {
-                if (!PathfindrAuth.hasPurchased()) {
-                    PathfindrAuth.showAuthModal('login');
-                    updateAuthUI();
-                    return;
-                }
-                if (typeof switchToVisualizerMode === 'function') switchToVisualizerMode();
-            });
-
             bindPress(splashRemoveAdsBtn, async () => {
                 splashRemoveAdsBtn.disabled = true;
 
@@ -1434,6 +1668,37 @@
                     }
                 }
             });
+
+            bindPress(dashboardShowGlobeBtn, () => {
+                setDashboardView('globe');
+            });
+
+            bindPress(dashboardShowMapBtn, () => {
+                setDashboardView('map');
+            });
+
+            bindPress(dashboardResumeBtn, () => {
+                hideDashboardOverlay();
+            });
+
+            const hudMenuBtn = document.getElementById('hud-menu-btn');
+            if (hudMenuBtn) {
+                hudMenuBtn.addEventListener('click', (event) => {
+                    if (!hasLiveSession()) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    setDashboardOverlayState({ activeGame: true, preferredView: 'map' });
+                }, true);
+            }
+
+            window.addEventListener('resize', () => {
+                resizeDashboardGlobe();
+                if (dashboardState.miniMap) {
+                    dashboardState.miniMap.resize();
+                }
+            });
+
+            ensureDashboardGlobe();
 
             // Social login buttons
             document.querySelectorAll('.social-btn').forEach(btn => {

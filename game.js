@@ -11286,9 +11286,7 @@ function setDifficulty(difficulty) {
 function initSplashScreen() {
     const splashScreen = document.getElementById('splash-screen');
     const introVideo = document.getElementById('splash-intro-video');
-    const logoVideo = document.getElementById('splash-logo-video');
     const skipBtn = document.getElementById('splash-skip-btn');
-    const startAudioBtn = document.getElementById('splash-start-audio-btn');
 
     if (shouldAutostartStreamVisualizer()) {
         if (splashScreen) splashScreen.classList.add('hidden');
@@ -11343,18 +11341,7 @@ function initSplashScreen() {
             introVideo.pause();
         }
 
-        if (startAudioBtn) {
-            startAudioBtn.classList.add('hidden');
-        }
-
-        if (logoVideo) {
-            logoVideo.currentTime = 0;
-            const loopPromise = logoVideo.play();
-            if (loopPromise && typeof loopPromise.catch === 'function') {
-                loopPromise.catch(() => {});
-            }
-        }
-
+        SoundEngine.init();
         SoundEngine.playSoundtrack();
 
         if (immediate) {
@@ -11392,7 +11379,7 @@ function initSplashScreen() {
         }, durationMs);
     };
 
-    const beginIntroPlayback = async ({ withSound = false, restart = false } = {}) => {
+    const beginIntroPlayback = async ({ restart = false } = {}) => {
         if (!introVideo || introStarted) return;
         introStarted = true;
 
@@ -11400,24 +11387,13 @@ function initSplashScreen() {
             introVideo.currentTime = 0;
         }
         introVideo.volume = 1;
-        introVideo.muted = !withSound;
+        introVideo.muted = true;
 
         try {
             await introVideo.play();
-            if (startAudioBtn) {
-                if (withSound) {
-                    startAudioBtn.classList.add('hidden');
-                } else {
-                    startAudioBtn.classList.remove('hidden');
-                }
-            }
         } catch (error) {
             introStarted = false;
             introVideo.pause();
-            if (withSound && startAudioBtn) {
-                beginIntroPlayback({ withSound: false, restart: true });
-                return;
-            }
             revealWelcome({ immediate: true });
         }
     };
@@ -11450,7 +11426,9 @@ function initSplashScreen() {
 
         scheduleIntroFallback();
 
-        beginIntroPlayback({ withSound: true, restart: true });
+        SoundEngine.init();
+        SoundEngine.playSoundtrack();
+        beginIntroPlayback({ restart: true });
     }
 
     if (skipBtn) {
@@ -11460,17 +11438,6 @@ function initSplashScreen() {
             revealWelcome();
         });
     }
-
-    if (startAudioBtn) {
-        startAudioBtn.addEventListener('click', () => {
-            SoundEngine.init();
-            SoundEngine.uiClick();
-            if (introVideo && introVideo.paused) {
-                introStarted = false;
-            }
-            beginIntroPlayback({ withSound: true, restart: true });
-        });
-    }
 }
 
 function showModeSelector() {
@@ -11478,7 +11445,6 @@ function showModeSelector() {
     document.getElementById('loading-overlay').classList.add('hidden');
     const splashScreen = document.getElementById('splash-screen');
     const introVideo = document.getElementById('splash-intro-video');
-    const logoVideo = document.getElementById('splash-logo-video');
     document.getElementById('mode-selector').classList.add('hidden');
 
     if (splashScreen) {
@@ -11487,16 +11453,13 @@ function showModeSelector() {
         splashScreen.classList.add('splash-show-welcome');
     }
 
+    if (window.PathfindrDashboard && typeof window.PathfindrDashboard.showLobby === 'function') {
+        window.PathfindrDashboard.showLobby();
+    }
+
     if (introVideo) {
         introVideo.pause();
         introVideo.currentTime = 0;
-    }
-
-    if (logoVideo) {
-        const loopPromise = logoVideo.play();
-        if (loopPromise && typeof loopPromise.catch === 'function') {
-            loopPromise.catch(() => {});
-        }
     }
 
     SoundEngine.playSoundtrack();
@@ -11509,9 +11472,10 @@ function showModeSelector() {
 function hideModeSelector() {
     document.getElementById('mode-selector').classList.add('hidden');
     const splashScreen = document.getElementById('splash-screen');
-    const logoVideo = document.getElementById('splash-logo-video');
     if (splashScreen) splashScreen.classList.add('hidden');
-    if (logoVideo) logoVideo.pause();
+    if (window.PathfindrDashboard && typeof window.PathfindrDashboard.hide === 'function') {
+        window.PathfindrDashboard.hide();
+    }
 }
 
 // Local dev-only premium bypass:
