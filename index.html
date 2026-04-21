@@ -1192,6 +1192,22 @@
                 mobileLobbyPanels.forEach((section) => {
                     section.classList.toggle('is-active', section.dataset.mobilePanel === panel);
                 });
+
+                if (panel === 'atlas') {
+                    ensureDashboardGlobe();
+                    requestAnimationFrame(() => {
+                        resizeDashboardGlobe();
+                        if (dashboardState.view === 'map' && dashboardState.miniMap) {
+                            dashboardState.miniMap.resize();
+                        }
+                        requestAnimationFrame(() => {
+                            resizeDashboardGlobe();
+                            if (dashboardState.view === 'map' && dashboardState.miniMap) {
+                                dashboardState.miniMap.resize();
+                            }
+                        });
+                    });
+                }
             };
 
             const getDashboardMapStyle = () => ({

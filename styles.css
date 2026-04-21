@@ -3159,22 +3159,24 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     .splash-copy-panel {
         grid-column: 1;
         grid-row: 1;
+        min-width: 0;
     }
 
     .splash-side-stack {
         display: contents;
     }
 
-    .splash-dashboard-panel {
+    .splash-player-panel {
         grid-column: 2;
         grid-row: 1;
-        align-self: start;
+        align-self: stretch;
+        min-width: 0;
     }
 
-    .splash-player-panel {
+    .splash-dashboard-panel {
         grid-column: 3;
         grid-row: 1;
-        align-self: stretch;
+        align-self: start;
         min-width: 0;
     }
 
@@ -3201,6 +3203,17 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     .splash-member-card {
         gap: 0.95rem;
         min-height: 100%;
+    }
+
+    .splash-profile-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.7rem;
+    }
+
+    .splash-profile-actions .btn-holo-upgrade,
+    .splash-profile-actions .btn-holo-secondary {
+        width: 100%;
     }
 
     .splash-member-identity {
@@ -3234,6 +3247,13 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
     .splash-member-log-list {
         max-height: 240px;
+    }
+
+    .splash-player-panel,
+    .splash-dashboard-panel {
+        display: grid;
+        align-content: start;
+        gap: 1rem;
     }
 }
 
