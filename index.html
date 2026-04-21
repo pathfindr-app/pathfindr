@@ -260,15 +260,48 @@
                     </div>
 
                     <div class="overlay-content splash-content">
+                        <div class="mobile-lobby-tabs" role="tablist" aria-label="Mobile lobby sections">
+                            <button class="mobile-lobby-tab is-active" type="button" data-mobile-panel="overview">Overview</button>
+                            <button class="mobile-lobby-tab" type="button" data-mobile-panel="atlas">Atlas</button>
+                            <button class="mobile-lobby-tab" type="button" data-mobile-panel="license">License</button>
+                        </div>
                         <div class="splash-welcome-shell">
-                            <div class="splash-copy-panel">
-                                <h1 class="splash-title">Welcome, Pathfindr</h1>
-                                <p class="splash-lead">
-                                    Visit a real city, trust your instincts, and race from point A to point B as fast as you can before the cleanest possible line beats you there.
-                                </p>
-                                <p class="splash-support-copy">
-                                    A route-guessing game where city awareness, spatial awareness, and competitive precision all meet in the chase for the highest score.
-                                </p>
+                            <div class="splash-copy-panel mobile-lobby-panel is-active" data-mobile-panel="overview">
+                                <div class="splash-hero-band">
+                                    <div class="splash-hero-copy">
+                                        <h1 class="splash-title">Welcome, Pathfindr</h1>
+                                        <p class="splash-lead">
+                                            Visit a real city, trust your instincts, and race from point A to point B as fast as you can before the cleanest possible line beats you there.
+                                        </p>
+                                        <p class="splash-support-copy">
+                                            A route-guessing game where city awareness, spatial awareness, and competitive precision all meet in the chase for the highest score.
+                                        </p>
+                                    </div>
+                                    <div class="splash-reel-card">
+                                        <div class="splash-reel-header">
+                                            <span class="splash-reel-label">Lobby Signal</span>
+                                            <span class="splash-reel-status">Looping intro</span>
+                                        </div>
+                                        <div class="splash-reel-frame">
+                                            <video
+                                                id="splash-lobby-reel"
+                                                class="splash-lobby-reel"
+                                                autoplay
+                                                muted
+                                                loop
+                                                playsinline
+                                                preload="metadata"
+                                                poster="Visual Assets/logo.png"
+                                            >
+                                                <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
+                                            </video>
+                                            <div class="splash-reel-overlay">
+                                                <span class="splash-reel-pip"></span>
+                                                Route feed online
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div class="splash-pill-row">
                                     <span class="splash-pill">Daily Challenges</span>
@@ -276,7 +309,7 @@
                                     <span class="splash-pill">Community Driven</span>
                                 </div>
 
-                                <div class="splash-mode-panel">
+                                <div class="splash-mode-panel splash-command-deck">
                                     <div class="mode-options">
                                         <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
                                             <span id="challenge-badge" class="challenge-badge">HOURLY</span>
@@ -339,7 +372,10 @@
                                         </button>
                                     </div>
 
-                                    <div class="difficulty-selector">
+                                </div>
+
+                                <div class="splash-ops-footer">
+                                    <div class="difficulty-selector splash-difficulty-card">
                                         <span class="difficulty-label">Draw Precision</span>
                                         <div class="difficulty-options">
                                             <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
@@ -356,13 +392,12 @@
                                             </button>
                                         </div>
                                     </div>
+                                    <p class="splash-disclaimer">Use the lobby as your route dashboard, challenge board, and session checkpoint.</p>
                                 </div>
-
-                                <p class="splash-disclaimer">Use the lobby as your route dashboard, challenge board, and session checkpoint.</p>
                             </div>
 
                             <aside class="splash-side-stack">
-                                <div class="splash-dashboard-panel">
+                                <div class="splash-dashboard-panel mobile-lobby-panel" data-mobile-panel="atlas">
                                     <div class="dashboard-viewport-card">
                                         <div class="dashboard-viewport-header">
                                             <div class="dashboard-viewport-heading">
@@ -399,7 +434,7 @@
                                     </div>
                                 </div>
 
-                                <section class="splash-player-panel" id="splash-player-panel">
+                                <section class="splash-player-panel mobile-lobby-panel" id="splash-player-panel" data-mobile-panel="license">
                                     <div id="splash-player-guest" class="splash-guest-card">
                                         <div class="player-card-header">
                                             <div>
@@ -1102,6 +1137,8 @@
     <script src="ads.js"></script>
     <script src="auth.js"></script>
     <script src="analytics.js"></script>
+    <script src="vendor/d3-geo.min.js"></script>
+    <script src="vendor/topojson-client.min.js"></script>
     <script src="payments.js"></script>
     <script src="game.js"></script>
 
@@ -1139,6 +1176,8 @@
             const dashboardResumeBtn = document.getElementById('dashboard-resume-btn');
             const dashboardViewportCopy = document.getElementById('dashboard-viewport-copy');
             const dashboardActiveCity = document.getElementById('dashboard-active-city');
+            const mobileLobbyTabs = Array.from(document.querySelectorAll('.mobile-lobby-tab'));
+            const mobileLobbyPanels = Array.from(document.querySelectorAll('.mobile-lobby-panel'));
 
             const DASHBOARD_FALLBACK_PINS = [
                 { lat: 42.296, lng: -71.294, name: 'Wellesley, MA, United States' },
@@ -1156,7 +1195,11 @@
                 miniMap: null,
                 pins: DASHBOARD_FALLBACK_PINS,
                 animationFrame: null,
-                overlayMode: 'lobby'
+                overlayMode: 'lobby',
+                countriesFeature: null,
+                countryBorders: null,
+                worldDataPromise: null,
+                worldDataLoaded: false
             };
 
             // Use getter/setter to sync with PathfindrAuth.showAuthModal
@@ -1188,6 +1231,18 @@
                 element.addEventListener('touchend', wrappedHandler, { passive: false });
             };
 
+            const setMobileLobbyPanel = (panel = 'overview') => {
+                mobileLobbyTabs.forEach((tab) => {
+                    const active = tab.dataset.mobilePanel === panel;
+                    tab.classList.toggle('is-active', active);
+                    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+
+                mobileLobbyPanels.forEach((section) => {
+                    section.classList.toggle('is-active', section.dataset.mobilePanel === panel);
+                });
+            };
+
             const getDashboardMapStyle = () => ({
                 version: 8,
                 sources: {
@@ -1216,9 +1271,55 @@
             };
 
             const setDashboardPins = (locations = []) => {
-                dashboardState.pins = Array.isArray(locations) && locations.length
-                    ? locations.slice(-60)
-                    : DASHBOARD_FALLBACK_PINS;
+                if (!Array.isArray(locations) || locations.length === 0) {
+                    dashboardState.pins = DASHBOARD_FALLBACK_PINS;
+                    return;
+                }
+
+                const seen = new Set();
+                dashboardState.pins = locations
+                    .filter((loc) => Number.isFinite(loc?.lat) && Number.isFinite(loc?.lng))
+                    .filter((loc) => {
+                        const key = `${loc.name || 'unknown'}:${Number(loc.lat).toFixed(3)}:${Number(loc.lng).toFixed(3)}`;
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    })
+                    .slice(-80);
+            };
+
+            const loadDashboardWorld = async () => {
+                if (dashboardState.worldDataLoaded) return true;
+                if (dashboardState.worldDataPromise) return dashboardState.worldDataPromise;
+
+                dashboardState.worldDataPromise = fetch('data/countries-110m.json')
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error(`Failed to load world data: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then((topology) => {
+                        if (typeof topojson === 'undefined') {
+                            throw new Error('TopoJSON client not available');
+                        }
+
+                        dashboardState.countriesFeature = topojson.feature(topology, topology.objects.countries);
+                        dashboardState.countryBorders = topojson.mesh(
+                            topology,
+                            topology.objects.countries,
+                            (a, b) => a !== b
+                        );
+                        dashboardState.worldDataLoaded = true;
+                        return true;
+                    })
+                    .catch((error) => {
+                        console.error('[Dashboard] Failed to load globe country data:', error);
+                        dashboardState.worldDataPromise = null;
+                        return false;
+                    });
+
+                return dashboardState.worldDataPromise;
             };
 
             const resizeDashboardGlobe = () => {
@@ -1243,7 +1344,7 @@
                 const cx = width / 2;
                 const cy = height / 2;
                 const radius = Math.min(width, height) * 0.3;
-                const rotation = now * 0.00012;
+                const rotation = now * 0.0018;
 
                 ctx.clearRect(0, 0, width, height);
 
@@ -1266,34 +1367,72 @@
                 ctx.fill();
 
                 ctx.save();
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.clip();
+                if (
+                    dashboardState.worldDataLoaded &&
+                    dashboardState.countriesFeature &&
+                    typeof d3 !== 'undefined'
+                ) {
+                    const projection = d3.geoOrthographic()
+                        .translate([cx, cy])
+                        .scale(radius * 0.98)
+                        .rotate([-rotation, -18, 0])
+                        .clipAngle(90)
+                        .precision(0.3);
+                    const path = d3.geoPath(projection, ctx);
+                    const graticule = d3.geoGraticule10();
 
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-                ctx.lineWidth = Math.max(1.2, radius * 0.008);
+                    ctx.save();
+                    path({ type: 'Sphere' });
+                    ctx.clip();
 
-                for (let i = -2; i <= 2; i++) {
-                    const latY = cy + (i / 2.7) * radius * 0.58;
-                    const latRx = Math.sqrt(Math.max(radius * radius - (latY - cy) * (latY - cy), 0));
+                    ctx.strokeStyle = 'rgba(111, 240, 226, 0.12)';
+                    ctx.lineWidth = Math.max(0.9, radius * 0.004);
                     ctx.beginPath();
-                    ctx.ellipse(cx, latY, latRx, latRx * 0.2, 0, 0, Math.PI * 2);
+                    path(graticule);
                     ctx.stroke();
-                }
 
-                for (let i = 0; i < 8; i++) {
-                    const angle = rotation + (i / 8) * Math.PI * 2;
-                    const axisScale = Math.cos(angle) * 0.92;
+                    ctx.fillStyle = 'rgba(18, 30, 46, 0.86)';
                     ctx.beginPath();
-                    ctx.ellipse(cx, cy, Math.abs(axisScale) * radius, radius, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = `rgba(115, 233, 224, ${0.06 + Math.abs(axisScale) * 0.08})`;
+                    path(dashboardState.countriesFeature);
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'rgba(126, 228, 227, 0.28)';
+                    ctx.lineWidth = Math.max(1, radius * 0.005);
+                    ctx.beginPath();
+                    path(dashboardState.countryBorders);
                     ctx.stroke();
+
+                    ctx.restore();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                    ctx.clip();
+
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                    ctx.lineWidth = Math.max(1.2, radius * 0.008);
+
+                    for (let i = -2; i <= 2; i++) {
+                        const latY = cy + (i / 2.7) * radius * 0.58;
+                        const latRx = Math.sqrt(Math.max(radius * radius - (latY - cy) * (latY - cy), 0));
+                        ctx.beginPath();
+                        ctx.ellipse(cx, latY, latRx, latRx * 0.2, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (rotation * Math.PI / 180) + (i / 8) * Math.PI * 2;
+                        const axisScale = Math.cos(angle) * 0.92;
+                        ctx.beginPath();
+                        ctx.ellipse(cx, cy, Math.abs(axisScale) * radius, radius, 0, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(115, 233, 224, ${0.06 + Math.abs(axisScale) * 0.08})`;
+                        ctx.stroke();
+                    }
                 }
 
                 const pins = dashboardState.pins || [];
                 pins.forEach((pin, index) => {
                     const lat = (pin.lat || 0) * Math.PI / 180;
-                    const lng = ((pin.lng || 0) * Math.PI / 180) + rotation;
+                    const lng = ((pin.lng || 0) * Math.PI / 180) + (rotation * Math.PI / 180);
                     const x3d = Math.cos(lat) * Math.sin(lng);
                     const y3d = Math.sin(lat);
                     const z3d = Math.cos(lat) * Math.cos(lng);
@@ -1339,6 +1478,7 @@
 
             const ensureDashboardGlobe = () => {
                 if (!dashboardGlobeCanvas || dashboardState.animationFrame) return;
+                loadDashboardWorld();
                 dashboardState.animationFrame = requestAnimationFrame(drawDashboardGlobe);
             };
 
@@ -1424,6 +1564,7 @@
                     splashScreen.classList.remove('hidden');
                 }
                 if (dashboardResumeBtn) dashboardResumeBtn.classList.toggle('hidden', !activeGame);
+                setMobileLobbyPanel(activeGame ? 'atlas' : 'overview');
                 setDashboardView(activeGame ? preferredView : 'globe');
             };
 
@@ -1575,6 +1716,10 @@
 
             // Open auth modal
             bindPress(userBtn, () => {
+                if (hasLiveSession()) {
+                    setDashboardOverlayState({ activeGame: true, preferredView: 'globe' });
+                    return;
+                }
                 PathfindrAuth.showAuthModal(_isSignUp ? 'signup' : 'login');
                 updateAuthUI();
             });
@@ -1681,6 +1826,12 @@
                 hideDashboardOverlay();
             });
 
+            mobileLobbyTabs.forEach((tab) => {
+                bindPress(tab, () => {
+                    setMobileLobbyPanel(tab.dataset.mobilePanel || 'overview');
+                });
+            });
+
             const hudMenuBtn = document.getElementById('hud-menu-btn');
             if (hudMenuBtn) {
                 hudMenuBtn.addEventListener('click', (event) => {
@@ -1699,6 +1850,7 @@
             });
 
             ensureDashboardGlobe();
+            setMobileLobbyPanel('overview');
 
             // Social login buttons
             document.querySelectorAll('.social-btn').forEach(btn => {
