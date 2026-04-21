@@ -264,39 +264,33 @@
 
                     <div class="overlay-content splash-content">
                         <div class="splash-welcome-shell">
-                            <div class="splash-visual-panel">
-                                <div class="splash-logo-frame">
-                                    <video
-                                        id="splash-logo-video"
-                                        class="splash-logo-video"
-                                        autoplay
-                                        muted
-                                        loop
-                                        playsinline
-                                        preload="metadata"
-                                        poster="Visual Assets/logo.png"
-                                    >
-                                        <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
-                                    </video>
-                                    <img src="Visual Assets/logo.png" alt="Pathfindr logo" class="splash-logo-fallback">
-                                </div>
-                                <p class="splash-visual-caption">A route-guessing game where your instinct meets the map.</p>
-                            </div>
-
                             <div class="splash-copy-panel">
                                 <div class="splash-version">ALPHA v0.1</div>
-                                <p class="splash-overline">Welcome, Pathfindr</p>
-                                <h1 class="splash-title">Ready to explore?</h1>
+                                <p class="splash-overline">Precision route play on real streets</p>
+                                <h1 class="splash-title">Draw the line everyone else misses.</h1>
                                 <p class="splash-lead">
-                                    Trace the best route you can see through a real city, then watch a
-                                    <span class="highlight-cyan">beautiful pathfinding result</span>
-                                    compare your score against the most optimal algorithmic line.
+                                    Study a real city, trust your instincts, and watch your route go head-to-head with the cleanest algorithmic path. Every session sharpens your read on space, speed, and efficiency.
                                 </p>
 
                                 <div class="splash-pill-row">
-                                    <span class="splash-pill">Real city streets</span>
-                                    <span class="splash-pill">Challenge runs</span>
-                                    <span class="splash-pill">Global playerbase</span>
+                                    <span class="splash-pill">Live challenge cadence</span>
+                                    <span class="splash-pill">Global scoring</span>
+                                    <span class="splash-pill">Precision route play</span>
+                                </div>
+
+                                <div class="splash-kpi-strip" aria-label="Pathfindr highlights">
+                                    <div class="splash-kpi">
+                                        <span class="splash-kpi-value">24/7</span>
+                                        <span class="splash-kpi-label">Rotating challenge loop</span>
+                                    </div>
+                                    <div class="splash-kpi">
+                                        <span class="splash-kpi-value">5</span>
+                                        <span class="splash-kpi-label">Classic cities per run</span>
+                                    </div>
+                                    <div class="splash-kpi">
+                                        <span class="splash-kpi-value">1 line</span>
+                                        <span class="splash-kpi-label">Your fastest route instinct</span>
+                                    </div>
                                 </div>
 
                                 <div class="splash-mode-panel">
@@ -383,6 +377,85 @@
 
                                 <p class="splash-disclaimer">Early alpha build. Expect active tuning on visuals, mobile, and challenge systems.</p>
                             </div>
+
+                            <aside class="splash-side-stack">
+                                <div class="splash-visual-panel">
+                                    <div class="splash-logo-frame">
+                                        <video
+                                            id="splash-logo-video"
+                                            class="splash-logo-video"
+                                            autoplay
+                                            muted
+                                            loop
+                                            playsinline
+                                            preload="metadata"
+                                            poster="Visual Assets/logo.png"
+                                        >
+                                            <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
+                                        </video>
+                                        <img src="Visual Assets/logo.png" alt="Pathfindr logo" class="splash-logo-fallback">
+                                        <div class="splash-logo-overlay">
+                                            <span class="splash-signal-dot"></span>
+                                            <span>Routing signal stable</span>
+                                        </div>
+                                    </div>
+                                    <div class="splash-visual-caption">
+                                        <span class="splash-caption-label">Current brief</span>
+                                        <p>A premium route-guessing game where city awareness, clean line reading, and competitive precision all meet in one launch screen.</p>
+                                    </div>
+                                </div>
+
+                                <section class="splash-player-panel" id="splash-player-panel">
+                                    <div class="player-card-shell">
+                                        <div class="player-card-header">
+                                            <div>
+                                                <span class="player-card-eyebrow">Player Card</span>
+                                                <h2 id="splash-player-heading" class="player-card-title">Log in to track your route record.</h2>
+                                            </div>
+                                            <span id="splash-player-tier" class="player-card-tier">Guest</span>
+                                        </div>
+
+                                        <div id="splash-player-guest" class="player-card-state">
+                                            <p class="player-card-copy">Save your callsign, compare challenge scores, and unlock a personal route ledger that follows you across every city.</p>
+                                            <div class="player-card-actions">
+                                                <button id="splash-auth-login-btn" class="splash-auth-btn splash-auth-btn-primary" type="button">Sign In</button>
+                                                <button id="splash-auth-signup-btn" class="splash-auth-btn" type="button">Create Account</button>
+                                            </div>
+                                            <p class="player-card-footnote">Classic mode is open instantly. Sign in when you want progression and leaderboard identity.</p>
+                                        </div>
+
+                                        <div id="splash-player-member" class="player-card-state hidden">
+                                            <div class="player-identity-row">
+                                                <div id="splash-player-avatar" class="player-avatar">PF</div>
+                                                <div class="player-identity-copy">
+                                                    <span id="splash-player-name" class="player-name">Path Pilot</span>
+                                                    <span id="splash-player-email" class="player-meta">Signed in and ready to route</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="player-stat-grid">
+                                                <div class="player-stat-tile">
+                                                    <span id="splash-player-rounds" class="player-stat-value">0</span>
+                                                    <span class="player-stat-label">Rounds logged</span>
+                                                </div>
+                                                <div class="player-stat-tile">
+                                                    <span id="splash-player-cities" class="player-stat-value">0</span>
+                                                    <span class="player-stat-label">Cities traced</span>
+                                                </div>
+                                                <div class="player-stat-tile player-stat-wide">
+                                                    <span id="splash-player-efficiency" class="player-stat-value">0%</span>
+                                                    <span class="player-stat-label">Average route efficiency</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="player-card-actions">
+                                                <button id="splash-auth-profile-btn" class="splash-auth-btn splash-auth-btn-primary" type="button">Open Profile</button>
+                                                <button id="splash-auth-signout-btn" class="splash-auth-btn" type="button">Sign Out</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </aside>
                         </div>
                     </div>
                 </div>
@@ -959,6 +1032,10 @@
             const authSwitchBtn = document.getElementById('auth-switch-btn');
             const logoutBtn = document.getElementById('logout-btn');
             const usernameDisplay = document.getElementById('username-display');
+            const splashLoginBtn = document.getElementById('splash-auth-login-btn');
+            const splashSignupBtn = document.getElementById('splash-auth-signup-btn');
+            const splashProfileBtn = document.getElementById('splash-auth-profile-btn');
+            const splashSignoutBtn = document.getElementById('splash-auth-signout-btn');
 
             // Use getter/setter to sync with PathfindrAuth.showAuthModal
             let _isSignUp = false;
@@ -989,9 +1066,83 @@
                 element.addEventListener('touchend', wrappedHandler, { passive: false });
             };
 
+            async function updateSplashPlayerCard() {
+                const guestState = document.getElementById('splash-player-guest');
+                const memberState = document.getElementById('splash-player-member');
+                const headingEl = document.getElementById('splash-player-heading');
+                const tierEl = document.getElementById('splash-player-tier');
+
+                if (!guestState || !memberState || !headingEl || !tierEl) return;
+
+                if (!PathfindrAuth.isLoggedIn()) {
+                    guestState.classList.remove('hidden');
+                    memberState.classList.add('hidden');
+                    headingEl.textContent = 'Log in to track your route record.';
+                    tierEl.textContent = 'Guest';
+                    return;
+                }
+
+                guestState.classList.add('hidden');
+                memberState.classList.remove('hidden');
+
+                const username = PathfindrAuth.getUsername() || 'Path Pilot';
+                const email = PathfindrAuth.currentUser?.email || 'Signed in and ready to route';
+                const isPremium = PathfindrAuth.hasPurchased();
+
+                headingEl.textContent = 'Your route ledger is ready.';
+                tierEl.textContent = isPremium ? 'Pro Member' : 'Member';
+
+                const nameEl = document.getElementById('splash-player-name');
+                const emailEl = document.getElementById('splash-player-email');
+                const avatarEl = document.getElementById('splash-player-avatar');
+
+                if (nameEl) nameEl.textContent = username;
+                if (emailEl) emailEl.textContent = email;
+                if (avatarEl) {
+                    const initials = username
+                        .split(/[\s_-]+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase() || '')
+                        .join('') || 'PF';
+                    avatarEl.textContent = initials;
+                }
+
+                try {
+                    const stats = await PathfindrAuth.getProfileStats();
+                    const roundsEl = document.getElementById('splash-player-rounds');
+                    const citiesEl = document.getElementById('splash-player-cities');
+                    const efficiencyEl = document.getElementById('splash-player-efficiency');
+
+                    if (roundsEl) roundsEl.textContent = String(stats.totalRounds || 0);
+                    if (citiesEl) citiesEl.textContent = String(stats.cities || 0);
+                    if (efficiencyEl) efficiencyEl.textContent = `${stats.avgEfficiency || 0}%`;
+                } catch (error) {
+                    console.error('[Splash] Failed to refresh player card stats:', error);
+                }
+            }
+
             // Open auth modal
             bindPress(userBtn, () => {
                 PathfindrAuth.showAuthModal(_isSignUp ? 'signup' : 'login');
+                updateAuthUI();
+            });
+
+            bindPress(splashLoginBtn, () => {
+                _isSignUp = false;
+                PathfindrAuth.showAuthModal('login');
+                updateAuthUI();
+            });
+
+            bindPress(splashSignupBtn, () => {
+                _isSignUp = true;
+                PathfindrAuth.showAuthModal('signup');
+                updateAuthUI();
+            });
+
+            bindPress(splashProfileBtn, () => {
+                _isSignUp = false;
+                PathfindrAuth.showAuthModal('login');
                 updateAuthUI();
             });
 
@@ -1044,6 +1195,11 @@
 
             // Logout
             logoutBtn?.addEventListener('click', async () => {
+                await PathfindrAuth.logout();
+                updateAuthUI();
+            });
+
+            bindPress(splashSignoutBtn, async () => {
                 await PathfindrAuth.logout();
                 updateAuthUI();
             });
@@ -1136,6 +1292,8 @@
                     loggedInSection.style.display = 'none';
                     usernameDisplay.textContent = '';
                 }
+
+                updateSplashPlayerCard();
             }
 
             // Listen for auth changes
