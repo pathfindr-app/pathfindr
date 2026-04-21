@@ -11317,7 +11317,8 @@ function initSplashScreen() {
 
     let welcomeVisible = false;
     let introFallbackTimer = null;
-    let revealTransitionTimer = null;
+    let revealCleanupTimer = null;
+    let introProgressPoll = null;
     let introStarted = false;
 
     const revealWelcome = ({ immediate = false } = {}) => {
@@ -11329,9 +11330,13 @@ function initSplashScreen() {
             introFallbackTimer = null;
         }
 
-        if (revealTransitionTimer) {
-            clearTimeout(revealTransitionTimer);
-            revealTransitionTimer = null;
+        if (revealCleanupTimer) {
+            clearTimeout(revealCleanupTimer);
+            revealCleanupTimer = null;
+        }
+        if (introProgressPoll) {
+            clearInterval(introProgressPoll);
+            introProgressPoll = null;
         }
 
         if (introVideo) {
@@ -11363,35 +11368,54 @@ function initSplashScreen() {
         }
 
         splashScreen.classList.add('splash-transitioning');
-        revealTransitionTimer = setTimeout(() => {
-            splashScreen.classList.add('splash-show-welcome');
-            revealTransitionTimer = null;
-        }, 320);
+        splashScreen.classList.add('splash-show-welcome');
+        revealCleanupTimer = setTimeout(() => {
+            splashScreen.classList.remove('splash-transitioning');
+            revealCleanupTimer = null;
+        }, 900);
     };
 
     const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-    const beginIntroPlayback = async ({ withSound = false } = {}) => {
+    const scheduleIntroFallback = () => {
+        if (welcomeVisible) return;
+        const durationMs = Number.isFinite(introVideo?.duration) && introVideo.duration > 0
+            ? Math.ceil(introVideo.duration * 1000) + 1200
+            : 15000;
+
+        if (introFallbackTimer) {
+            clearTimeout(introFallbackTimer);
+        }
+
+        introFallbackTimer = setTimeout(() => {
+            revealWelcome({ immediate: true });
+        }, durationMs);
+    };
+
+    const beginIntroPlayback = async ({ withSound = false, restart = false } = {}) => {
         if (!introVideo || introStarted) return;
         introStarted = true;
 
-        introVideo.currentTime = 0;
+        if (restart) {
+            introVideo.currentTime = 0;
+        }
         introVideo.volume = 1;
         introVideo.muted = !withSound;
 
         try {
             await introVideo.play();
-            if (startAudioBtn) startAudioBtn.classList.add('hidden');
+            if (startAudioBtn) {
+                if (withSound) {
+                    startAudioBtn.classList.add('hidden');
+                } else {
+                    startAudioBtn.classList.remove('hidden');
+                }
+            }
         } catch (error) {
             introStarted = false;
             introVideo.pause();
-            introVideo.currentTime = 0;
             if (withSound && startAudioBtn) {
-                if (introFallbackTimer) {
-                    clearTimeout(introFallbackTimer);
-                    introFallbackTimer = null;
-                }
-                startAudioBtn.classList.remove('hidden');
+                beginIntroPlayback({ withSound: false, restart: true });
                 return;
             }
             revealWelcome({ immediate: true });
@@ -11403,12 +11427,30 @@ function initSplashScreen() {
     } else {
         introVideo.addEventListener('ended', () => revealWelcome(), { once: true });
         introVideo.addEventListener('error', () => revealWelcome({ immediate: true }), { once: true });
+        introVideo.addEventListener('timeupdate', () => {
+            if (!welcomeVisible && Number.isFinite(introVideo.duration) && introVideo.duration > 0 && introVideo.currentTime >= introVideo.duration - 0.08) {
+                revealWelcome();
+            }
+        });
+        introVideo.addEventListener('pause', () => {
+            if (!welcomeVisible && Number.isFinite(introVideo.duration) && introVideo.duration > 0 && introVideo.currentTime >= introVideo.duration - 0.08) {
+                revealWelcome();
+            }
+        });
+        introProgressPoll = setInterval(() => {
+            if (welcomeVisible) return;
+            if (Number.isFinite(introVideo.duration) && introVideo.duration > 0 && introVideo.currentTime >= introVideo.duration - 0.08) {
+                revealWelcome();
+            }
+        }, 250);
 
-        introFallbackTimer = setTimeout(() => {
-            revealWelcome({ immediate: true });
-        }, 15000);
+        introVideo.addEventListener('loadedmetadata', () => {
+            scheduleIntroFallback();
+        }, { once: true });
 
-        beginIntroPlayback({ withSound: true });
+        scheduleIntroFallback();
+
+        beginIntroPlayback({ withSound: true, restart: true });
     }
 
     if (skipBtn) {
@@ -11423,7 +11465,10 @@ function initSplashScreen() {
         startAudioBtn.addEventListener('click', () => {
             SoundEngine.init();
             SoundEngine.uiClick();
-            beginIntroPlayback({ withSound: true });
+            if (introVideo && introVideo.paused) {
+                introStarted = false;
+            }
+            beginIntroPlayback({ withSound: true, restart: true });
         });
     }
 }
