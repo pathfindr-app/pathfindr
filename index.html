@@ -1385,19 +1385,19 @@
                     path({ type: 'Sphere' });
                     ctx.clip();
 
-                    ctx.strokeStyle = 'rgba(111, 240, 226, 0.12)';
-                    ctx.lineWidth = Math.max(0.9, radius * 0.004);
+                    ctx.strokeStyle = 'rgba(111, 240, 226, 0.18)';
+                    ctx.lineWidth = Math.max(1.1, radius * 0.0045);
                     ctx.beginPath();
                     path(graticule);
                     ctx.stroke();
 
-                    ctx.fillStyle = 'rgba(18, 30, 46, 0.86)';
+                    ctx.fillStyle = 'rgba(36, 60, 84, 0.88)';
                     ctx.beginPath();
                     path(dashboardState.countriesFeature);
                     ctx.fill();
 
-                    ctx.strokeStyle = 'rgba(126, 228, 227, 0.28)';
-                    ctx.lineWidth = Math.max(1, radius * 0.005);
+                    ctx.strokeStyle = 'rgba(180, 244, 239, 0.42)';
+                    ctx.lineWidth = Math.max(1.2, radius * 0.0055);
                     ctx.beginPath();
                     path(dashboardState.countryBorders);
                     ctx.stroke();
