@@ -2526,6 +2526,10 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     transform: translateY(0) scale(1);
 }
 
+#splash-screen.splash-transitioning.splash-show-welcome .splash-content {
+    transition-delay: 0.24s;
+}
+
 #splash-screen.splash-show-welcome .splash-video-stage {
     opacity: 0.16;
     transform: scale(1.04);
@@ -2832,6 +2836,16 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 }
 
 @media (max-width: 520px) {
+    .splash-visual-panel {
+        gap: 0.8rem;
+    }
+
+    .splash-logo-frame {
+        width: min(100%, 320px);
+        aspect-ratio: 16 / 9;
+        margin: 0 auto;
+    }
+
     .splash-video-brand {
         left: 1rem;
         right: 1rem;
@@ -2857,6 +2871,10 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     .splash-lead,
     .splash-visual-caption {
         font-size: 0.86rem;
+    }
+
+    .splash-visual-caption {
+        max-width: 20rem;
     }
 
     .splash-pill-row {
