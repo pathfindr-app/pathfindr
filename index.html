@@ -277,30 +277,6 @@
                                             A route-guessing game where city awareness, spatial awareness, and competitive precision all meet in the chase for the highest score.
                                         </p>
                                     </div>
-                                    <div class="splash-reel-card">
-                                        <div class="splash-reel-header">
-                                            <span class="splash-reel-label">Lobby Signal</span>
-                                            <span class="splash-reel-status">Looping intro</span>
-                                        </div>
-                                        <div class="splash-reel-frame">
-                                            <video
-                                                id="splash-lobby-reel"
-                                                class="splash-lobby-reel"
-                                                autoplay
-                                                muted
-                                                loop
-                                                playsinline
-                                                preload="metadata"
-                                                poster="Visual Assets/logo.png"
-                                            >
-                                                <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
-                                            </video>
-                                            <div class="splash-reel-overlay">
-                                                <span class="splash-reel-pip"></span>
-                                                Route feed online
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div class="splash-pill-row">
@@ -452,120 +428,94 @@
                                     </div>
 
                                     <div id="splash-player-member" class="splash-member-stack hidden">
-                                        <div class="pilot-id-card splash-pilot-card">
-                                            <div class="id-card-scanline"></div>
-                                            <div class="id-card-noise"></div>
-
-                                            <div class="id-card-header">
-                                                <span class="id-card-type">NAVIGATOR LICENSE</span>
-                                                <span class="id-card-serial">PATHFINDR-2026</span>
+                                        <div class="splash-member-card">
+                                            <div class="splash-member-card-glow"></div>
+                                            <div class="splash-member-header">
+                                                <div class="splash-member-heading">
+                                                    <span class="player-card-eyebrow">Pathfindr Account</span>
+                                                    <h2 class="splash-member-title">Navigator Console</h2>
+                                                </div>
+                                                <span class="splash-member-chip">Synced</span>
                                             </div>
 
-                                            <div class="id-card-identity">
-                                                <div class="pilot-avatar-frame">
-                                                    <div class="avatar-hex-border"></div>
-                                                    <div class="avatar-glow"></div>
-                                                    <div class="avatar-inner">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                                            <circle cx="12" cy="7" r="4"/>
+                                            <div class="splash-member-identity">
+                                                <div class="splash-member-avatar">
+                                                    <div class="splash-member-avatar-ring"></div>
+                                                    <div class="splash-member-avatar-core">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                                            <circle cx="12" cy="7" r="4"></circle>
                                                         </svg>
                                                     </div>
-                                                    <div class="avatar-ring avatar-ring-1"></div>
-                                                    <div class="avatar-ring avatar-ring-2"></div>
                                                 </div>
-                                                <div class="pilot-details">
-                                                    <div class="callsign-row">
-                                                        <span class="callsign-label">CALLSIGN</span>
-                                                        <div class="callsign-value-row">
-                                                            <span class="callsign-value" id="splash-profile-username">Player</span>
-                                                            <button class="callsign-edit-btn" id="splash-edit-callsign-btn" title="Edit callsign">
-                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                                </svg>
-                                                            </button>
+
+                                                <div class="splash-member-main">
+                                                    <div class="splash-member-label-row">
+                                                        <span class="splash-member-label">Callsign</span>
+                                                        <button class="callsign-edit-btn" id="splash-edit-callsign-btn" title="Edit callsign" type="button">
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <div class="splash-member-name-row">
+                                                        <span class="splash-member-name" id="splash-profile-username">Player</span>
+                                                        <div class="status-badge" id="splash-profile-status-badge">
+                                                            <span class="status-dot"></span>
+                                                            <span class="status-text" id="splash-profile-status">Free</span>
                                                         </div>
                                                     </div>
-                                                    <div class="status-badge" id="splash-profile-status-badge">
-                                                        <span class="status-dot"></span>
-                                                        <span class="status-text" id="splash-profile-status">Free</span>
-                                                    </div>
+                                                    <p class="splash-member-copy">Your live route profile, challenge footprint, and latest city trail in one refined dashboard panel.</p>
                                                 </div>
                                             </div>
 
-                                            <div class="pilot-stats-grid">
-                                                <div class="pilot-stat" data-stat="cities">
-                                                    <div class="stat-bar-bg">
-                                                        <div class="stat-bar-fill" id="splash-profile-cities-fill" style="--fill-percent: 0%"></div>
+                                            <div class="splash-member-metrics">
+                                                <article class="splash-member-stat" data-stat="cities">
+                                                    <span class="splash-member-stat-label">Cities</span>
+                                                    <span class="splash-member-stat-value" id="splash-profile-cities">0</span>
+                                                    <div class="splash-member-stat-track">
+                                                        <div class="splash-member-stat-fill" id="splash-profile-cities-fill" style="--fill-percent: 0%"></div>
                                                     </div>
-                                                    <div class="stat-content">
-                                                        <span class="stat-number" id="splash-profile-cities">0</span>
-                                                        <span class="stat-name">Cities</span>
+                                                </article>
+                                                <article class="splash-member-stat" data-stat="regions">
+                                                    <span class="splash-member-stat-label">Regions</span>
+                                                    <span class="splash-member-stat-value" id="splash-profile-countries">0</span>
+                                                    <div class="splash-member-stat-track">
+                                                        <div class="splash-member-stat-fill" id="splash-profile-countries-fill" style="--fill-percent: 0%"></div>
                                                     </div>
-                                                    <div class="stat-icon-glow"></div>
-                                                </div>
-                                                <div class="pilot-stat" data-stat="regions">
-                                                    <div class="stat-bar-bg">
-                                                        <div class="stat-bar-fill" id="splash-profile-countries-fill" style="--fill-percent: 0%"></div>
+                                                </article>
+                                                <article class="splash-member-stat" data-stat="distance">
+                                                    <span class="splash-member-stat-label">Drawn</span>
+                                                    <span class="splash-member-stat-value" id="splash-profile-distance">0<span class="stat-unit">km</span></span>
+                                                    <div class="splash-member-stat-track">
+                                                        <div class="splash-member-stat-fill" id="splash-profile-distance-fill" style="--fill-percent: 0%"></div>
                                                     </div>
-                                                    <div class="stat-content">
-                                                        <span class="stat-number" id="splash-profile-countries">0</span>
-                                                        <span class="stat-name">Regions</span>
+                                                </article>
+                                                <article class="splash-member-stat" data-stat="efficiency">
+                                                    <span class="splash-member-stat-label">Efficiency</span>
+                                                    <span class="splash-member-stat-value" id="splash-profile-avg-efficiency">0<span class="stat-unit">%</span></span>
+                                                    <div class="splash-member-stat-track">
+                                                        <div class="splash-member-stat-fill" id="splash-profile-efficiency-fill" style="--fill-percent: 0%"></div>
                                                     </div>
-                                                    <div class="stat-icon-glow"></div>
-                                                </div>
-                                                <div class="pilot-stat" data-stat="distance">
-                                                    <div class="stat-bar-bg">
-                                                        <div class="stat-bar-fill" id="splash-profile-distance-fill" style="--fill-percent: 0%"></div>
-                                                    </div>
-                                                    <div class="stat-content">
-                                                        <span class="stat-number" id="splash-profile-distance">0<span class="stat-unit">km</span></span>
-                                                        <span class="stat-name">Drawn</span>
-                                                    </div>
-                                                    <div class="stat-icon-glow"></div>
-                                                </div>
-                                                <div class="pilot-stat" data-stat="efficiency">
-                                                    <div class="stat-bar-bg">
-                                                        <div class="stat-bar-fill" id="splash-profile-efficiency-fill" style="--fill-percent: 0%"></div>
-                                                    </div>
-                                                    <div class="stat-content">
-                                                        <span class="stat-number" id="splash-profile-avg-efficiency">0<span class="stat-unit">%</span></span>
-                                                        <span class="stat-name">Efficiency</span>
-                                                    </div>
-                                                    <div class="stat-icon-glow"></div>
-                                                </div>
+                                                </article>
                                             </div>
 
-                                            <div class="navigation-log">
-                                                <div class="nav-log-frame">
-                                                    <div class="nav-corner nav-corner-tl"></div>
-                                                    <div class="nav-corner nav-corner-tr"></div>
-                                                    <div class="nav-corner nav-corner-bl"></div>
-                                                    <div class="nav-corner nav-corner-br"></div>
+                                            <div class="splash-member-log">
+                                                <div class="splash-member-log-header">
+                                                    <span class="splash-member-log-title">Route Archive</span>
+                                                    <span class="splash-member-log-count" id="splash-journey-rounds">0 rounds</span>
                                                 </div>
-                                                <div class="nav-log-header">
-                                                    <span class="nav-log-label">
-                                                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <circle cx="12" cy="12" r="10"/>
-                                                            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                                                        </svg>
-                                                        NAVIGATION LOG
-                                                    </span>
-                                                    <span class="nav-log-count" id="splash-journey-rounds">0 rounds</span>
-                                                </div>
-                                                <div class="nav-log-list" id="splash-nav-log-list">
+                                                <div class="nav-log-list splash-member-log-list" id="splash-nav-log-list">
                                                     <div class="nav-log-empty">
                                                         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1">
-                                                            <circle cx="12" cy="12" r="10" stroke-dasharray="2 2"/>
-                                                            <circle cx="12" cy="12" r="2"/>
-                                                            <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+                                                            <circle cx="12" cy="12" r="10" stroke-dasharray="2 2"></circle>
+                                                            <circle cx="12" cy="12" r="2"></circle>
+                                                            <path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path>
                                                         </svg>
-                                                        <span>No navigation data yet</span>
+                                                        <span>No route history yet</span>
                                                     </div>
                                                 </div>
-                                                <div class="nav-log-fade"></div>
-                                                <div class="nav-log-scanline"></div>
                                             </div>
                                         </div>
 
@@ -1137,6 +1087,7 @@
     <script src="ads.js"></script>
     <script src="auth.js"></script>
     <script src="analytics.js"></script>
+    <script src="vendor/d3-array.min.js"></script>
     <script src="vendor/d3-geo.min.js"></script>
     <script src="vendor/topojson-client.min.js"></script>
     <script src="payments.js"></script>
@@ -1304,6 +1255,10 @@
                             throw new Error('TopoJSON client not available');
                         }
 
+                        if (typeof d3 === 'undefined' || typeof d3.geoOrthographic !== 'function') {
+                            throw new Error('d3 geo runtime not available');
+                        }
+
                         dashboardState.countriesFeature = topojson.feature(topology, topology.objects.countries);
                         dashboardState.countryBorders = topojson.mesh(
                             topology,
@@ -1343,8 +1298,8 @@
                 const height = dashboardGlobeCanvas.height;
                 const cx = width / 2;
                 const cy = height / 2;
-                const radius = Math.min(width, height) * 0.3;
-                const rotation = now * 0.0018;
+                const radius = Math.min(width, height) * 0.318;
+                const rotation = now * 0.0125;
 
                 ctx.clearRect(0, 0, width, height);
 
@@ -1367,14 +1322,15 @@
                 ctx.fill();
 
                 ctx.save();
+                let projection = null;
                 if (
                     dashboardState.worldDataLoaded &&
                     dashboardState.countriesFeature &&
                     typeof d3 !== 'undefined'
                 ) {
-                    const projection = d3.geoOrthographic()
+                    projection = d3.geoOrthographic()
                         .translate([cx, cy])
-                        .scale(radius * 0.98)
+                        .scale(radius * 0.99)
                         .rotate([-rotation, -18, 0])
                         .clipAngle(90)
                         .precision(0.3);
@@ -1391,15 +1347,21 @@
                     path(graticule);
                     ctx.stroke();
 
-                    ctx.fillStyle = 'rgba(36, 60, 84, 0.88)';
+                    ctx.fillStyle = 'rgba(78, 128, 151, 0.58)';
                     ctx.beginPath();
                     path(dashboardState.countriesFeature);
                     ctx.fill();
 
-                    ctx.strokeStyle = 'rgba(180, 244, 239, 0.42)';
-                    ctx.lineWidth = Math.max(1.2, radius * 0.0055);
+                    ctx.strokeStyle = 'rgba(221, 246, 244, 0.72)';
+                    ctx.lineWidth = Math.max(1.2, radius * 0.0048);
                     ctx.beginPath();
                     path(dashboardState.countryBorders);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+                    ctx.lineWidth = Math.max(1, radius * 0.003);
+                    ctx.beginPath();
+                    path({ type: 'Sphere' });
                     ctx.stroke();
 
                     ctx.restore();
@@ -1431,30 +1393,58 @@
 
                 const pins = dashboardState.pins || [];
                 pins.forEach((pin, index) => {
-                    const lat = (pin.lat || 0) * Math.PI / 180;
-                    const lng = ((pin.lng || 0) * Math.PI / 180) + (rotation * Math.PI / 180);
-                    const x3d = Math.cos(lat) * Math.sin(lng);
-                    const y3d = Math.sin(lat);
-                    const z3d = Math.cos(lat) * Math.cos(lng);
+                    const latValue = pin.lat || 0;
+                    const lngValue = pin.lng || 0;
+                    let px;
+                    let py;
+                    let visibility = 0.5;
 
-                    if (z3d < -0.24) return;
+                    if (projection) {
+                        const projected = projection([lngValue, latValue]);
+                        if (!projected) return;
+                        [px, py] = projected;
 
-                    const px = cx + x3d * radius;
-                    const py = cy - y3d * radius;
-                    const scale = 0.55 + ((z3d + 1) / 2) * 0.85;
-                    const pulse = 0.75 + 0.25 * Math.sin(now * 0.002 + index * 0.9);
-                    const pinRadius = Math.max(2.2, radius * 0.022 * scale);
+                        const rotateLambda = (-rotation * Math.PI) / 180;
+                        const rotatePhi = (-18 * Math.PI) / 180;
+                        const lambda = (lngValue * Math.PI) / 180;
+                        const phi = (latValue * Math.PI) / 180;
+                        const x = Math.cos(phi) * Math.cos(lambda);
+                        const y = Math.cos(phi) * Math.sin(lambda);
+                        const z = Math.sin(phi);
+                        const x1 = x * Math.cos(rotateLambda) - y * Math.sin(rotateLambda);
+                        const y1 = x * Math.sin(rotateLambda) + y * Math.cos(rotateLambda);
+                        const z1 = z;
+                        const x2 = x1 * Math.cos(rotatePhi) + z1 * Math.sin(rotatePhi);
+                        const z2 = -x1 * Math.sin(rotatePhi) + z1 * Math.cos(rotatePhi);
+                        visibility = x2;
+                        if (visibility < 0.03) return;
+                        visibility = Math.min(1, Math.max(0.18, visibility));
+                    } else {
+                        const lat = (latValue * Math.PI) / 180;
+                        const lng = ((lngValue + rotation) * Math.PI) / 180;
+                        const x3d = Math.cos(lat) * Math.sin(lng);
+                        const y3d = Math.sin(lat);
+                        const z3d = Math.cos(lat) * Math.cos(lng);
+
+                        if (z3d < -0.24) return;
+                        px = cx + x3d * radius;
+                        py = cy - y3d * radius;
+                        visibility = (z3d + 1) / 2;
+                    }
+                    const scale = 0.6 + visibility * 0.74;
+                    const pulse = 0.92 + 0.08 * Math.sin(now * 0.0012 + index * 0.9);
+                    const pinRadius = Math.max(1.15, radius * 0.0072 * scale);
 
                     ctx.beginPath();
-                    ctx.arc(px, py, pinRadius * 2.4 * pulse, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(255, 96, 166, ${0.06 + scale * 0.12})`;
+                    ctx.arc(px, py, pinRadius * 1.85 * pulse, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 96, 166, ${0.02 + scale * 0.045})`;
                     ctx.fill();
 
                     ctx.beginPath();
                     ctx.arc(px, py, pinRadius, 0, Math.PI * 2);
-                    ctx.fillStyle = z3d > 0.35 ? 'rgba(111, 240, 226, 0.96)' : 'rgba(255, 152, 205, 0.9)';
-                    ctx.shadowColor = z3d > 0.35 ? 'rgba(111, 240, 226, 0.65)' : 'rgba(255, 96, 166, 0.62)';
-                    ctx.shadowBlur = pinRadius * 4;
+                    ctx.fillStyle = visibility > 0.54 ? 'rgba(151, 244, 236, 0.94)' : 'rgba(255, 178, 214, 0.9)';
+                    ctx.shadowColor = visibility > 0.54 ? 'rgba(111, 240, 226, 0.26)' : 'rgba(255, 96, 166, 0.2)';
+                    ctx.shadowBlur = pinRadius * 1.8;
                     ctx.fill();
                     ctx.shadowBlur = 0;
                 });
