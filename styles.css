@@ -3146,12 +3146,44 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 }
 
 @media (min-width: 1440px) {
+    .splash-content {
+        width: min(1780px, calc(100% - 2rem));
+        max-width: 1780px;
+    }
+
     .splash-welcome-shell {
-        grid-template-columns: minmax(0, 1.75fr) minmax(440px, 0.82fr);
+        grid-template-columns: minmax(560px, 1.34fr) minmax(370px, 0.78fr) minmax(430px, 0.9fr);
+        align-items: stretch;
+    }
+
+    .splash-copy-panel {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .splash-side-stack {
+        display: contents;
+    }
+
+    .splash-dashboard-panel {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: start;
+    }
+
+    .splash-player-panel {
+        grid-column: 3;
+        grid-row: 1;
+        align-self: stretch;
+        min-width: 0;
+    }
+
+    .dashboard-viewport-card {
+        padding: 0.9rem;
     }
 
     .dashboard-viewport-shell {
-        min-height: 388px;
+        min-height: 360px;
     }
 
     .splash-title {
@@ -3160,6 +3192,48 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
     .splash-hero-band {
         grid-template-columns: 1fr;
+    }
+
+    .splash-member-stack {
+        height: 100%;
+    }
+
+    .splash-member-card {
+        gap: 0.95rem;
+        min-height: 100%;
+    }
+
+    .splash-member-identity {
+        grid-template-columns: 70px minmax(0, 1fr) auto;
+    }
+
+    .splash-member-name {
+        font-size: 1.22rem;
+    }
+
+    .splash-member-copy {
+        max-width: 34ch;
+    }
+
+    .splash-member-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
+    }
+
+    .splash-member-stat {
+        padding: 0.82rem 0.78rem 0.76rem;
+    }
+
+    .splash-member-stat-value {
+        font-size: 1.16rem;
+    }
+
+    .splash-member-log {
+        flex: 1 1 auto;
+    }
+
+    .splash-member-log-list {
+        max-height: 240px;
     }
 }
 
