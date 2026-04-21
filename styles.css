@@ -2919,9 +2919,20 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     min-width: 0;
 }
 
-.player-card-shell {
+.splash-guest-card,
+.splash-member-stack {
     display: grid;
     gap: 1rem;
+}
+
+.player-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.splash-guest-card {
     padding: 1.15rem;
     border-radius: 28px;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2931,13 +2942,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     box-shadow:
         0 18px 38px rgba(0, 0, 0, 0.26),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.player-card-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
 }
 
 .player-card-eyebrow {
@@ -3097,6 +3101,39 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     line-height: 1.45;
 }
 
+.splash-pilot-card {
+    box-shadow:
+        0 22px 48px rgba(0, 0, 0, 0.34),
+        0 0 60px rgba(65, 217, 217, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.splash-pilot-card .nav-log-list {
+    max-height: 170px;
+}
+
+.splash-profile-mode-actions {
+    margin-bottom: 0;
+    padding: 0.9rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.splash-profile-actions {
+    gap: 0.9rem;
+}
+
+.splash-profile-actions .btn-holo-upgrade {
+    min-height: 58px;
+}
+
+.splash-profile-actions .btn-holo-secondary {
+    min-height: 50px;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+}
+
 /* Mobile adjustments for splash */
 @media (min-width: 861px) {
     #splash-screen.splash-show-welcome {
@@ -3223,6 +3260,10 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     .player-identity-row,
     .player-card-actions {
         align-items: stretch;
+        flex-direction: column;
+    }
+
+    .splash-profile-mode-actions .mode-action-buttons {
         flex-direction: column;
     }
 
