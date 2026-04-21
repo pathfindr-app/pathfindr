@@ -6930,6 +6930,9 @@ function initMap() {
     // Unified map change handler
     function onMapChange() {
         invalidateProjectedCaches();
+        if (window.PathfindrDashboard?.updateMobileCompass) {
+            window.PathfindrDashboard.updateMobileCompass();
+        }
     }
 
     function onMapRender() {

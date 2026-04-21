@@ -123,6 +123,19 @@
                 </button>
             </div>
             <div class="hud-section hud-user">
+                <button id="mobile-compass-btn" class="hud-mobile-compass" title="Reset north">
+                    <span class="hud-mobile-compass-ring">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                            <circle cx="12" cy="12" r="8.5"></circle>
+                            <path d="M12 5.2v2.8"></path>
+                            <path d="M12 16v2.8"></path>
+                            <path d="M5.2 12H8"></path>
+                            <path d="M16 12h2.8"></path>
+                        </svg>
+                        <span class="hud-mobile-compass-needle"></span>
+                    </span>
+                    <span id="mobile-compass-label" class="hud-mobile-compass-label">N</span>
+                </button>
                 <button id="user-btn" class="hud-btn" title="Account">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -517,19 +530,19 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div class="profile-actions splash-profile-actions" id="splash-profile-actions">
-                                            <button id="splash-remove-ads-btn" class="btn-holo-upgrade">
-                                                <span class="btn-holo-bg"></span>
-                                                <span class="btn-holo-text">
-                                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                                                    </svg>
-                                                    Go Premium · $2
-                                                </span>
-                                            </button>
-                                            <button id="splash-auth-signout-btn" class="btn-holo-secondary">Sign Out</button>
+                                            <div class="profile-actions splash-profile-actions" id="splash-profile-actions">
+                                                <button id="splash-remove-ads-btn" class="btn-holo-upgrade">
+                                                    <span class="btn-holo-bg"></span>
+                                                    <span class="btn-holo-text">
+                                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                                        </svg>
+                                                        Go Premium · $2
+                                                    </span>
+                                                </button>
+                                                <button id="splash-auth-signout-btn" class="btn-holo-secondary">Sign Out</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </section>
@@ -1125,6 +1138,8 @@
             const dashboardShowGlobeBtn = document.getElementById('dashboard-show-globe-btn');
             const dashboardShowMapBtn = document.getElementById('dashboard-show-map-btn');
             const dashboardResumeBtn = document.getElementById('dashboard-resume-btn');
+            const mobileCompassBtn = document.getElementById('mobile-compass-btn');
+            const mobileCompassLabel = document.getElementById('mobile-compass-label');
             const dashboardViewportCopy = document.getElementById('dashboard-viewport-copy');
             const dashboardActiveCity = document.getElementById('dashboard-active-city');
             const mobileLobbyTabs = Array.from(document.querySelectorAll('.mobile-lobby-tab'));
@@ -1208,6 +1223,20 @@
                         });
                     });
                 }
+            };
+
+            const updateMobileCompass = () => {
+                if (!mobileCompassBtn || typeof GameState === 'undefined' || !GameState.map || typeof GameState.map.getBearing !== 'function') {
+                    return;
+                }
+
+                const bearing = GameState.map.getBearing() || 0;
+                mobileCompassBtn.style.setProperty('--mobile-bearing', `${bearing}deg`);
+
+                const normalized = ((bearing % 360) + 360) % 360;
+                const headings = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const headingIndex = Math.round(normalized / 45) % headings.length;
+                if (mobileCompassLabel) mobileCompassLabel.textContent = headings[headingIndex];
             };
 
             const getDashboardMapStyle = () => ({
@@ -1569,7 +1598,10 @@
                     splashScreen.classList.add('splash-show-welcome');
                     splashScreen.classList.remove('hidden');
                 }
-                if (dashboardResumeBtn) dashboardResumeBtn.classList.toggle('hidden', !activeGame);
+                if (dashboardResumeBtn) {
+                    dashboardResumeBtn.classList.toggle('hidden', !activeGame);
+                    dashboardResumeBtn.classList.toggle('is-armed', activeGame);
+                }
                 setMobileLobbyPanel(activeGame ? 'atlas' : 'overview');
                 setDashboardView(activeGame ? preferredView : 'globe');
             };
@@ -1592,7 +1624,11 @@
                     syncDashboardMiniMap();
                 },
                 showLobby() {
-                    setDashboardOverlayState({ activeGame: false, preferredView: 'globe' });
+                    const activeGame = hasLiveSession();
+                    setDashboardOverlayState({ activeGame, preferredView: activeGame ? 'map' : 'globe' });
+                },
+                updateMobileCompass() {
+                    updateMobileCompass();
                 }
             };
 
@@ -1723,7 +1759,7 @@
             // Open auth modal
             bindPress(userBtn, () => {
                 if (hasLiveSession()) {
-                    setDashboardOverlayState({ activeGame: true, preferredView: 'globe' });
+                    setDashboardOverlayState({ activeGame: true, preferredView: 'map' });
                     return;
                 }
                 PathfindrAuth.showAuthModal(_isSignUp ? 'signup' : 'login');
@@ -1832,6 +1868,16 @@
                 hideDashboardOverlay();
             });
 
+            bindPress(mobileCompassBtn, () => {
+                if (!GameState?.map || typeof GameState.map.easeTo !== 'function') return;
+                GameState.map.easeTo({
+                    bearing: 0,
+                    duration: 600,
+                    easing: (t) => 1 - Math.pow(1 - t, 3)
+                });
+                updateMobileCompass();
+            });
+
             mobileLobbyTabs.forEach((tab) => {
                 bindPress(tab, () => {
                     setMobileLobbyPanel(tab.dataset.mobilePanel || 'overview');
@@ -1853,10 +1899,12 @@
                 if (dashboardState.miniMap) {
                     dashboardState.miniMap.resize();
                 }
+                updateMobileCompass();
             });
 
             ensureDashboardGlobe();
             setMobileLobbyPanel('overview');
+            updateMobileCompass();
 
             // Social login buttons
             document.querySelectorAll('.social-btn').forEach(btn => {
