@@ -2598,8 +2598,8 @@ const SoundEngine = {
 
     // Load soundtrack (separate to not block other audio)
     async loadSoundtrack() {
-        this.musicTrackQueue = this.createMusicQueue({ openingTrackFirst: true });
-        this.primeMusicTrack({ openingTrackFirst: true });
+        this.musicTrackQueue = this.createMusicQueue();
+        this.primeMusicTrack();
         console.log('[Sound] Music playlist ready');
     },
 
@@ -2612,14 +2612,8 @@ const SoundEngine = {
         return shuffled;
     },
 
-    createMusicQueue({ openingTrackFirst = false } = {}) {
-        const tracks = [...MUSIC_TRACKS];
-        if (!openingTrackFirst) {
-            return this.shuffleTracks(tracks);
-        }
-
-        const [openingTrack, ...rest] = tracks;
-        return [openingTrack, ...this.shuffleTracks(rest)];
+    createMusicQueue() {
+        return this.shuffleTracks(MUSIC_TRACKS);
     },
 
     syncMutePreference() {
@@ -2661,19 +2655,17 @@ const SoundEngine = {
         return audio;
     },
 
-    getNextMusicTrack({ openingTrackFirst = false } = {}) {
+    getNextMusicTrack() {
         if (this.musicTrackQueue.length === 0) {
-            this.musicTrackQueue = this.createMusicQueue({
-                openingTrackFirst: openingTrackFirst && !this.musicStartedOnce,
-            });
+            this.musicTrackQueue = this.createMusicQueue();
         }
         return this.musicTrackQueue.shift();
     },
 
-    primeMusicTrack({ openingTrackFirst = false } = {}) {
+    primeMusicTrack() {
         if (this.currentMusicTrack) return;
 
-        const nextTrack = this.getNextMusicTrack({ openingTrackFirst });
+        const nextTrack = this.getNextMusicTrack();
         if (!nextTrack) return;
 
         const audio = this.ensureMusicPlayer();
@@ -2709,7 +2701,7 @@ const SoundEngine = {
         const audio = this.ensureMusicPlayer();
 
         if (!this.currentMusicTrack || !audio.getAttribute('src')) {
-            this.primeMusicTrack({ openingTrackFirst: !this.musicStartedOnce });
+            this.primeMusicTrack();
         }
 
         this.soundtrackFadeToken = 0;
@@ -11325,6 +11317,7 @@ function initSplashScreen() {
 
     let welcomeVisible = false;
     let introFallbackTimer = null;
+    let revealTransitionTimer = null;
     let introStarted = false;
 
     const revealWelcome = ({ immediate = false } = {}) => {
@@ -11334,6 +11327,11 @@ function initSplashScreen() {
         if (introFallbackTimer) {
             clearTimeout(introFallbackTimer);
             introFallbackTimer = null;
+        }
+
+        if (revealTransitionTimer) {
+            clearTimeout(revealTransitionTimer);
+            revealTransitionTimer = null;
         }
 
         if (introVideo) {
@@ -11356,6 +11354,7 @@ function initSplashScreen() {
 
         if (immediate) {
             splashScreen.classList.add('splash-no-motion');
+            splashScreen.classList.remove('splash-transitioning');
             splashScreen.classList.add('splash-show-welcome');
             requestAnimationFrame(() => {
                 splashScreen.classList.remove('splash-no-motion');
@@ -11363,7 +11362,11 @@ function initSplashScreen() {
             return;
         }
 
-        splashScreen.classList.add('splash-show-welcome');
+        splashScreen.classList.add('splash-transitioning');
+        revealTransitionTimer = setTimeout(() => {
+            splashScreen.classList.add('splash-show-welcome');
+            revealTransitionTimer = null;
+        }, 320);
     };
 
     const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -11435,6 +11438,7 @@ function showModeSelector() {
 
     if (splashScreen) {
         splashScreen.classList.remove('hidden');
+        splashScreen.classList.remove('splash-transitioning');
         splashScreen.classList.add('splash-show-welcome');
     }
 

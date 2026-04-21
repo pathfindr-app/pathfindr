@@ -2402,6 +2402,19 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     transition: opacity 0.75s ease, transform 0.9s ease, filter 0.9s ease;
 }
 
+.splash-video-stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.18), transparent 28%),
+        linear-gradient(140deg, rgba(255, 107, 157, 0.22), transparent 42%, rgba(65, 217, 217, 0.2));
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 0.45s ease, transform 0.6s ease;
+    pointer-events: none;
+}
+
 .splash-intro-video {
     width: 100%;
     height: 100%;
@@ -2519,6 +2532,17 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     filter: blur(12px);
 }
 
+#splash-screen.splash-transitioning .splash-video-stage {
+    opacity: 0.42;
+    transform: scale(1.08);
+    filter: blur(5px) saturate(1.12);
+}
+
+#splash-screen.splash-transitioning .splash-video-stage::after {
+    opacity: 0.92;
+    transform: scale(1);
+}
+
 #splash-screen.splash-show-welcome .splash-skip-btn {
     opacity: 0;
     pointer-events: none;
@@ -2632,6 +2656,21 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     text-align: left;
     gap: 0;
     min-width: 0;
+    transition: transform 0.6s ease, opacity 0.6s ease;
+}
+
+.splash-visual-panel {
+    transition: transform 0.6s ease, opacity 0.6s ease;
+}
+
+#splash-screen.splash-transitioning .splash-visual-panel {
+    transform: translateY(14px) scale(0.985);
+    opacity: 0.84;
+}
+
+#splash-screen.splash-transitioning .splash-copy-panel {
+    transform: translateY(8px);
+    opacity: 0.78;
 }
 
 .splash-version {
