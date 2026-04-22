@@ -7515,6 +7515,9 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, reques
         if (isStale()) return;
         document.getElementById('current-location').textContent = location.name;
         hideLoading();
+        if (location?.name && GameState.gameMode !== 'explorer' && GameState.gameMode !== 'visualizer') {
+            CityFacts.startTicker(location);
+        }
 
         // Handle different game modes after road network loads
         if (GameState.gameMode === 'explorer') {
@@ -7668,6 +7671,9 @@ function startGame() {
 
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
+    if (GameState.currentCity?.name) {
+        CityFacts.startTicker(GameState.currentCity);
+    }
 
     // Analytics: Track game start and first round
     if (typeof PathfindrAnalytics !== 'undefined') {
@@ -11856,6 +11862,75 @@ async function navigateToCity(city) {
     }
 }
 
+function hasInterruptibleRouteInProgress() {
+    const phase = typeof GameController !== 'undefined' ? GameController.phase : null;
+    return Boolean(
+        GameState.gameStarted ||
+        (Array.isArray(GameState.userPath) && GameState.userPath.length > 1) ||
+        GameState.visualizerState?.active ||
+        GameState.gameMode === 'explorer' ||
+        phase === GamePhase.PLAYING ||
+        phase === GamePhase.VISUALIZING
+    );
+}
+
+async function confirmMapChange(city) {
+    const modal = document.getElementById('city-change-modal');
+    const copyEl = document.getElementById('city-change-copy');
+    const currentEl = document.getElementById('city-change-current');
+    const nextEl = document.getElementById('city-change-next');
+    const confirmBtn = document.getElementById('city-change-confirm');
+    const cancelBtn = document.getElementById('city-change-cancel');
+
+    if (!modal || !confirmBtn || !cancelBtn) return true;
+    if (!hasInterruptibleRouteInProgress()) return true;
+
+    const currentCityName = GameState.currentCity?.name || 'Current route';
+    const nextCityName = `${city.name}${city.country ? `, ${city.country}` : ''}`;
+
+    if (currentEl) currentEl.textContent = currentCityName;
+    if (nextEl) nextEl.textContent = nextCityName;
+    if (copyEl) {
+        copyEl.textContent = `You are mid-run in ${currentCityName}. Loading ${nextCityName} will reset the active route and move the session to a new map.`;
+    }
+
+    modal.classList.remove('hidden');
+
+    return new Promise((resolve) => {
+        let settled = false;
+
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKeydown);
+        };
+
+        const finish = (accepted) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(accepted);
+        };
+
+        const onConfirm = () => finish(true);
+        const onCancel = () => finish(false);
+        const onBackdrop = (event) => {
+            if (event.target === modal) finish(false);
+        };
+        const onKeydown = (event) => {
+            if (event.key === 'Escape') finish(false);
+            if (event.key === 'Enter') finish(true);
+        };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onKeydown);
+    });
+}
+
 // =============================================================================
 // INLINE LOCATION SEARCH - Click location to search in any mode
 // =============================================================================
@@ -11958,11 +12033,14 @@ function initInlineLocationSearch() {
 
                     // Add click handlers
                     resultsEl.querySelectorAll('.inline-search-result').forEach(item => {
-                        item.addEventListener('click', () => {
+                        item.addEventListener('click', async () => {
                             const lat = parseFloat(item.dataset.lat);
                             const lng = parseFloat(item.dataset.lng);
                             const name = item.dataset.name;
                             const country = item.dataset.country;
+
+                            const shouldProceed = await confirmMapChange({ name, lat, lng, country });
+                            if (!shouldProceed) return;
 
                             navigateToCity({ name, lat, lng, country });
                             closeSearch();
@@ -14966,6 +15044,7 @@ function showResults() {
     SoundEngine.slide();
     document.getElementById('results-panel').classList.add('visible');
     requestPresentationSync();
+    CityFacts.stopTicker();
 
     // Show a city fact in the results panel
     if (GameState.currentCity?.name) {
@@ -14994,6 +15073,10 @@ function showResults() {
 function hideResults() {
     document.getElementById('results-panel').classList.remove('visible');
     requestPresentationSync();
+
+    if (GameState.gameMode === 'competitive' && GameState.currentCity?.name && GameState.gameStarted) {
+        CityFacts.startTicker(GameState.currentCity);
+    }
 
     // Hide banner ad when leaving round recap
     if (typeof PathfindrAds !== 'undefined') {

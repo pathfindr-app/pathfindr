@@ -414,7 +414,12 @@
                                         </div>
                                         <div class="dashboard-viewport-footer">
                                             <p id="dashboard-viewport-copy">Cities pulse across the globe so the lobby feels alive before you even launch a run.</p>
-                                            <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">Resume Run</button>
+                                            <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">
+                                                <span class="resume-btn-core">
+                                                    <span class="resume-btn-rings" aria-hidden="true"></span>
+                                                    <span>Resume Run</span>
+                                                </span>
+                                            </button>
                                         </div>
                                     </div>
                                     <div class="splash-visual-caption">
@@ -574,6 +579,38 @@
                     </div>
                     <div class="ticker-content">
                         <span class="ticker-text" id="ticker-text"></span>
+                    </div>
+                </div>
+
+                <div id="city-change-modal" class="overlay hidden">
+                    <div class="overlay-content city-change-modal">
+                        <div class="city-change-frame">
+                            <span class="city-change-kicker">Route Shift Check</span>
+                            <h2>Change the map?</h2>
+                            <p id="city-change-copy" class="city-change-copy">
+                                You have an active route in progress. Loading a new city will reset the current run.
+                            </p>
+                            <div class="city-change-cities">
+                                <div class="city-change-city">
+                                    <span class="city-change-label">Current</span>
+                                    <strong id="city-change-current">Current Route</strong>
+                                </div>
+                                <div class="city-change-separator" aria-hidden="true">
+                                    <span></span>
+                                </div>
+                                <div class="city-change-city">
+                                    <span class="city-change-label">Next</span>
+                                    <strong id="city-change-next">New City</strong>
+                                </div>
+                            </div>
+                            <div class="city-change-actions">
+                                <button id="city-change-cancel" class="btn-holo-secondary" type="button">Keep Current Route</button>
+                                <button id="city-change-confirm" class="btn-holo-upgrade" type="button">
+                                    <span class="btn-holo-bg"></span>
+                                    <span class="btn-holo-text">Change Map</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
