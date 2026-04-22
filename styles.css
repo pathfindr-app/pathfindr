@@ -2894,8 +2894,8 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
         grid-template-areas:
             "hero"
             "pills"
-            "atlas"
             "modes"
+            "atlas"
             "ops";
         align-content: start;
         gap: 0.9rem;
