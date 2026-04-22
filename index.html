@@ -298,6 +298,48 @@
                                     <span class="splash-pill">Community Driven</span>
                                 </div>
 
+                                <div class="splash-dashboard-panel mobile-lobby-panel" data-mobile-panel="atlas">
+                                    <div class="dashboard-viewport-card">
+                                        <div class="dashboard-viewport-header">
+                                            <div class="dashboard-viewport-heading">
+                                                <span class="dashboard-viewport-eyebrow">Pathfindr Atlas</span>
+                                                <h2>Community Globe</h2>
+                                            </div>
+                                            <div class="dashboard-toggle-group" role="tablist" aria-label="Dashboard viewport">
+                                                <button id="dashboard-show-globe-btn" class="dashboard-toggle-btn is-active" type="button">Globe</button>
+                                                <button id="dashboard-show-map-btn" class="dashboard-toggle-btn" type="button">Current Map</button>
+                                            </div>
+                                        </div>
+                                        <div class="dashboard-viewport-shell">
+                                            <canvas id="dashboard-globe-canvas" class="dashboard-viewport-layer"></canvas>
+                                            <div id="dashboard-map-preview" class="dashboard-map-preview dashboard-viewport-layer hidden"></div>
+                                            <div id="dashboard-map-empty" class="dashboard-map-empty hidden">
+                                                Open any run, hit menu, and your current map will dock here with a wider tactical view.
+                                            </div>
+                                            <div class="dashboard-viewport-overlay">
+                                                <span class="dashboard-status-pill">
+                                                    <span class="dashboard-status-dot"></span>
+                                                    Community pins online
+                                                </span>
+                                                <span id="dashboard-active-city" class="dashboard-active-city">Lobby overview</span>
+                                            </div>
+                                        </div>
+                                        <div class="dashboard-viewport-footer">
+                                            <p id="dashboard-viewport-copy">Cities pulse across the globe so the lobby feels alive before you even launch a run.</p>
+                                            <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">
+                                                <span class="resume-btn-core">
+                                                    <span class="resume-btn-rings" aria-hidden="true"></span>
+                                                    <span>Resume Run</span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="splash-visual-caption">
+                                        <span class="splash-caption-label">Current brief</span>
+                                        <p>A route-guessing game where city awareness, spatial awareness, and competitive precision all meet to compete for the highest score.</p>
+                                    </div>
+                                </div>
+
                                 <div class="splash-play-shell">
                                     <div class="splash-play-header">
                                         <span class="splash-play-kicker">Play</span>
@@ -393,48 +435,6 @@
                             </div>
 
                             <aside class="splash-side-stack">
-                                <div class="splash-dashboard-panel mobile-lobby-panel" data-mobile-panel="atlas">
-                                    <div class="dashboard-viewport-card">
-                                        <div class="dashboard-viewport-header">
-                                            <div class="dashboard-viewport-heading">
-                                                <span class="dashboard-viewport-eyebrow">Pathfindr Atlas</span>
-                                                <h2>Community Globe</h2>
-                                            </div>
-                                            <div class="dashboard-toggle-group" role="tablist" aria-label="Dashboard viewport">
-                                                <button id="dashboard-show-globe-btn" class="dashboard-toggle-btn is-active" type="button">Globe</button>
-                                                <button id="dashboard-show-map-btn" class="dashboard-toggle-btn" type="button">Current Map</button>
-                                            </div>
-                                        </div>
-                                        <div class="dashboard-viewport-shell">
-                                            <canvas id="dashboard-globe-canvas" class="dashboard-viewport-layer"></canvas>
-                                            <div id="dashboard-map-preview" class="dashboard-map-preview dashboard-viewport-layer hidden"></div>
-                                            <div id="dashboard-map-empty" class="dashboard-map-empty hidden">
-                                                Open any run, hit menu, and your current map will dock here with a wider tactical view.
-                                            </div>
-                                            <div class="dashboard-viewport-overlay">
-                                                <span class="dashboard-status-pill">
-                                                    <span class="dashboard-status-dot"></span>
-                                                    Community pins online
-                                                </span>
-                                                <span id="dashboard-active-city" class="dashboard-active-city">Lobby overview</span>
-                                            </div>
-                                        </div>
-                                        <div class="dashboard-viewport-footer">
-                                            <p id="dashboard-viewport-copy">Cities pulse across the globe so the lobby feels alive before you even launch a run.</p>
-                                            <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">
-                                                <span class="resume-btn-core">
-                                                    <span class="resume-btn-rings" aria-hidden="true"></span>
-                                                    <span>Resume Run</span>
-                                                </span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="splash-visual-caption">
-                                        <span class="splash-caption-label">Current brief</span>
-                                        <p>A route-guessing game where city awareness, spatial awareness, and competitive precision all meet to compete for the highest score.</p>
-                                    </div>
-                                </div>
-
                                 <section class="splash-player-panel mobile-lobby-panel" id="splash-player-panel" data-mobile-panel="license">
                                     <div id="splash-player-guest" class="splash-guest-card">
                                         <div class="player-card-header">
