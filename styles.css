@@ -2701,9 +2701,96 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     text-transform: uppercase;
 }
 
+.splash-play-shell {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+        radial-gradient(circle at top left, rgba(255, 107, 157, 0.08), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(65, 217, 217, 0.08), transparent 40%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 18px 42px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.splash-play-shell::before,
+.splash-play-shell::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+}
+
+.splash-play-shell::before {
+    inset: 14px;
+    border-radius: 24px;
+    border: 1px dashed rgba(129, 233, 227, 0.12);
+}
+
+.splash-play-shell::after {
+    inset: auto 1.2rem 1rem auto;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px),
+        radial-gradient(circle, rgba(255, 107, 157, 0.12), transparent 64%);
+    background-size: 12px 12px, 100% 100%;
+    opacity: 0.3;
+    filter: blur(0.3px);
+}
+
+.splash-play-header {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    align-items: center;
+}
+
+.splash-play-kicker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 108px;
+    min-height: 108px;
+    padding: 1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(120, 239, 231, 0.2);
+    background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 62%),
+        radial-gradient(circle at center, rgba(65, 217, 217, 0.18), transparent 74%);
+    color: #f6fbfc;
+    font-family: var(--font-sans-premium);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+    box-shadow:
+        inset 0 0 0 10px rgba(255, 255, 255, 0.018),
+        0 0 0 1px rgba(255, 255, 255, 0.03),
+        0 18px 32px rgba(0, 0, 0, 0.2);
+}
+
+.splash-play-copy {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    max-width: 38rem;
+    color: rgba(222, 229, 233, 0.72);
+    font-size: 0.88rem;
+    line-height: 1.7;
+}
+
 .splash-mode-panel {
     width: 100%;
-    margin-top: 0.2rem;
+    margin-top: 0;
 }
 
 .splash-mode-panel .mode-options {
@@ -2716,10 +2803,13 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     backdrop-filter: blur(18px);
     min-height: 170px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.04), transparent 42%);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         0 14px 32px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
 }
 
 .splash-mode-panel .mode-btn:hover {
@@ -2746,7 +2836,7 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     justify-content: flex-end;
     gap: 0.55rem;
     height: 100%;
-    padding: 1.15rem 1.15rem 1.2rem;
+    padding: 1.25rem 1.15rem 1.2rem;
 }
 
 .splash-mode-panel .mode-desc {
@@ -4442,6 +4532,26 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
         grid-template-columns: 1fr;
     }
 
+    .splash-play-shell {
+        padding: 0.85rem;
+        border-radius: 24px;
+    }
+
+    .splash-play-header {
+        grid-template-columns: 1fr;
+        gap: 0.7rem;
+    }
+
+    .splash-play-kicker {
+        min-width: 0;
+        min-height: 68px;
+        width: 100%;
+        border-radius: 20px;
+        justify-content: flex-start;
+        padding: 0.85rem 1rem;
+        font-size: 1.12rem;
+    }
+
     .splash-mode-panel .mode-btn.mode-challenge,
     .splash-mode-panel .mode-btn.mode-classic,
     .splash-mode-panel .mode-btn.mode-explorer,
@@ -5108,7 +5218,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
 /* Fullscreen active state - hide UI elements */
 body.fullscreen-mode #gameplay-hud,
-body.fullscreen-mode .facts-ticker,
 body.fullscreen-mode .fullscreen-btn {
     opacity: 0;
     pointer-events: none;

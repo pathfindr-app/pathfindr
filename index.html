@@ -284,10 +284,10 @@
                                     <div class="splash-hero-copy">
                                         <h1 class="splash-title">Welcome, Pathfindr</h1>
                                         <p class="splash-lead">
-                                            Visit a real city, trust your instincts, and race from point A to point B as fast as you can before the cleanest possible line beats you there.
+                                            Visit a real city, trust your navigation instinct, and trace the route you believe gets from point A to point B most efficiently.
                                         </p>
                                         <p class="splash-support-copy">
-                                            A route-guessing game where city awareness, spatial awareness, and competitive precision all meet in the chase for the highest score.
+                                            Read the streets, commit to a line, and see how your spatial judgment compares to the cleanest algorithmic path through the city.
                                         </p>
                                     </div>
                                 </div>
@@ -298,90 +298,97 @@
                                     <span class="splash-pill">Community Driven</span>
                                 </div>
 
-                                <div class="splash-mode-panel splash-command-deck">
-                                    <div class="mode-options">
-                                        <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
-                                            <span id="challenge-badge" class="challenge-badge">HOURLY</span>
-                                            <div class="mode-bg"></div>
-                                            <div class="mode-content">
-                                                <div class="mode-icon">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                                        <path d="M2 17l10 5 10-5"/>
-                                                        <path d="M2 12l10 5 10-5"/>
-                                                    </svg>
-                                                </div>
-                                                <span class="mode-title">Hourly Challenge</span>
-                                                <span id="challenge-desc" class="mode-desc">Compete globally · New challenge every hour</span>
-                                            </div>
-                                        </button>
-                                        <button class="mode-btn mode-classic" data-mode="competitive">
-                                            <div class="mode-bg"></div>
-                                            <div class="mode-content">
-                                                <div class="mode-icon">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
-                                                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
-                                                        <path d="M4 22h16"/>
-                                                        <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
-                                                        <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
-                                                    </svg>
-                                                </div>
-                                                <span class="mode-title">Pathfindr Classic</span>
-                                                <span class="mode-desc">5 cities · 5 chances · Find the shortest path</span>
-                                            </div>
-                                        </button>
-                                        <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
-                                            <span class="premium-tag">PRO</span>
-                                            <div class="mode-bg"></div>
-                                            <div class="mode-content">
-                                                <div class="mode-icon">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <circle cx="12" cy="12" r="10"/>
-                                                        <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
-                                                    </svg>
-                                                </div>
-                                                <span class="mode-title">Explorer</span>
-                                                <span class="mode-desc">Drop your markers, free roam, perfect</span>
-                                            </div>
-                                        </button>
-                                        <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
-                                            <span class="premium-tag">PRO</span>
-                                            <div class="mode-bg"></div>
-                                            <div class="mode-content">
-                                                <div class="mode-icon">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-                                                        <circle cx="12" cy="12" r="3"/>
-                                                    </svg>
-                                                </div>
-                                                <span class="mode-title">Visualizer</span>
-                                                <span class="mode-desc">Randomized, endless stream of locations</span>
-                                            </div>
-                                        </button>
+                                <div class="splash-play-shell">
+                                    <div class="splash-play-header">
+                                        <span class="splash-play-kicker">Play</span>
+                                        <p class="splash-play-copy">Choose a mode, set your draw precision, and launch straight from the dashboard.</p>
                                     </div>
 
-                                </div>
-
-                                <div class="splash-ops-footer">
-                                    <div class="difficulty-selector splash-difficulty-card">
-                                        <span class="difficulty-label">Draw Precision</span>
-                                        <div class="difficulty-options">
-                                            <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
-                                                <span class="diff-name">Hard</span>
-                                                <span class="diff-desc">Precise</span>
+                                    <div class="splash-mode-panel splash-command-deck">
+                                        <div class="mode-options">
+                                            <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
+                                                <span id="challenge-badge" class="challenge-badge">LIVE</span>
+                                                <div class="mode-bg"></div>
+                                                <div class="mode-content">
+                                                    <div class="mode-icon">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                            <path d="M2 17l10 5 10-5"/>
+                                                            <path d="M2 12l10 5 10-5"/>
+                                                        </svg>
+                                                    </div>
+                                                    <span class="mode-title">Daily Challenge</span>
+                                                    <span id="challenge-desc" class="mode-desc">One featured city. One shared benchmark. See how your instinct stacks up.</span>
+                                                </div>
                                             </button>
-                                            <button class="difficulty-btn active" data-difficulty="medium" title="500m max click distance">
-                                                <span class="diff-name">Medium</span>
-                                                <span class="diff-desc">Balanced</span>
+                                            <button class="mode-btn mode-classic" data-mode="competitive">
+                                                <div class="mode-bg"></div>
+                                                <div class="mode-content">
+                                                    <div class="mode-icon">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/>
+                                                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/>
+                                                            <path d="M4 22h16"/>
+                                                            <path d="M10 22V8a2 2 0 1 1 4 0v14"/>
+                                                            <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
+                                                        </svg>
+                                                    </div>
+                                                    <span class="mode-title">Pathfindr Classic</span>
+                                                    <span class="mode-desc">Study the grid, commit to your line, and chase the highest efficiency score.</span>
+                                                </div>
                                             </button>
-                                            <button class="difficulty-btn" data-difficulty="easy" title="1km max click distance">
-                                                <span class="diff-name">Easy</span>
-                                                <span class="diff-desc">Relaxed</span>
+                                            <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
+                                                <span class="premium-tag">PRO</span>
+                                                <div class="mode-bg"></div>
+                                                <div class="mode-content">
+                                                    <div class="mode-icon">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                                                        </svg>
+                                                    </div>
+                                                    <span class="mode-title">Explorer</span>
+                                                    <span class="mode-desc">Choose your own start and finish points to test custom route reads.</span>
+                                                </div>
+                                            </button>
+                                            <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
+                                                <span class="premium-tag">PRO</span>
+                                                <div class="mode-bg"></div>
+                                                <div class="mode-content">
+                                                    <div class="mode-icon">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                                                            <circle cx="12" cy="12" r="3"/>
+                                                        </svg>
+                                                    </div>
+                                                    <span class="mode-title">Visualizer</span>
+                                                    <span class="mode-desc">Watch endless city routes resolve and learn the structure behind cleaner lines.</span>
+                                                </div>
                                             </button>
                                         </div>
+
                                     </div>
-                                    <p class="splash-disclaimer">Use the lobby as your route dashboard, challenge board, and session checkpoint.</p>
+
+                                    <div class="splash-ops-footer">
+                                        <div class="difficulty-selector splash-difficulty-card">
+                                            <span class="difficulty-label">Draw Precision</span>
+                                            <div class="difficulty-options">
+                                                <button class="difficulty-btn" data-difficulty="hard" title="250m max click distance">
+                                                    <span class="diff-name">Hard</span>
+                                                    <span class="diff-desc">Precise</span>
+                                                </button>
+                                                <button class="difficulty-btn active" data-difficulty="medium" title="500m max click distance">
+                                                    <span class="diff-name">Medium</span>
+                                                    <span class="diff-desc">Balanced</span>
+                                                </button>
+                                                <button class="difficulty-btn" data-difficulty="easy" title="1km max click distance">
+                                                    <span class="diff-name">Easy</span>
+                                                    <span class="diff-desc">Relaxed</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p class="splash-disclaimer">Use the lobby as your route dashboard, challenge board, and session checkpoint.</p>
+                                    </div>
                                 </div>
                             </div>
 
