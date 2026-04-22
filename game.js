@@ -6655,6 +6655,10 @@ const GameState = {
     endMarker: null,
     startLabel: null,
     endLabel: null,
+    endpointSelection: {
+        recentBearings: [],
+        cityKey: null,
+    },
 
     // User drawing - SINGLE SOURCE OF TRUTH
     isDrawing: false,
@@ -7839,33 +7843,102 @@ function selectRandomEndpoints(options = {}) {
         scale = distanceScales[Math.min(round - 1, 4)];
     }
 
-    let attempts = 0;
+    const cityKey = GameState.currentCity?.name || 'default';
+    if (GameState.endpointSelection.cityKey !== cityKey) {
+        GameState.endpointSelection.cityKey = cityKey;
+        GameState.endpointSelection.recentBearings = [];
+    }
+
+    const getUndirectedBearing = (startPos, endPos) => {
+        const lat1 = startPos.lat * Math.PI / 180;
+        const lat2 = endPos.lat * Math.PI / 180;
+        const deltaLng = (endPos.lng - startPos.lng) * Math.PI / 180;
+        const y = Math.sin(deltaLng) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+        const raw = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        return raw >= 180 ? raw - 180 : raw;
+    };
+
+    const getAngularDifference = (a, b) => {
+        const diff = Math.abs(a - b) % 180;
+        return diff > 90 ? 180 - diff : diff;
+    };
+
+    const recentBearings = GameState.endpointSelection.recentBearings || [];
+    const idealDistance = (scale.min + scale.max) * 0.5;
+    const minBalance = GameState.currentRound >= 3 ? 0.26 : 0.18;
+    const minAngleDelta = recentBearings.length > 0 ? (GameState.currentRound >= 3 ? 28 : 20) : 0;
+
+    let bestQualified = null;
+    let bestFallback = null;
     let minDistance = scale.min;
     let maxDistance = scale.max;
 
-    do {
-        const startIdx = Math.floor(Math.random() * nodesToUse.length);
-        let endIdx;
-        do {
-            endIdx = Math.floor(Math.random() * nodesToUse.length);
-        } while (endIdx === startIdx);
+    for (let wave = 0; wave < 3; wave++) {
+        const samples = 160;
 
-        GameState.startNode = nodesToUse[startIdx];
-        GameState.endNode = nodesToUse[endIdx];
+        for (let attempt = 0; attempt < samples; attempt++) {
+            const startIdx = Math.floor(Math.random() * nodesToUse.length);
+            let endIdx;
+            do {
+                endIdx = Math.floor(Math.random() * nodesToUse.length);
+            } while (endIdx === startIdx);
 
-        const startPos = GameState.nodes.get(GameState.startNode);
-        const endPos = GameState.nodes.get(GameState.endNode);
-        const dist = haversineDistance(startPos.lat, startPos.lng, endPos.lat, endPos.lng);
+            const startNode = nodesToUse[startIdx];
+            const endNode = nodesToUse[endIdx];
+            const startPos = GameState.nodes.get(startNode);
+            const endPos = GameState.nodes.get(endNode);
+            if (!startPos || !endPos) continue;
 
-        if (dist >= minDistance && dist <= maxDistance) break;
+            const dist = haversineDistance(startPos.lat, startPos.lng, endPos.lat, endPos.lng);
+            if (dist < minDistance || dist > maxDistance) continue;
 
-        attempts++;
-        if (attempts > 100) {
-            minDistance *= 0.7;
-            maxDistance *= 1.2;
-            attempts = 0;
+            const latKm = haversineDistance(startPos.lat, startPos.lng, endPos.lat, startPos.lng);
+            const lngKm = haversineDistance(startPos.lat, startPos.lng, startPos.lat, endPos.lng);
+            const dominantAxis = Math.max(latKm, lngKm, 0.001);
+            const minorAxis = Math.min(latKm, lngKm);
+            const balance = minorAxis / dominantAxis;
+            const componentRatio = minorAxis / Math.max(dist, 0.001);
+            const bearing = getUndirectedBearing(startPos, endPos);
+            const angleDelta = recentBearings.length > 0
+                ? Math.min(...recentBearings.map((prev) => getAngularDifference(prev, bearing)))
+                : 90;
+
+            const distanceScore = 1 - Math.min(Math.abs(dist - idealDistance) / Math.max(idealDistance, 0.001), 1);
+            const balanceScore = Math.min(balance / 0.45, 1);
+            const angleScore = Math.min(angleDelta / 45, 1);
+            const componentScore = Math.min(componentRatio / 0.34, 1);
+            const score = (distanceScore * 1.1) + (balanceScore * 1.9) + (angleScore * 1.4) + (componentScore * 1.6);
+
+            const candidate = { startNode, endNode, startPos, endPos, bearing, score, balance, angleDelta, componentRatio };
+            const qualifies = balance >= minBalance && componentRatio >= 0.16 && angleDelta >= minAngleDelta;
+
+            if (qualifies && (!bestQualified || candidate.score > bestQualified.score)) {
+                bestQualified = candidate;
+            }
+
+            if (!bestFallback || candidate.score > bestFallback.score) {
+                bestFallback = candidate;
+            }
         }
-    } while (true);
+
+        if (bestQualified) break;
+        minDistance *= 0.85;
+        maxDistance *= 1.1;
+    }
+
+    const selected = bestQualified || bestFallback;
+    if (!selected) {
+        console.error('Failed to find endpoint pair!');
+        return;
+    }
+
+    GameState.startNode = selected.startNode;
+    GameState.endNode = selected.endNode;
+    GameState.endpointSelection.recentBearings = [
+        ...recentBearings.slice(-3),
+        selected.bearing,
+    ];
 
     const startPos = GameState.nodes.get(GameState.startNode);
     const endPos = GameState.nodes.get(GameState.endNode);

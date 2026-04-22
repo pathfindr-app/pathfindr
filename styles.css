@@ -2615,13 +2615,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     justify-content: flex-start;
     gap: 1.2rem;
     min-width: 0;
-    padding: 1.1rem 1.15rem 1.15rem;
-    border-radius: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008)),
-        radial-gradient(circle at bottom right, rgba(65, 217, 217, 0.04), transparent 42%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
     transition: transform 0.6s ease, opacity 0.6s ease;
 }
 
@@ -2712,11 +2705,12 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
 .splash-play-shell {
     display: grid;
-    grid-template-columns: minmax(168px, 0.34fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
     grid-template-areas:
-        "intro modes"
-        "ops ops";
-    gap: 1rem 1.1rem;
+        "intro"
+        "modes"
+        "ops";
+    gap: 0.9rem;
     align-items: start;
     width: 100%;
     margin: 0;
@@ -2726,10 +2720,10 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
 .splash-play-header {
     grid-area: intro;
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.8rem;
-    align-items: start;
+    align-items: center;
 }
 
 .splash-play-kicker {
@@ -2758,7 +2752,7 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
 
 .splash-play-copy {
     margin: 0;
-    max-width: 18rem;
+    max-width: 34rem;
     font-family: var(--font-sans-premium);
     color: rgba(222, 229, 233, 0.72);
     font-size: 0.84rem;
@@ -2840,6 +2834,7 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     font-size: 0.74rem;
     line-height: 1.6;
     max-width: 31rem;
+    padding-top: 0.15rem;
 }
 
 .splash-ops-footer {
@@ -2849,18 +2844,16 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     gap: 0.8rem;
     align-items: stretch;
     width: 100%;
-    padding-top: 0.15rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .splash-difficulty-card {
     margin-top: 0;
-    padding: 0.95rem 1rem 1rem;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
-        radial-gradient(circle at bottom right, rgba(115, 233, 224, 0.1), transparent 44%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    padding: 0.15rem 0 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .splash-side-stack {
@@ -2904,7 +2897,7 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
             "ops";
         align-content: start;
         gap: 0.9rem;
-        padding: 1rem;
+        padding: 0;
     }
 
     .splash-hero-band {
@@ -3134,11 +3127,11 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
         grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1fr);
         gap: 0.7rem;
         align-items: stretch;
+        padding-top: 0.75rem;
     }
 
     .splash-difficulty-card {
-        padding: 0.75rem 0.85rem 0.8rem;
-        border-radius: 20px;
+        padding: 0.15rem 0 0;
     }
 
     .difficulty-selector .difficulty-options {
@@ -3153,13 +3146,7 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
         align-self: stretch;
         display: flex;
         align-items: center;
-        padding: 0.75rem 0.9rem;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-            radial-gradient(circle at top right, rgba(255, 107, 157, 0.08), transparent 44%);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        padding: 0.15rem 0 0;
         max-width: none;
         font-size: 0.78rem;
     }
@@ -4507,11 +4494,6 @@ body.pro-user .mode-btn.premium-mode .mode-icon {
     }
 
     .splash-play-shell {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-            "intro"
-            "modes"
-            "ops";
         gap: 0.85rem;
         padding-top: 0.85rem;
     }
