@@ -8,16 +8,19 @@ dist/
 .idea/
 *.iml
 .vscode/
+.claude/
 
 # OS files
 .DS_Store
 Thumbs.db
 nul
+desktop.ini
 
 # Temp files
 tmpclaude-*
 tmp/stream-runtime.json
 tmp/youtube-worker-state.json
+output/
 
 # Environment
 .env
@@ -42,3 +45,6 @@ android/keystore.properties
 ios/App/Pods/
 ios/App/build/
 *.ipa
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+*.xcuserstate

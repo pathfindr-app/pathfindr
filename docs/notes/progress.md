@@ -1,0 +1,416 @@
+Original prompt: it needs to look organic so make it somewhat random between 80-140 players i gues?
+
+## Work Log
+- Added challenge player display helpers in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` to keep displayed counts in an organic `80-140` range.
+- Implemented seeded, time-bucketed variation (10-minute buckets) so values feel alive but do not flicker on every render.
+- Updated challenge mode UI strings to say `players online` and wired count usage in:
+  - mode selector description
+  - challenge list cards
+  - challenge info screen
+  - challenge result summary (`out of X players`)
+- Ran `npm run build` successfully after the change.
+- Attempted Playwright skill client run; blocked due to missing `playwright` package required by `/Users/bradleyarakaki/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js`.
+- Reviewed route snapping UX issue in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` without changing code.
+- Main finding: the visible click radius uses full segment distance, but actual snap search uses a much smaller independent radius (`getSnapRadiusMeters`), so the UI is not truthfully showing what can be snapped.
+- Secondary finding: snap target selection is based on nearest edge/node to the click, not the most plausible next move from the current path node, which can choose unexpected parallel streets in dense road grids.
+- Recommendation before coding: prefer live snap-preview / reachable-edge highlighting over showing raw nodes only, because actual snapping frequently lands on virtual edge points rather than existing graph nodes.
+- Implemented a first-pass snap fix in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - virtual snap points now store their canonical base-edge key
+  - repeated clicks near the same spot reuse the existing virtual node
+  - virtual points on the same base edge now connect directly to each other instead of only to the segment endpoints
+- Ran `npm run build` successfully after the snap change.
+- Installed `playwright` for the local skill runner outside repo metadata and ran browser validation.
+- Browser validation results:
+  - the stock Playwright skill client could load the splash screen, but its single-selector flow was not enough to drive this app through splash -> mode -> location -> gameplay
+  - a targeted in-browser Playwright check validated the core fix on a synthetic long-edge graph: two virtual points on the same road segment now produce a direct two-node path, do not route through endpoints, and the routed distance matches the direct segment distance exactly
+- Found and fixed a second, more important snapping bug in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - `findNearestNodeWithDist()` returned node distances in kilometers
+  - `findNearestEdgePoint()` returned edge distances in meters
+  - `findSnapTarget()` compared them directly, which heavily biased clicks toward nodes/intersections instead of the edge under the cursor
+- Verified with a synthetic Playwright check:
+  - nearby node at ~`12.8m`
+  - edge under cursor at ~`0.56m`
+  - snap result now correctly resolves to the edge candidate instead of the node
+- Implemented first-pass snap preview in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - desktop: live preview on mouse move over the map surface
+  - mobile: touch-down/touch-move preview, release-to-commit
+  - preview shows a dashed ghost route plus a bright snap marker at the resolved landing point
+  - preview starts from `startNode` before the first click, not only after the path is already underway
+- Validation:
+  - `npm run build` passes after preview changes
+  - synthetic browser check confirmed `updateSnapPreview()` activates from the start node, resolves edge snaps, and builds the expected preview path before commit
+- Preview polish pass:
+  - moved preview rendering to a dedicated `/Users/bradleyarakaki/Desktop/Pathfindr/index.html` overlay canvas so it sits above the draw canvas, vignette overlay, and marker layer
+  - raised preview layer to `z-index: 850` in `/Users/bradleyarakaki/Desktop/Pathfindr/styles.css`
+  - upgraded preview styling in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` with a brighter cyan/pink dual-glow route, stronger animated dashes, and a larger target reticle
+  - verified computed stacking order in-browser: preview `850`, markers `800`, draw canvas `400`
+- Preview visibility/audio pass ("level 10"):
+  - massively increased preview contrast in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` with:
+    - dark cutout underlay behind the preview route
+    - large white/cyan/magenta bloom stack
+    - thicker white core
+    - dual animated dash overlays
+    - moving sprite energy traveling along the preview route
+    - larger multi-ring target reticle with corner accents
+  - added a throttled preview-lock chirp in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+    - derived from the existing `Found1.wav` sample buffer rather than introducing a new source asset
+    - only fires when the preview meaningfully changes, with cooldown to avoid cursor spam
+  - validation:
+    - `npm run build` passes
+    - browser sanity check confirms preview canvas exists, stays at `z-index: 850`, and `SoundEngine.previewLock()` is wired
+- Preview refinement after user feedback:
+  - reduced chunky geometry in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+  - replaced the heavy under-stroke with localized dimming along the preview corridor and around the target
+  - thinned the route spine while keeping strong animated dash overlays
+  - kept motion emphasis via smaller, faster traveling energy packets
+  - simplified the target reticle so it reads sharper instead of bulkier
+  - validation:
+    - `npm run build` passes
+    - browser sanity check still confirms preview layer/audio hook are present
+
+## Notes
+- This is a display-layer change only. Backend participant counts are unchanged.
+- Existing unrelated local changes (including `cosmic/*`) were left untouched.
+- Current preview is route/target visualization only. It does not yet add explicit reachable nodes/guide dots.
+
+## TODO
+- Run in-browser spot-check of challenge list/info/results to confirm count behavior across refresh and after ~10 minutes.
+- Install Playwright (`npm i -D playwright`) if automated screenshot/state validation with the skill client is needed in this repo.
+- If implementing snapping UX improvements:
+  - Make displayed radius match actual snap/search behavior.
+  - Add hover preview of the resolved snap target.
+  - Consider candidate scoring that factors both click proximity and reachability from the current path endpoint.
+- Manual gameplay test for the new snap logic:
+  - click repeatedly along a long uninterrupted road segment and confirm the route advances along the same street instead of failing or detouring
+  - test both `medium` and `easy`, since sparse-node roads are more noticeable there
+  - test desktop hover preview and mobile touch-down preview to confirm the ghost route reflects the eventual commit
+  - if it still feels ambiguous where clicks will land, next iteration should add reachable snap guides or candidate highlighting
+- Round review visibility pass:
+  - added a dedicated results-phase render path in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` instead of reusing the normal persistent-history stack
+  - during `GamePhase.RESULTS`, previous round history/electric arcs/user-draw overlays are suppressed
+  - ambient road network is rendered at much lower opacity in results to stop competing with comparison routes
+  - added `AmbientViz.renderRoundReview()` with:
+    - full-scene dim veil
+    - corridor cutout/spotlight around the current round's two routes
+    - stable bright white user-route treatment with dark outline and subtle motion accents
+    - cyan optimal-route treatment using the existing electricity/sweep renderer
+    - slight staged reveal: user route first, optimal route second
+  - aligned results comparison bars in `/Users/bradleyarakaki/Desktop/Pathfindr/styles.css` to the new route colors (white for user, cyan for optimal)
+- Validation for the round review pass:
+  - `npm run build` passes
+  - ran the `$develop-web-game` Playwright client against `http://localhost:3000`; smoke screenshot captured successfully, but it only reached the splash screen because the stock client is not sufficient to drive this app's full flow
+  - inspected the generated splash screenshot at `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - ran a custom Playwright browser check that forced a synthetic `GamePhase.RESULTS` scene and captured `/Users/bradleyarakaki/Desktop/Pathfindr/output/results-review-check.png`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/results-review-check.png`; the new results-mode read is substantially cleaner, with only the two comparison routes competing visually
+- Existing console noise from Playwright smoke run:
+  - `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json` contains a single 404 resource load during splash-screen smoke testing; not investigated in this pass because it predates the round-review rendering work
+- Bridge / stacked-road routing pass:
+  - widened snap reach in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` so snap search is much closer to the visible move budget instead of the old hard `120m` ceiling
+  - added structured road metadata to imported edges (`highway`, `name`, `bridge`, `tunnel`, `layer`) during `processRoadData()`
+  - replaced raw nearest-edge selection with context-aware snap scoring:
+    - prefers continuing on the same edge / same named road
+    - prefers same bridge/tunnel/layer structure as the current segment
+    - prefers forward continuation from the player’s current direction
+    - penalizes service roads and link ramps unless they are clearly the intended continuation
+  - narrowed node auto-selection to very-close clicks so stacked intersections/overpasses are less likely to snap to the wrong level
+  - added a routed-segment allowance helper so same-road / same-structure bridge continuations can survive the route-budget check without generally making detours too permissive
+  - expanded imported playable highway classes via shared Overpass query helper to include `trunk`, `trunk_link`, and `motorway_link` so important bridge/ramp connectors are less likely to be missing from the graph
+- Validation for the bridge pass:
+  - `npm run build` passes
+  - ran the `$develop-web-game` Playwright smoke client again; it still only captures the splash screen with the stock one-click flow, and the existing 404 console noise remains unchanged in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+  - inspected the latest smoke screenshot at `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - ran a targeted Playwright browser check against a synthetic stacked-road scenario:
+    - anchor placed on a bridge segment
+    - competing service road placed nearby underneath
+    - `findSnapTarget()` resolved to the bridge continuation edge
+    - `updateSnapPreview()` stayed active with a valid preview path
+    - reported snap radius on `medium` as `170m`
+- Round-transition render-state fix:
+  - likely cause of post-round desync was that `nextRound()` kept the app in `GamePhase.RESULTS` while hiding the results UI, clearing canvases, and fitting the camera to the next route
+  - with the new dedicated results renderer, that meant map/camera movement could happen under the wrong render mode
+  - changed `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` so:
+    - `startGame()` enters `PLAYING` before selecting/fitting endpoints
+    - `nextRound()` exits `RESULTS` immediately into `IDLE` after hiding results
+    - for rounds 2-5, `nextRound()` enters `PLAYING` before `selectRandomEndpoints()` / `fitBounds()`
+    - final game-over branch also exits to `IDLE` before showing game over
+- Validation for round-transition fix:
+  - `npm run build` passes
+  - ran a targeted Playwright/browser check that instrumented `nextRound()` and verified this order on round 4 -> 5:
+    - `hideResults` while phase=`results`
+    - phase enters `idle`
+    - clear/reset work runs in `idle`
+    - phase enters `playing`
+    - `selectRandomEndpoints()` executes while phase=`playing` and round=`5`
+  - reran the required `$develop-web-game` Playwright smoke client; it still only reaches the splash screen with the stock one-click flow, and the same single 404 console noise remains in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Follow-up fix for the transition regression after user report (`rounds 4/5 didn't render`, `map/road network unsynced`):
+  - reverted the phase-order change that entered `PLAYING` before `selectRandomEndpoints()` in both `startGame()` and `nextRound()`
+  - kept the important part: `nextRound()` now exits `RESULTS` immediately into `IDLE` before the camera/route reset work
+  - added `GameState.roundTransitionInFlight` guard so overlapping `nextRound()` calls cannot race
+  - added `refreshMapPresentation()` / `scheduleMapPresentationRefresh()` in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+    - invalidates `ScreenCoordCache`
+    - recomputes WebGL edge positions
+    - repositions markers
+    - redraws the current player path
+  - updated `resizeCanvases()` so it now also calls `GameState.map.resize()` and then refreshes overlay/WebGL alignment
+  - updated `selectRandomEndpoints()` to schedule alignment refreshes after `fitBounds()` and after marker placement, which should keep the road layer synced through later-round camera jumps
+- Validation for the follow-up fix:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright client against `http://localhost:3000`
+  - headless smoke still cannot validate map gameplay because MapLibre requires WebGL in-browser; local headless runs only reach the selector/splash flow
+  - visually inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - latest console noise remains the same single 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Continuous-play city-transition follow-up after user report (`worked for 5 rounds, then broke on new city`):
+  - root cause candidate 1: non-local `transitionToNextCity()` was not clearing `RoundHistory`, so previous-city route history could remain over the new city and look like a map/road desync
+  - root cause candidate 2: the new-city path (`jumpTo` -> preload/fetch -> `selectRandomEndpoints`) was still missing explicit map/WebGL/overlay resync calls
+  - changes in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+    - `transitionToNextCity()` now enters `IDLE` at the start for both local and non-local city transitions
+    - non-local city transitions now call `RoundHistory.clear()` instead of writing to the unused `GameState.roundHistory`
+    - after `jumpTo(nextCity)`, the transition now forces `map.resize()` and `scheduleMapPresentationRefresh()`
+    - both the preloaded-data branch and the fresh-fetch branch now schedule another presentation refresh before starting the next round
+- Validation for the continuous-play follow-up:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client; it still only validates selector/splash flow because headless MapLibre gameplay is blocked by WebGL requirements
+  - visually inspected the latest `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+- Layout-resize desync follow-up after user report (`2nd location, round 3 broke again`):
+  - likely root cause: the app only resynced map/canvas/WebGL on `window.resize`, but several gameplay UI events can resize the map container without a window resize:
+    - mobile ad banner spacing (`body.ad-visible`)
+    - results panel / overlay layout changes
+    - city transition overlays and safe-area adjustments
+  - added a `ResizeObserver` on `/Users/bradleyarakaki/Desktop/Pathfindr/index.html`'s `#map-container` via `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+  - new state added:
+    - `containerResizeObserver`
+    - `pendingResizeSync`
+    - `lastCanvasSize`
+  - `resizeCanvases()` now:
+    - returns early for zero-sized containers
+    - tracks last known canvas size
+    - still calls `map.resize()` / `WebGLRenderer.resize()`
+    - avoids unnecessary canvas buffer resets when size is unchanged
+  - the observer debounces through `requestAnimationFrame` and calls `resizeCanvases()` whenever the map container’s size changes from layout/UI events
+- Validation for the resize-observer follow-up:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client and inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+- Mobile-specific follow-up after user report (`first location / first round unsynced on mobile`, `no pathfinding visualizations`):
+  - likely cause: the custom overlay `WebGLRenderer` was still being used on mobile/coarse-pointer devices, and that path appears less stable than the Canvas 2D fallback on actual phones
+  - pragmatic fix in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+    - added `GameState.isMobileBrowser`
+    - `initMobileBrowserDetection()` now records mobile/coarse-pointer status in state
+    - added `shouldPreferCanvasRoadRenderer()`
+    - `initCanvases()` now skips custom overlay WebGL on mobile/coarse-pointer devices and uses Canvas 2D roads/visualization instead
+    - `processRoadData()` now also avoids building overlay WebGL buffers when the device is in Canvas-preferred mode
+  - rationale: reliability over fancy rendering on mobile; the base map is already WebGL via MapLibre, so removing the extra overlay WebGL layer reduces sync/context fragility
+- Validation for the mobile-renderer follow-up:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client and re-inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+- Compared against user-provided last-known-good mobile baseline `/Users/bradleyarakaki/Desktop/Pathfindr` commit `13bf10c4e9f05e0a47139e07acbe932488ebeeb9`:
+  - baseline mobile path did NOT have the later generic sync layer:
+    - no `scheduleMapPresentationRefresh()`
+    - no explicit `map.resize()` inside `resizeCanvases()`
+    - no extra post-`fitBounds()` / post-marker refresh calls
+  - current working hypothesis: those later sync hooks are the mobile WebGL regression, while desktop benefits from them
+- Mobile-specific sync narrowing pass in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - added `shouldUseLegacyMobileSync()`
+  - on mobile/coarse-pointer devices:
+    - `resizeCanvases()` now follows the older `13bf10c` behavior more closely
+    - skips the extra `map.resize()` call
+    - skips `refreshMapPresentation()` / scheduled sync passes
+    - still resizes the overlay canvases and WebGL canvas, then redraws the user path
+  - desktop keeps the newer sync layer for the round/city transition fixes
+  - this preserves recent gameplay/UX changes while restoring the older mobile sync behavior
+- Validation for the mobile sync narrowing pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client and inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+- Found a bug in the mobile sync narrowing pass:
+  - I had disabled too much on mobile by skipping direct resize-time sync entirely
+  - that means when the mobile viewport changes (browser chrome / visual viewport / safe-area changes), the overlay canvases and WebGL road positions can drift from the MapLibre base map
+- Corrective pass in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - mobile still skips the newer scheduled transition sync (`scheduleMapPresentationRefresh`) to stay closer to the `13bf10c4e9f05e0a47139e07acbe932488ebeeb9` baseline
+  - but `resizeCanvases()` now once again always does direct sync on all devices:
+    - `map.resize()`
+    - canvas resize
+    - `WebGLRenderer.resize()`
+    - `refreshMapPresentation()` (invalidate coords, update edge positions, reposition markers, redraw path)
+  - added `visualViewport.resize` listener so mobile browser UI changes trigger `resizeCanvases()` even when `window.resize` is unreliable
+- Validation for the corrective pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client and inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+- Additional mobile investigation after user reported occasional remaining desync / missing visualization on mobile while desktop stayed fine:
+  - most likely remaining issue is a race between `map.resize()` and overlay resync
+  - before this pass, `onMapChange()` ran for `move/zoom/pitch/rotate` but not for the map's own `resize` event
+  - added `GameState.map.on('resize', onMapChange)` in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+  - rationale: when mobile browser chrome / visual viewport changes force a map resize, we now resync the cached screen coords, overlay WebGL edge positions, markers, user path, and visualization layer *after MapLibre itself reports resize complete*
+- Validation for the resize-event pass:
+  - `npm run build` passes
+- Projection-sync hardening pass after continued random desync reports on mobile and web:
+  - added `getMapPresentationStateKey()` / `ensureMapPresentationSync()` in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+  - render loop now self-heals projection drift every frame by checking current map center/zoom/pitch/bearing plus canvas size before rendering
+  - `ScreenCoordCache` now stores the map presentation key and refreshes automatically if the projection changes even when an explicit invalidation event was missed
+  - `WebGLRenderer` now tracks its last projection key and skips duplicate uploads, but also self-corrects when the current projection no longer matches buffer state
+  - `resizeCanvases()` now resizes overlay canvases before `map.resize()` to reduce resize-event races
+  - `invalidateProjectedCaches()` now also clears Explorer/Visualizer projected caches and invalidates `VisualizerVibeRenderer` snapshot state
+  - Explorer/Visualizer cached path map-state keys now include viewport width/height, not just center/zoom/pitch/bearing
+  - added a defensive `webglcontextlost` fallback that drops to Canvas rendering instead of leaving mobile blank
+- Validation for the hardening pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright client against `http://127.0.0.1:3000` with `#splash-continue-btn`; latest artifacts are in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png` (mode selector)
+  - console output still shows the pre-existing single 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Remaining risk if desync still appears after this pass:
+  - the next place to instrument is MapLibre camera lifecycle vs overlay redraw order, but the current code now has both event-driven invalidation and render-time projection verification rather than relying on one path only
+- 3D-pan desync follow-up after user reported breakage specifically while panning in pitched view:
+  - identified a timing problem in the previous hardening pass: map events were still trying to resync overlays immediately, which can capture a stale projection during animated camera movement and then mark the state as "synced"
+  - changed `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` so map events now invalidate only; authoritative overlay/WebGL sync now happens from the render path via `ensureMapPresentationSync()` and a `map.on('render', ...)` backstop
+  - added `presentationDirty` + `mapWasMoving` state so overlay sync is forced every frame while the map is moving and for one extra frame after movement stops
+  - added WebGL projected-edge validation/clipping (`computeProjectedEdgeQuad`) so pitched/horizon projections that explode off-screen are written as degenerate quads instead of poisoning the road/viz buffers
+  - added the same projected-segment guard to Canvas fallback road rendering and virtual-edge overlays
+- Validation for the 3D-pan follow-up:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright smoke client; latest artifacts in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - console noise remains the same single pre-existing 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Map-render ownership pass after continued desync reports during/after results + pitched pan stress:
+  - identified that `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` was still ignoring `map.on('render', ...)` whenever the unified game loop was active, which meant overlay redraw timing was still anchored to the app rAF rather than MapLibre's actual render cadence
+  - refactored `GameController._renderFrame()` to delegate phase-specific drawing to a shared `renderCurrentPhaseFrame()` helper
+  - `onMapRender()` now always runs `ensureMapPresentationSync()` and redraws the current phase frame with `advanceState: false`, so the map, road overlay, history, markers, user path, and results frame are repainted on MapLibre's authoritative camera/render timing during pan/zoom/pitch/rotate
+  - removed the old ad hoc `requestAnimationFrame` redraw path from `onMapChange()`; change events now only invalidate projection state and let render-time redraw own the presentation
+  - added `renderVisualization({ advanceState: false })` support so map-driven redraws during active A* visualization do not double-advance pulse/heat/particle state
+- Validation for the map-render ownership pass:
+  - `npm run build` passes
+- Mobile/web overlay follow-up after report that round 4 produced random orange lines and A* viz appeared to stop while the basemap/road layer stayed synced:
+  - traced a separate bug from map sync: `syncProjectedLayers()` and the ambient render path were still redrawing the orange interactive user-path layer whenever projection state changed, even during/after submit when that layer is supposed to be hidden above the viz canvas
+  - added `pathLockInActive`, `shouldRenderInteractivePathOverlay()`, `clearInteractivePathOverlay()`, and `syncInteractivePathOverlay()` in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`
+  - interactive draw/preview canvases now render only while the round is actually interactive (`PLAYING` + can draw) or during the short lock-in animation
+  - entering `VISUALIZING`, `RESULTS`, `IDLE`, `MENU`, or `LOADING` now clears the interactive draw/preview overlays immediately
+  - `buildVirtualEdgesForRender()` now only renders helper edges for virtual nodes in the current active user path, so stale virtual nodes from prior rounds no longer paint stray orange helper lines across the city
+- Validation for the interactive overlay pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright smoke client against `http://127.0.0.1:3000`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png` (mode selector)
+  - latest console noise remains the same single pre-existing 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- SSOT refactor pass for visual state in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - added immutable visual snapshots for history objects (`exploredSegments`, `optimalPathCoords`, `userPathCoords`) so round/explorer/visualizer rendering no longer depends on mutable live graph state
+  - added shared projection helpers that project stored geometry snapshots instead of live node ids / edge lookup where possible
+  - added `getVisualSceneState()` so phase-dependent overlay decisions (`results`, interactive path, history mode) come from one derived scene state instead of scattered checks
+  - added virtual-node pruning on `resetUserPath()` and `undoLastSegment()` so old snap helper nodes do not accumulate across rounds/cities and leak into later visuals
+  - updated `AmbientViz.renderRoundReview()`, `AmbientViz.renderRoundHistory()`, `AmbientViz.renderPathHistory()`, and `VisualizerVibeRenderer.appendPath()` to consume the stored geometry snapshots
+- Validation for the SSOT visual refactor:
+  - `npm run build` passes
+  - ran the required `$develop-web-game` Playwright smoke client against `http://127.0.0.1:3000`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - console output still only shows the same pre-existing single 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Current working theory after this pass:
+  - recurring later-round / later-city visual corruption was most likely coming from history/overlay renderers reading mutable graph state (especially virtual snap nodes) after gameplay state had moved on
+  - this pass makes visual history authoritative at capture time instead of render time
+- Artifact-layer fix after mobile report of short cyan/green/yellow line fragments persisting after map movement and later suppressing viz:
+  - likely culprit was transient screen-space overlay state, not basemap sync:
+    - `ElectricitySystem.arcs` stores fixed screen coordinates
+    - history spark overlays store screen-space edge references
+    - `VisualizerPhaseBlend` is a captured screen bitmap
+    - `traceAnimation` stores screen-space segments
+  - these effects were surviving map camera changes and could persist if the canvas stopped on that frame
+- Fixes in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - added `clearScreenSpaceTransientEffects()`
+  - `invalidateProjectedCaches()` now clears those transient screen-space effects whenever map presentation changes
+  - added `ElectricitySystem.clearArcs()`
+  - phase transitions (`LOADING`, `VISUALIZING`, `MENU`, `RESULTS`, `IDLE`) now clear screen-space transient effects explicitly
+  - `processRoadData()` and `clearVisualization()` now clear screen-space transient effects too
+  - changed `map.on('render')` so it no longer redraws the overlay canvas during gameplay; GameController RAF is the only gameplay canvas writer now
+- Validation for the transient-effect / single-writer pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client against `http://127.0.0.1:3000`
+  - rechecked `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - console output still only shows the same pre-existing single 404 in `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/errors-0.json`
+- Regression follow-up after `b2d0844`:
+  - user confirmed the last patch made basemap/road overlay sync worse on both mobile and web
+  - root cause was the `onMapRender()` change: removing map-driven redraw/sync during active gameplay weakened the authoritative camera/render path
+  - restored the previous `onMapRender()` behavior so map render once again:
+    - runs `ensureMapPresentationSync()` while dirty or moving
+    - redraws the current phase frame with `advanceState: false`
+  - kept the new transient-overlay cleanup from `b2d0844`
+- Validation for the render-path rollback:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` smoke client against `http://127.0.0.1:3000`
+- Follow-up after user reported `ddf88c3` still loses visible A* by round 4 on both mobile and desktop:
+  - symptom broadening to both platforms points away from mobile-only viewport sync and toward a render-path conflict / loop fragility
+  - local safeguard pass in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+    - `GameController._loop()` now wraps `_renderFrame()` in `try/catch` so one bad frame cannot kill the unified RAF loop and leave stale lines on the canvas forever
+    - `map.on('render')` now always preserves map-driven `ensureMapPresentationSync()` when dirty/moving, but only redraws the phase canvas if `GameController.animationId` is NOT active
+    - this keeps map presentation sync authoritative without allowing MapLibre render to act as a second active gameplay canvas writer while the unified loop is running
+
+- 2026-02-08: Investigated mobile auth modal taps from Hourly Challenge. Patched auth modal to own its open/close state, lock underlying map/canvas pointer events while visible, and bound close/social/switch controls with explicit touchend+click handling to avoid WebView click suppression. Pending validation on mobile and build.
+
+- 2026-02-08: Root cause for dead auth modal controls appears to be init ordering in /Users/bradleyarakaki/Desktop/Pathfindr/index.html: handlers were bound only after await PathfindrAuth.init(), so slow auth/session restore left the modal visible but inert. Also found production OAuth pointed at broken custom domain https://api.pathfindr.world; switched config to canonical Supabase project URL.
+
+- 2026-02-08: Switched /Users/bradleyarakaki/Desktop/Pathfindr/config.js Supabase URL from broken custom host https://api.pathfindr.world to canonical project host https://wxlglepsypmpnupxexoc.supabase.co. Verified custom host TLS handshake fails and canonical host responds over HTTPS.
+
+- 2026-02-08: Removed challenge player-count display from /Users/bradleyarakaki/Desktop/Pathfindr/game.js and /Users/bradleyarakaki/Desktop/Pathfindr/styles.css. Mode selector, challenge cards, info modal, and results no longer show player counts or fake participation totals.
+
+- 2026-02-08: Desktop sync pass in /Users/bradleyarakaki/Desktop/Pathfindr/game.js. During active desktop map movement, GameController now advances state without owning overlay redraw, and MapLibre render events drive presentation redraw on the same cadence as the base map. Also disabled VisualizerVibeRenderer pan-offset approximation on desktop only; mobile still keeps the legacy approximation path.
+- Desktop-only moving-map sync pass in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js`:
+  - `GameController` now distinguishes between desktop map-driven redraws during active camera motion and the existing mobile RAF-driven path
+  - while the map is moving on desktop, the unified game loop advances visual state but leaves actual phase-frame drawing to MapLibre's `render` cadence
+  - on mobile (`shouldUseLegacyMobileSync()`), the old behavior is preserved
+  - `VisualizerVibeRenderer`'s pan-offset approximation path is now mobile-only; desktop forces full reprojection instead of shifting cached canvases during movement
+- Validation for the desktop-only sync pass:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright client and inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - ran headed Playwright probes against `http://127.0.0.1:3000` for both desktop and mobile emulation
+  - desktop probe result after starting a live round and animating `map.easeTo(...)`:
+    - `shouldUseLegacyMobileSync() === false`
+    - moving-frame redraws came from the map render path (`mapDriven: 100`, `rafDriven: 0`)
+    - `VisualizerVibeRenderer.drawOffsetX/Y` stayed `0`, confirming the pan-offset approximation was not used
+  - mobile probe result under iPhone 13 emulation:
+    - `shouldUseLegacyMobileSync() === true`
+    - moving-frame redraws stayed on the RAF path (`mapDriven: 0`, `rafDriven: 52`)
+    - `VisualizerVibeRenderer.drawOffsetX/Y` remained `0` after the test move
+- Splash / welcome redesign pass:
+  - added a video-first splash flow using `/Users/bradleyarakaki/Desktop/Pathfindr/visual assets/Intro Video Splash.mp4`
+  - redesigned the follow-up welcome screen around `/Users/bradleyarakaki/Desktop/Pathfindr/visual assets/logo.png`
+  - new splash uses a two-stage experience:
+    - autoplay intro video with skip button
+    - glass-card welcome layout with logo panel, feature pills, and updated CTA copy
+  - `initSplashScreen()` in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` now:
+    - plays the intro when possible
+    - falls back to the welcome stage if autoplay fails or reduced-motion is enabled
+    - reveals the welcome stage on video end or skip
+  - `/Users/bradleyarakaki/Desktop/Pathfindr/scripts/build.js` now copies the `visual assets` directory into `dist/` and skips hidden files while copying directories
+- Validation for splash redesign:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright client against `http://127.0.0.1:3000`
+  - inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png` for the welcome stage
+  - captured a headed desktop screenshot of the video stage at `/Users/bradleyarakaki/Desktop/Pathfindr/output/splash-video-stage.png`
+  - captured a mobile-emulated welcome screenshot at `/Users/bradleyarakaki/Desktop/Pathfindr/output/splash-mobile.png`
+  - added a mobile layout fix so the welcome card scrolls instead of clipping off-screen when the content is taller than the viewport
+- Splash follow-up correction after live feedback:
+  - fixed asset path casing to `/Users/bradleyarakaki/Desktop/Pathfindr/Visual Assets/*` so the live site can actually load the logo/video
+  - moved the mode selector and difficulty selector into the welcome stage itself; the post-intro page now contains hero copy + logo video + all modes on one screen
+  - removed the old separate splash CTA dependency; mode selection now happens directly from the welcome page
+  - kept the intro stage first, with the same skip behavior, and made the welcome page use the animated logo video with the PNG as poster/fallback
+  - updated `/Users/bradleyarakaki/Desktop/Pathfindr/scripts/build.js` to copy the exact `Visual Assets` directory name
+- Validation for the corrected splash flow:
+  - `npm run build` passes
+  - reran the required `$develop-web-game` Playwright client; latest intro-stage artifact is `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - captured integrated desktop welcome screenshot at `/Users/bradleyarakaki/Desktop/Pathfindr/output/splash-desktop-combined.png`
+  - captured integrated mobile welcome screenshot at `/Users/bradleyarakaki/Desktop/Pathfindr/output/splash-mobile-combined.png`
+- Music rotation pass:
+  - replaced the old single-loop `Pathfindr1.wav` soundtrack path in `/Users/bradleyarakaki/Desktop/Pathfindr/game.js` with an HTMLAudio-backed rotating playlist
+  - playlist includes `Pathfindr1.wav` plus all current `/Users/bradleyarakaki/Desktop/Pathfindr/music/*.mp3` tracks
+  - lobby music now attempts to start as soon as the intro reveals the welcome/mode screen (`revealWelcome()` and `showModeSelector()`)
+  - music now continues through classic/gameplay flows because it is no longer faded/stopped on normal mode entry; removed the old `fadeOutSoundtrack()` call from `stopVisualizerMode()` so returning to menu does not kill music
+  - added retry behavior so if autoplay is blocked at lobby reveal, the next real UI interaction nudges music playback
+  - `toggleMute()`, `pauseAll()`, and `resumeAll()` now manage music playback in addition to the WebAudio SFX context
+- Build pipeline update:
+  - added `/Users/bradleyarakaki/Desktop/Pathfindr/music` to `/Users/bradleyarakaki/Desktop/Pathfindr/scripts/build.js` so the new soundtrack assets are copied into `dist/`
+- Validation:
+  - `npm run build` passes and copies all `music/*.mp3` files into `dist/`
+  - ran the required `$develop-web-game` Playwright client against `http://127.0.0.1:3000` with splash skip interaction; inspected `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - custom Playwright checks confirmed:
+    - after skipping intro, lobby music starts on the welcome screen with `currentMusicTrack = "Pathfindr"` and `musicPaused = false`
+    - after clicking `/Users/bradleyarakaki/Desktop/Pathfindr/index.html`’s `.mode-classic`, the splash hides, location selector opens, and music continues (`musicPaused = false`, advanced playback time)
+- Follow-up audio asset fix:
+  - corrected playlist asset paths from lowercase `music/...` to the actual on-disk `/Users/bradleyarakaki/Desktop/Pathfindr/Music/...`
+  - updated `/Users/bradleyarakaki/Desktop/Pathfindr/scripts/build.js` to copy `Music` (capital M) so production/case-sensitive deploys do not 404 the new tracks
+- Revalidation after case fix:
+  - `npm run build` passes and copies `/Users/bradleyarakaki/Desktop/Pathfindr/Music/*` into `dist/`
+  - reran the required `$develop-web-game` Playwright client and rechecked `/Users/bradleyarakaki/Desktop/Pathfindr/output/web-game/shot-0.png`
+  - custom Playwright check still shows lobby music and post-mode-select music playing with `musicSource = "Pathfindr1.wav"`, `musicPaused = false`
