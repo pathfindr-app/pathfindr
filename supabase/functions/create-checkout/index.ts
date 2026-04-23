@@ -51,6 +51,10 @@ const ALLOWED_ORIGINS = [
   'https://pathfindr.world',
   'https://www.pathfindr.world',
   'https://pathfindralpha.vercel.app', // Legacy/staging
+  'capacitor://localhost',
+  'http://localhost',
+  'http://localhost:3000',
+  'ionic://localhost',
 ]
 
 const getCorsHeaders = (origin: string | null) => {

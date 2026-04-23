@@ -41,7 +41,7 @@ const PathfindrConfig = {
     // Test mode - IMPORTANT: Set to false before releasing to production!
     // When true: Uses test ad units, won't earn real revenue
     // When false: Uses production ad units, earns real revenue
-    testing: true,  // TODO: Set to false for production release
+    testing: false,
   },
 
   // ===========================================
@@ -80,6 +80,14 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.0.0',
+  },
+
+  urls: {
+    website: 'https://www.pathfindr.world',
+    privacyPolicy: 'https://www.pathfindr.world/privacy.html',
+    termsOfService: 'https://www.pathfindr.world/terms.html',
+    supportEmail: 'hello@pathfindr.world',
+    supportUrl: 'mailto:hello@pathfindr.world',
   },
 
   // ===========================================
@@ -135,11 +143,44 @@ PathfindrConfig.platform = (() => {
   return 'web';
 })();
 
+PathfindrConfig.localStorageKeys = {
+  nativePremium: 'pathfindr_native_premium',
+  admobTesting: 'pathfindr_admob_testing',
+};
+
+PathfindrConfig.isLocalDevelopment = () => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname || '';
+  return host === 'localhost' ||
+         host === '127.0.0.1' ||
+         host.endsWith('.local');
+};
+
+PathfindrConfig.isAdMobTestingEnabled = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return PathfindrConfig.isLocalDevelopment() ||
+      window.localStorage.getItem(PathfindrConfig.localStorageKeys.admobTesting) === 'true';
+  } catch (error) {
+    return PathfindrConfig.isLocalDevelopment();
+  }
+};
+
+PathfindrConfig.hasNativePremiumAccess = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(PathfindrConfig.localStorageKeys.nativePremium) === 'true';
+  } catch (error) {
+    return false;
+  }
+};
+
 // Helper to check if user has purchased ad-free
 // Uses PathfindrAuth as source of truth to prevent console tampering
 PathfindrConfig.isAdFree = () => {
   // Admins are always ad-free
   if (PathfindrConfig.isAdmin()) return true;
+  if (PathfindrConfig.hasNativePremiumAccess()) return true;
   // Check via PathfindrAuth (uses internal currentProfile, not window object)
   if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased) {
     return PathfindrAuth.hasPurchased();

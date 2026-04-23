@@ -9,6 +9,7 @@ import csv
 import datetime as dt
 import json
 import math
+import base64
 import urllib.request
 from pathlib import Path
 
@@ -28,6 +29,10 @@ GRAPH_K = 6
 MAX_NEIGHBOR_DEG = 8.0
 CELL_DEG = 4.0
 CONST_MATCH_MAX_DEG = 1.6
+MILKY_MAG_LIMIT = 12.0
+MILKY_MAP_W = 720
+MILKY_MAP_H = 360
+MILKY_SMOOTH_SIGMA_DEG = 1.2
 
 
 def clamp(v, lo, hi):
@@ -117,6 +122,127 @@ def load_stars(path: Path):
     # Keep deterministic ordering: brightest first, then RA/Dec.
     stars.sort(key=lambda s: (s["mag"], s["ra"], s["dec"]))
     return stars
+
+
+def load_density_stars(path: Path, mag_limit: float):
+    stars = []
+
+    with path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                ra_hours = float(row["ra"])
+                dec = float(row["dec"])
+                mag = float(row["mag"])
+            except (ValueError, KeyError, TypeError):
+                continue
+
+            if mag > mag_limit:
+                continue
+            if not (0.0 <= ra_hours <= 24.0 and -90.0 <= dec <= 90.0):
+                continue
+
+            ra = normalize_ra(ra_hours * 15.0)
+            stars.append((ra, dec, mag))
+
+    return stars
+
+
+def gaussian_kernel_1d(sigma_px: float):
+    sigma = max(0.45, sigma_px)
+    radius = max(1, int(math.ceil(sigma * 3.0)))
+    vals = []
+    total = 0.0
+    for i in range(-radius, radius + 1):
+        w = math.exp(-0.5 * (i / sigma) * (i / sigma))
+        vals.append(w)
+        total += w
+    return [v / total for v in vals], radius
+
+
+def blur_wrap_x(data, width, height, kernel, radius):
+    out = [0.0] * (width * height)
+    for y in range(height):
+        row = y * width
+        for x in range(width):
+            acc = 0.0
+            for k in range(-radius, radius + 1):
+                xx = (x + k) % width
+                acc += data[row + xx] * kernel[k + radius]
+            out[row + x] = acc
+    return out
+
+
+def blur_clamp_y(data, width, height, kernel, radius):
+    out = [0.0] * (width * height)
+    for y in range(height):
+        for x in range(width):
+            acc = 0.0
+            for k in range(-radius, radius + 1):
+                yy = y + k
+                if yy < 0:
+                    yy = 0
+                elif yy >= height:
+                    yy = height - 1
+                acc += data[yy * width + x] * kernel[k + radius]
+            out[y * width + x] = acc
+    return out
+
+
+def percentile(sorted_vals, p):
+    if not sorted_vals:
+        return 0.0
+    p = clamp(p, 0.0, 100.0)
+    idx = int(round((p / 100.0) * (len(sorted_vals) - 1)))
+    return sorted_vals[idx]
+
+
+def build_milky_way_density(path: Path):
+    stars = load_density_stars(path, MILKY_MAG_LIMIT)
+    w = MILKY_MAP_W
+    h = MILKY_MAP_H
+    grid = [0.0] * (w * h)
+
+    for ra, dec, mag in stars:
+        x = int((ra / 360.0) * w) % w
+        y = int(((dec + 90.0) / 180.0) * h)
+        if y < 0:
+            y = 0
+        elif y >= h:
+            y = h - 1
+
+        m = clamp(mag, -1.5, MILKY_MAG_LIMIT)
+        flux = 10 ** (-0.4 * (m - 6.0))
+        # Compress dynamic range so dense faint regions dominate over a handful of bright stars.
+        weight = 0.18 + (flux ** 0.28)
+        grid[y * w + x] += weight
+
+    sigma_px = (MILKY_SMOOTH_SIGMA_DEG / 360.0) * w
+    kernel, radius = gaussian_kernel_1d(sigma_px)
+    smooth = blur_wrap_x(grid, w, h, kernel, radius)
+    smooth = blur_clamp_y(smooth, w, h, kernel, radius)
+
+    sorted_vals = sorted(smooth)
+    lo = percentile(sorted_vals, 35.0)
+    hi = percentile(sorted_vals, 99.7)
+    if hi <= lo:
+        hi = lo + 1e-9
+
+    out = bytearray(w * h)
+    for i, v in enumerate(smooth):
+        t = (v - lo) / (hi - lo)
+        t = clamp(t, 0.0, 1.0)
+        t = t ** 0.78
+        out[i] = int(round(t * 255.0))
+
+    encoded = base64.b64encode(bytes(out)).decode("ascii")
+    return {
+        "width": w,
+        "height": h,
+        "encoding": "base64-u8",
+        "data": encoded,
+        "source_mag_limit": MILKY_MAG_LIMIT,
+    }
 
 
 def build_grid(stars, cell_deg):
@@ -334,7 +460,7 @@ def remap_to_component(stars, edge_map, keep_set):
     return new_stars, new_edges
 
 
-def make_output(stars, edges, segments):
+def make_output(stars, edges, segments, milky_map):
     # Reduce payload size with compact array structures.
     stars_out = [
         [
@@ -375,6 +501,7 @@ def make_output(stars, edges, segments):
                 "graph_k": GRAPH_K,
                 "max_neighbor_deg": MAX_NEIGHBOR_DEG,
                 "constellation_match_max_deg": CONST_MATCH_MAX_DEG,
+                "milky_map_mag_limit": MILKY_MAG_LIMIT,
             },
             "counts": {
                 "stars": len(stars_out),
@@ -386,12 +513,14 @@ def make_output(stars, edges, segments):
             "star_schema": ["ra_deg", "dec_deg", "mag", "ci", "name", "constellation", "distance_pc", "spectral"],
             "edge_schema": ["from_idx", "to_idx", "distance_deg", "type"],
             "segment_schema": ["ra1_deg", "dec1_deg", "ra2_deg", "dec2_deg", "constellation_id"],
+            "milky_way_density_schema": ["width", "height", "encoding", "data", "source_mag_limit"],
         },
         "stars": stars_out,
         "edges": edges_out,
         "constellation_segments": segments_out,
         "bright_candidates": bright_candidates,
         "named_candidates": named_candidates,
+        "milky_way_density": milky_map,
     }
 
 
@@ -423,12 +552,19 @@ def main():
     print(f"Mapped constellation edges: {mapped}")
     print(f"Combined edge count: {len(edge_map)}")
 
+    print("Building Milky Way density map from full catalog...")
+    milky_map = build_milky_way_density(HYG_PATH)
+    print(
+        f"Milky Way density map: {milky_map['width']}x{milky_map['height']} "
+        f"(mag <= {milky_map['source_mag_limit']})"
+    )
+
     print("Keeping largest connected component...")
     keep = largest_component(len(stars), edge_map)
     print(f"Largest component size: {len(keep)} / {len(stars)}")
 
     stars2, edges2 = remap_to_component(stars, edge_map, keep)
-    out = make_output(stars2, edges2, segments)
+    out = make_output(stars2, edges2, segments, milky_map)
 
     OUT_PATH.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
     print(f"Wrote {OUT_PATH} ({OUT_PATH.stat().st_size / (1024 * 1024):.2f} MiB)")

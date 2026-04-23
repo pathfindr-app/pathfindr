@@ -67,9 +67,19 @@
     U: { label: 'Unknown Type', temp: 'Unknown', twinkle: 1.3, amp: 0.11 },
   };
 
+  const GL_COLORS = {
+    constellations: [0.5, 0.66, 0.95, 0.14],
+    graph: [0.5, 1.0, 0.89, 0.1],
+    optimal: [1.0, 0.84, 0.53, 0.5],
+    user: [0.52, 1.0, 0.9, 0.96],
+  };
+
   const state = {
+    app: null,
+    glCanvas: null,
     canvas: null,
     ctx: null,
+    webglRenderer: null,
     width: 0,
     height: 0,
     dpr: 1,
@@ -81,6 +91,7 @@
     brightCandidates: [],
     namedCandidates: [],
     starsByCon: new Map(),
+    milkyMap: null,
 
     starEq: null,      // Float32Array [x,y,z]*n
     starHzn: null,     // Float32Array [e,n,u]*n
@@ -137,6 +148,8 @@
     render: {
       showGraph: false,
       showLabels: true,
+      useWebGL: false,
+      glQuality: 'high',
       rafId: 0,
       prevFrameMs: 0,
     },
@@ -186,6 +199,16 @@
 
   function setLoading(msg) {
     if (el.loadingSub) el.loadingSub.textContent = msg;
+  }
+
+  function decodeBase64U8(base64) {
+    if (!base64) return null;
+    const raw = atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) {
+      out[i] = raw.charCodeAt(i);
+    }
+    return out;
   }
 
   function hideLoading() {
@@ -245,10 +268,19 @@
     return `rgba(${r},${g},${b},0.95)`;
   }
 
+  function colorRgbFromCI(ci) {
+    if (ci == null || Number.isNaN(ci)) return [217 / 255, 233 / 255, 1];
+    const t = clamp((ci + 0.4) / 2.6, 0, 1);
+    const r = (221 + 34 * t) / 255;
+    const g = (244 - 82 * t) / 255;
+    const b = (255 - 154 * t) / 255;
+    return [r, g, b];
+  }
+
   function starRadius(mag, depth) {
-    const base = (6.4 - mag) * 0.65;
-    const depthFactor = clamp(0.66 + depth * 0.44, 0.45, 1.15);
-    return clamp(base * depthFactor, 0.45, 4.9);
+    const base = (7.1 - mag) * 0.82;
+    const depthFactor = clamp(0.74 + depth * 0.56, 0.5, 1.42);
+    return clamp(base * depthFactor, 0.62, 7.2);
   }
 
   function seededUnit(seed) {
@@ -910,8 +942,10 @@
   function drawHorizonLine() {
     const ctx = state.ctx;
 
-    ctx.strokeStyle = 'rgba(134, 185, 255, 0.32)';
-    ctx.lineWidth = 1.35;
+    ctx.strokeStyle = state.render.useWebGL
+      ? 'rgba(160, 201, 255, 0.16)'
+      : 'rgba(134, 185, 255, 0.32)';
+    ctx.lineWidth = state.render.useWebGL ? 1.15 : 1.35;
     ctx.beginPath();
 
     let drawing = false;
@@ -935,12 +969,20 @@
     }
 
     ctx.stroke();
+
+    if (state.render.useWebGL) {
+      ctx.strokeStyle = 'rgba(153, 208, 255, 0.08)';
+      ctx.lineWidth = 3.6;
+      ctx.stroke();
+    }
   }
 
   function drawSkyGrid() {
     const ctx = state.ctx;
-    ctx.strokeStyle = 'rgba(104, 146, 210, 0.14)';
-    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = state.render.useWebGL
+      ? 'rgba(114, 157, 223, 0.06)'
+      : 'rgba(104, 146, 210, 0.14)';
+    ctx.lineWidth = state.render.useWebGL ? 0.68 : 0.8;
 
     // altitude rings
     for (const altDeg of [15, 35, 55, 75]) {
@@ -1137,7 +1179,7 @@
       const s = state.stars[idx];
       if (s[STAR.MAG] > 2.3 && state.camera.fov > 70) continue;
 
-      const fontSize = s[STAR.MAG] <= 1.1 ? 19 : s[STAR.MAG] <= 2.2 ? 17 : 15;
+      const fontSize = s[STAR.MAG] <= 1.1 ? 22 : s[STAR.MAG] <= 2.2 ? 19 : 17;
       ctx.font = `700 ${fontSize}px Rajdhani`;
       ctx.fillStyle = 'rgba(239,247,255,0.94)';
       ctx.strokeStyle = 'rgba(8, 16, 33, 0.75)';
@@ -1175,7 +1217,7 @@
       const cy = y / totalW;
       const label = zodiacNameLabel.toUpperCase();
 
-      const fontSize = state.camera.fov <= 62 ? 21 : 17;
+      const fontSize = state.camera.fov <= 62 ? 24 : 19;
       ctx.font = `700 ${fontSize}px Orbitron`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1212,6 +1254,21 @@
       ctx.arc(ex, ey, 8.4, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  function drawSelectedMarker() {
+    const idx = state.interaction.selectedStar;
+    if (idx < 0 || !state.starVisible[idx]) return;
+    const ctx = state.ctx;
+    const x = state.starX[idx];
+    const y = state.starY[idx];
+    const pulse = 0.75 + 0.25 * Math.sin(performance.now() * 0.006);
+
+    ctx.beginPath();
+    ctx.strokeStyle = `rgba(255, 245, 185, ${0.8 + pulse * 0.15})`;
+    ctx.lineWidth = 1.9;
+    ctx.arc(x, y, 8.1 + pulse * 2.4, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   function drawHover() {
@@ -1277,6 +1334,152 @@
     }
   }
 
+  function toClipX(x) {
+    return (x / state.width) * 2 - 1;
+  }
+
+  function toClipY(y) {
+    return 1 - (y / state.height) * 2;
+  }
+
+  function pushLineSegment(out, ax, ay, bx, by, color) {
+    out.push(
+      toClipX(ax), toClipY(ay), color[0], color[1], color[2], color[3],
+      toClipX(bx), toClipY(by), color[0], color[1], color[2], color[3]
+    );
+  }
+
+  function batchFromArrayData(arr) {
+    if (arr.length === 0) return null;
+    return {
+      data: new Float32Array(arr),
+      count: arr.length / 6,
+    };
+  }
+
+  function buildConstellationBatch() {
+    const out = [];
+    const segEq = state.segEq;
+    const m = state.skyMatrix;
+
+    for (let i = 0; i < state.segments.length; i++) {
+      const p = i * 6;
+      const x1 = segEq[p + 0];
+      const y1 = segEq[p + 1];
+      const z1 = segEq[p + 2];
+      const x2 = segEq[p + 3];
+      const y2 = segEq[p + 4];
+      const z2 = segEq[p + 5];
+
+      const e1 = m.e11 * x1 + m.e12 * y1 + m.e13 * z1;
+      const n1 = m.n11 * x1 + m.n12 * y1 + m.n13 * z1;
+      const u1 = m.u11 * x1 + m.u12 * y1 + m.u13 * z1;
+      const e2 = m.e11 * x2 + m.e12 * y2 + m.e13 * z2;
+      const n2 = m.n11 * x2 + m.n12 * y2 + m.n13 * z2;
+      const u2 = m.u11 * x2 + m.u12 * y2 + m.u13 * z2;
+
+      if (u1 < -0.1 && u2 < -0.1) continue;
+
+      const a = projectENU(e1, n1, u1);
+      const b = projectENU(e2, n2, u2);
+      if (!a || !b) continue;
+
+      pushLineSegment(out, a.x, a.y, b.x, b.y, GL_COLORS.constellations);
+    }
+
+    return batchFromArrayData(out);
+  }
+
+  function buildGraphBatch() {
+    if (!state.render.showGraph) return null;
+    const out = [];
+
+    for (let i = 0; i < state.edges.length; i++) {
+      const edge = state.edges[i];
+      const a = edge[0];
+      const b = edge[1];
+      if (!state.starVisible[a] || !state.starVisible[b]) continue;
+      pushLineSegment(out, state.starX[a], state.starY[a], state.starX[b], state.starY[b], GL_COLORS.graph);
+    }
+
+    return batchFromArrayData(out);
+  }
+
+  function buildPathBatch(path, color) {
+    if (!path || path.length < 2) return null;
+    const out = [];
+
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1];
+      const b = path[i];
+      if (!state.starVisible[a] || !state.starVisible[b]) continue;
+      pushLineSegment(out, state.starX[a], state.starY[a], state.starX[b], state.starY[b], color);
+    }
+
+    return batchFromArrayData(out);
+  }
+
+  function buildStarBatch() {
+    const out = [];
+
+    for (let i = 0; i < state.stars.length; i++) {
+      if (!state.starVisible[i]) continue;
+      const star = state.stars[i];
+      const depth = state.starZ[i];
+      const mag = star[STAR.MAG];
+      const baseRadius = starRadius(mag, depth);
+      const luminous = clamp((3.1 - mag) / 4.2, 0, 1);
+      const glam = 1.18 + luminous * 0.74;
+      const size = baseRadius * glam + luminous * 1.65;
+      const rgb = colorRgbFromCI(star[STAR.CI]);
+
+      out.push(
+        toClipX(state.starX[i]),
+        toClipY(state.starY[i]),
+        size,
+        rgb[0],
+        rgb[1],
+        rgb[2],
+        state.starPhase[i] || 0,
+        state.starSpeed[i] || 1,
+        state.starAmp[i] || 0.1
+      );
+    }
+
+    if (out.length === 0) return null;
+    return {
+      data: new Float32Array(out),
+      count: out.length / 9,
+    };
+  }
+
+  function renderWebGLFrame(frameMs) {
+    if (!state.webglRenderer || !state.render.useWebGL) return false;
+    const m = state.skyMatrix;
+
+    const scene = {
+      timeSec: frameMs * 0.001,
+      cameraAlt: state.camera.alt,
+      fov: state.camera.fov,
+      camRight: state.camera.right,
+      camUp: state.camera.up,
+      camFwd: state.camera.forward,
+      enuToEq: [
+        m.e11, m.e12, m.e13,
+        m.n11, m.n12, m.n13,
+        m.u11, m.u12, m.u13,
+      ],
+      stars: buildStarBatch(),
+      constellations: buildConstellationBatch(),
+      graph: buildGraphBatch(),
+      optimalPath: buildPathBatch(state.mission.optimalPath, GL_COLORS.optimal),
+      userPath: buildPathBatch(state.mission.userPath, GL_COLORS.user),
+    };
+
+    state.webglRenderer.render(scene);
+    return true;
+  }
+
   function render(frameMs) {
     state.render.rafId = requestAnimationFrame(render);
 
@@ -1293,19 +1496,30 @@
 
     const ctx = state.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, state.width, state.height);
+    ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
 
-    drawBackdrop();
-    drawSkyGrid();
-    drawConstellations();
-    drawGraphOverlay();
+    const didWebGL = renderWebGLFrame(frameMs);
+    if (!didWebGL) {
+      drawBackdrop();
+      drawSkyGrid();
+      drawConstellations();
+      drawGraphOverlay();
+      drawPath(state.mission.optimalPath, 'rgba(255, 210, 128, 0.36)', 2.4);
+      drawPath(state.mission.userPath, 'rgba(132, 255, 227, 0.96)', 3.05);
+      drawHorizonLine();
+      drawStars();
+    } else {
+      if (state.render.showGraph) {
+        drawSkyGrid();
+      }
+      drawHorizonLine();
+    }
 
-    drawPath(state.mission.optimalPath, 'rgba(255, 210, 128, 0.36)', 2.4);
-    drawPath(state.mission.userPath, 'rgba(132, 255, 227, 0.96)', 3.05);
-
-    drawHorizonLine();
-    drawStars();
     drawMissionMarkers();
+    if (didWebGL) {
+      drawSelectedMarker();
+    }
     drawLabels();
     drawHover();
   }
@@ -1319,10 +1533,47 @@
     state.canvas.width = Math.round(state.width * state.dpr);
     state.canvas.height = Math.round(state.height * state.dpr);
     state.ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+
+    if (state.webglRenderer) {
+      state.webglRenderer.resize(state.width, state.height, state.dpr);
+    } else if (state.glCanvas) {
+      state.glCanvas.width = Math.round(state.width * state.dpr);
+      state.glCanvas.height = Math.round(state.height * state.dpr);
+    }
   }
 
   function toggleButton(btn, active) {
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+
+  function qualityLabel(level) {
+    if (level === 'low') return 'FX Low';
+    if (level === 'medium') return 'FX Med';
+    return 'FX High';
+  }
+
+  function updateQualityUI() {
+    if (!el.btnQuality) return;
+    if (!state.render.useWebGL) {
+      el.btnQuality.textContent = 'FX 2D';
+      el.btnQuality.setAttribute('aria-disabled', 'true');
+      return;
+    }
+    el.btnQuality.textContent = qualityLabel(state.render.glQuality);
+    el.btnQuality.removeAttribute('aria-disabled');
+  }
+
+  function cycleQuality() {
+    if (!state.webglRenderer || !state.render.useWebGL) {
+      showToast('WebGL shaders unavailable. Running 2D renderer.');
+      return;
+    }
+    const levels = ['high', 'medium', 'low'];
+    const idx = levels.indexOf(state.render.glQuality);
+    state.render.glQuality = levels[(idx + 1) % levels.length];
+    state.webglRenderer.setQuality(state.render.glQuality);
+    updateQualityUI();
+    showToast(`Renderer quality: ${state.render.glQuality.toUpperCase()}`, 1300);
   }
 
   function cycleTimeSpeed() {
@@ -1331,6 +1582,38 @@
     state.observer.timeScale = speeds[(idx + 1) % speeds.length];
     updateObserverUI();
     showToast(`Time speed set to ${state.observer.timeScale}x`, 1400);
+  }
+
+  function initializeWebGL() {
+    const RendererCtor = window.CosmicWebGLRenderer;
+    if (!state.glCanvas || typeof RendererCtor !== 'function') {
+      state.render.useWebGL = false;
+      state.app.classList.add('webgl-fallback');
+      updateQualityUI();
+      return;
+    }
+
+    try {
+      state.webglRenderer = new RendererCtor(state.glCanvas, {
+        quality: state.render.glQuality,
+      });
+      state.webglRenderer.resize(state.width, state.height, state.dpr);
+      if (state.milkyMap) {
+        state.webglRenderer.setMilkyWayDensityMap(state.milkyMap);
+      }
+      state.render.useWebGL = true;
+      state.app.classList.remove('webgl-fallback');
+      state.app.classList.add('webgl-ready');
+      updateQualityUI();
+    } catch (err) {
+      console.warn('[Cosmic] WebGL renderer init failed:', err);
+      state.webglRenderer = null;
+      state.render.useWebGL = false;
+      state.app.classList.remove('webgl-ready');
+      state.app.classList.add('webgl-fallback');
+      updateQualityUI();
+      showToast('Shader renderer unavailable. Using 2D fallback.');
+    }
   }
 
   function applyObserverInputs() {
@@ -1398,6 +1681,7 @@
       toggleButton(el.btnLabels, state.render.showLabels);
       showToast(state.render.showLabels ? 'Labels on' : 'Labels off', 1300);
     });
+    el.btnQuality.addEventListener('click', cycleQuality);
 
     el.btnApplyObserver.addEventListener('click', applyObserverInputs);
     el.btnGeolocate.addEventListener('click', useGeolocation);
@@ -1422,6 +1706,9 @@
       if (k === 'l') {
         state.render.showLabels = !state.render.showLabels;
         toggleButton(el.btnLabels, state.render.showLabels);
+      }
+      if (k === 'v') {
+        cycleQuality();
       }
     });
   }
@@ -1550,6 +1837,24 @@
     state.brightCandidates = data.bright_candidates || [];
     state.namedCandidates = data.named_candidates || [];
 
+    const milky = data.milky_way_density || null;
+    if (
+      milky &&
+      milky.encoding === 'base64-u8' &&
+      Number.isFinite(milky.width) &&
+      Number.isFinite(milky.height) &&
+      typeof milky.data === 'string'
+    ) {
+      const pixels = decodeBase64U8(milky.data);
+      if (pixels && pixels.length === (milky.width * milky.height)) {
+        state.milkyMap = {
+          width: milky.width,
+          height: milky.height,
+          pixels,
+        };
+      }
+    }
+
     initSkyBuffers();
     buildGraph();
     buildConstellationIndex();
@@ -1561,11 +1866,17 @@
     if (counts) {
       showToast(`Loaded ${counts.stars.toLocaleString()} stars and ${counts.edges.toLocaleString()} links.`, 3000);
     }
+
+    if (state.webglRenderer && state.milkyMap) {
+      state.webglRenderer.setMilkyWayDensityMap(state.milkyMap);
+    }
   }
 
   function bindElements() {
+    state.app = $('cosmic-app');
+    state.glCanvas = $('cosmic-gl-canvas');
     state.canvas = $('cosmic-canvas');
-    state.ctx = state.canvas.getContext('2d', { alpha: false });
+    state.ctx = state.canvas.getContext('2d', { alpha: true });
 
     el.loading = $('loading');
     el.loadingSub = $('loading-sub');
@@ -1599,6 +1910,7 @@
     el.btnCenter = $('btn-center');
     el.btnGraph = $('btn-graph');
     el.btnLabels = $('btn-labels');
+    el.btnQuality = $('btn-quality');
 
     el.btnApplyObserver = $('btn-apply-observer');
     el.btnGeolocate = $('btn-geolocate');
@@ -1614,6 +1926,7 @@
   async function init() {
     bindElements();
     resize();
+    initializeWebGL();
 
     window.addEventListener('resize', resize);
 

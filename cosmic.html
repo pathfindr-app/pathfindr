@@ -11,6 +11,7 @@
 </head>
 <body>
   <div id="cosmic-app" class="cosmic-app">
+    <canvas id="cosmic-gl-canvas" aria-hidden="true"></canvas>
     <canvas id="cosmic-canvas" aria-label="Interactive 3D sky"></canvas>
 
     <header class="hud-top glass">
@@ -44,6 +45,7 @@
         <button id="btn-center" class="btn">Center Route (C)</button>
         <button id="btn-graph" class="btn btn-toggle" aria-pressed="false">Graph (G)</button>
         <button id="btn-labels" class="btn btn-toggle" aria-pressed="true">Labels (L)</button>
+        <button id="btn-quality" class="btn">FX High</button>
         <a class="btn btn-link" href="/index.html">Back To Main Game</a>
       </div>
     </header>
@@ -132,6 +134,7 @@
     </div>
   </div>
 
+  <script src="/cosmic/webgl-renderer.js"></script>
   <script src="/cosmic/cosmic.js"></script>
 </body>
 </html>

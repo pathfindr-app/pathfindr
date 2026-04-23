@@ -11,12 +11,48 @@ const PathfindrPayments = {
   initialized: false,
   products: [],
   Purchases: null, // RevenueCat SDK reference
+  nativePremiumActive: false,
+
+  getNativePremiumCacheKey() {
+    return PathfindrConfig.localStorageKeys.nativePremium;
+  },
+
+  getCachedPremiumStatus() {
+    if (typeof window === 'undefined') return this.nativePremiumActive;
+    try {
+      return window.localStorage.getItem(this.getNativePremiumCacheKey()) === 'true';
+    } catch (error) {
+      return this.nativePremiumActive;
+    }
+  },
+
+  setCachedPremiumStatus(isPremium) {
+    this.nativePremiumActive = !!isPremium;
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(this.getNativePremiumCacheKey(), isPremium ? 'true' : 'false');
+      } catch (error) {
+        console.warn('[Payments] Failed to persist premium cache:', error);
+      }
+    }
+  },
+
+  hasNativeBillingConfig() {
+    const platform = PathfindrConfig.platform;
+    if (platform !== 'ios' && platform !== 'android') return true;
+    const apiKey = platform === 'ios'
+      ? PathfindrConfig.revenuecat.apiKey.ios
+      : PathfindrConfig.revenuecat.apiKey.android;
+    return !!apiKey && !apiKey.startsWith('YOUR_');
+  },
 
   /**
    * Initialize payments based on platform
    */
   async init() {
     if (this.initialized) return;
+
+    this.nativePremiumActive = this.getCachedPremiumStatus();
 
     const platform = PathfindrConfig.platform;
     console.log('[Payments] Initializing for platform:', platform);
@@ -56,7 +92,7 @@ const PathfindrPayments = {
         : PathfindrConfig.revenuecat.apiKey.android;
 
       // Check if API key is configured
-      if (apiKey.startsWith('YOUR_')) {
+      if (!this.hasNativeBillingConfig()) {
         console.warn('[Payments] RevenueCat API key not configured');
         return;
       }
@@ -73,6 +109,7 @@ const PathfindrPayments = {
 
       // Load products
       await this.loadProducts();
+      await this.refreshNativePremiumStatus();
 
       console.log('[Payments] RevenueCat initialized successfully');
     } catch (error) {
@@ -203,6 +240,13 @@ const PathfindrPayments = {
    * Native: Purchase via RevenueCat
    */
   async purchaseRevenueCat() {
+    if (!this.hasNativeBillingConfig()) {
+      return {
+        success: false,
+        error: 'Native purchases are not configured for this platform build yet.',
+      };
+    }
+
     if (!this.Purchases) {
       console.error('[Payments] RevenueCat not initialized');
       return { success: false, error: 'Payment system not available' };
@@ -227,6 +271,7 @@ const PathfindrPayments = {
       // Check if premium entitlement is now active
       const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
       if (customerInfo.entitlements.active[premiumEntitlement]) {
+        this.setCachedPremiumStatus(true);
         await this.handlePurchaseSuccess();
         return { success: true };
       }
@@ -260,16 +305,31 @@ const PathfindrPayments = {
     }
 
     if (!this.Purchases) {
-      return false;
+      return this.getCachedPremiumStatus();
+    }
+
+    try {
+      return await this.refreshNativePremiumStatus();
+    } catch (error) {
+      console.error('[Payments] Failed to check premium status:', error);
+      return this.getCachedPremiumStatus();
+    }
+  },
+
+  async refreshNativePremiumStatus() {
+    if (!this.Purchases) {
+      return this.getCachedPremiumStatus();
     }
 
     try {
       const { customerInfo } = await this.Purchases.getCustomerInfo();
       const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
-      return !!customerInfo.entitlements.active[premiumEntitlement];
+      const isPremium = !!customerInfo.entitlements.active[premiumEntitlement];
+      this.setCachedPremiumStatus(isPremium);
+      return isPremium;
     } catch (error) {
-      console.error('[Payments] Failed to check premium status:', error);
-      return false;
+      console.error('[Payments] Failed to refresh native premium status:', error);
+      return this.getCachedPremiumStatus();
     }
   },
 
@@ -298,6 +358,7 @@ const PathfindrPayments = {
       const { customerInfo } = await this.Purchases.restorePurchases();
       const premiumEntitlement = PathfindrConfig.revenuecat.entitlements.premium;
       const isPremium = !!customerInfo.entitlements.active[premiumEntitlement];
+      this.setCachedPremiumStatus(isPremium);
 
       if (isPremium) {
         await this.handlePurchaseSuccess();
@@ -316,6 +377,10 @@ const PathfindrPayments = {
    * Updates user record and removes ads
    */
   async handlePurchaseSuccess() {
+    if (PathfindrConfig.platform === 'ios' || PathfindrConfig.platform === 'android') {
+      this.setCachedPremiumStatus(true);
+    }
+
     // Refresh profile from server to get webhook-updated purchase status
     // NOTE: has_purchased is ONLY set by Stripe webhook for security
     if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.refreshProfile) {
@@ -331,7 +396,7 @@ const PathfindrPayments = {
     }
 
     // Remove ads if now premium
-    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.hasPurchased && PathfindrAuth.hasPurchased()) {
+    if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
       if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
         await PathfindrAds.removeAllAds();
       }

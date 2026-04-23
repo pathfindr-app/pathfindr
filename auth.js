@@ -297,6 +297,54 @@ const PathfindrAuth = {
     window.pathfindrUser = null;
   },
 
+  async deleteAccount() {
+    if (!this.client || !this.currentUser) {
+      return { success: false, error: 'You must be signed in to delete your account.' };
+    }
+
+    const confirmation = window.prompt(
+      'Type DELETE to permanently remove your Pathfindr account, profile, scores, and saved progress.'
+    );
+
+    if (confirmation !== 'DELETE') {
+      return { success: false, cancelled: true, error: 'Account deletion cancelled.' };
+    }
+
+    try {
+      const { data: { session }, error: sessionError } = await this.client.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        return { success: false, error: 'Please sign in again before deleting your account.' };
+      }
+
+      const response = await fetch(`${PathfindrConfig.supabase.url}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': PathfindrConfig.supabase.anonKey,
+        },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return { success: false, error: payload.error || 'Unable to delete your account right now.' };
+      }
+
+      try {
+        localStorage.removeItem(PathfindrConfig.localStorageKeys.nativePremium);
+      } catch (error) {
+        // Ignore storage cleanup failures.
+      }
+
+      await this.logout();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message || 'Unable to delete your account right now.' };
+    }
+  },
+
   /**
    * Load user profile from database
    * Creates a new profile if one doesn't exist (for OAuth users)
@@ -705,7 +753,8 @@ const PathfindrAuth = {
    * @returns {boolean}
    */
   hasPurchased() {
-    return this.currentProfile?.has_purchased === true;
+    return this.currentProfile?.has_purchased === true ||
+      (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.hasNativePremiumAccess());
   },
 
   /**
@@ -745,7 +794,7 @@ const PathfindrAuth = {
         console.log('[Auth] Profile refreshed, has_purchased:', data.has_purchased);
 
         // Update UI if purchase status changed
-        if (data.has_purchased) {
+        if (this.hasPurchased()) {
           this.updateProfileModal();
           // Remove ads if now premium
           if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {

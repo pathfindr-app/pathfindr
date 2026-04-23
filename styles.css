@@ -7834,6 +7834,17 @@ body.has-ad-banner #gameplay-hud {
     background: rgba(255, 255, 255, 0.02);
 }
 
+.btn-holo-danger {
+    border-color: rgba(255, 107, 157, 0.25);
+    color: rgba(255, 164, 188, 0.9);
+}
+
+.btn-holo-danger:hover {
+    border-color: rgba(255, 107, 157, 0.45);
+    color: #ffd4df;
+    background: rgba(255, 107, 157, 0.08);
+}
+
 /* Hide elements from old design */
 .auth-logged-in .user-stats,
 .auth-logged-in .user-profile {

@@ -553,6 +553,7 @@
                                                         Go Premium · $2
                                                     </span>
                                                 </button>
+                                                <button id="splash-delete-account-btn" class="btn-holo-secondary btn-holo-danger">Delete Account</button>
                                                 <button id="splash-auth-signout-btn" class="btn-holo-secondary">Sign Out</button>
                                             </div>
                                         </div>
@@ -969,6 +970,7 @@
                                         Go Premium · $2
                                     </span>
                                 </button>
+                                <button id="delete-account-btn" class="btn-holo-secondary btn-holo-danger">Delete Account</button>
                                 <button id="logout-btn" class="btn-holo-secondary">Sign Out</button>
                             </div>
                         </div>
@@ -1880,6 +1882,30 @@
                 updateAuthUI();
             });
 
+            bindPress(document.getElementById('delete-account-btn'), async () => {
+                const result = await PathfindrAuth.deleteAccount();
+                if (!result.success && !result.cancelled) {
+                    alert(result.error || 'Unable to delete your account right now.');
+                    return;
+                }
+                if (result.success) {
+                    updateAuthUI();
+                    alert('Your Pathfindr account has been deleted.');
+                }
+            });
+
+            bindPress(document.getElementById('splash-delete-account-btn'), async () => {
+                const result = await PathfindrAuth.deleteAccount();
+                if (!result.success && !result.cancelled) {
+                    alert(result.error || 'Unable to delete your account right now.');
+                    return;
+                }
+                if (result.success) {
+                    updateAuthUI();
+                    alert('Your Pathfindr account has been deleted.');
+                }
+            });
+
             bindPress(splashEditCallsignBtn, () => {
                 if (PathfindrAuth.isLoggedIn()) {
                     PathfindrAuth.showCallsignModal(true);
@@ -2061,6 +2087,9 @@
 
             // Initialize auth after UI handlers are live.
             await PathfindrAuth.init();
+            await PathfindrPayments.init();
+            await PathfindrPayments.checkPremiumStatus();
+            updateAuthUI();
 
             // Update Pro status after auth init
             updateProUserStatus();

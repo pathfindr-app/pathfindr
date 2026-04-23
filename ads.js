@@ -31,10 +31,11 @@ const PathfindrAds = {
     // Native platforms use AdMob
     try {
       const { AdMob } = await import('@capacitor-community/admob');
+      const testing = PathfindrConfig.isAdMobTestingEnabled();
 
       await AdMob.initialize({
-        testingDevices: PathfindrConfig.admob.testing ? ['DEVICE_ID'] : [],
-        initializeForTesting: PathfindrConfig.admob.testing,
+        testingDevices: testing ? ['DEVICE_ID'] : [],
+        initializeForTesting: testing,
       });
 
       // Set up event listeners
@@ -80,7 +81,7 @@ const PathfindrAds = {
       await this.prepareInterstitial();
       await this.prepareRewarded();
 
-      console.log('[Ads] AdMob initialized successfully');
+      console.log('[Ads] AdMob initialized successfully', { testing });
     } catch (error) {
       console.error('[Ads] Failed to initialize AdMob:', error);
     }
