@@ -169,6 +169,13 @@ const PathfindrPayments = {
   },
 
   /**
+   * Backward-compatible entry point used by existing account buttons.
+   */
+  async purchaseRemoveAds() {
+    return await this.showPurchasePrompt();
+  },
+
+  /**
    * Web: Redirect to Stripe Checkout via Edge Function
    */
   async purchaseStripe() {
@@ -404,6 +411,9 @@ const PathfindrPayments = {
       // Update Pro user status in UI
       if (typeof updateProUserStatus === 'function') {
         updateProUserStatus();
+      }
+      if (typeof window.refreshPremiumUI === 'function') {
+        await window.refreshPremiumUI();
       }
 
       console.log('[Payments] Purchase verified - premium unlocked');

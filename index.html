@@ -1163,6 +1163,10 @@
             }
         }
 
+        window.refreshPremiumUI = async function refreshPremiumUI() {
+            updateProUserStatus();
+        };
+
         document.addEventListener('DOMContentLoaded', async () => {
             // Wire up auth UI immediately. Auth init can stall on network/session restore,
             // but the modal still needs to be interactive if it opens before init completes.
@@ -1918,7 +1922,14 @@
                 await PathfindrPayments.init();
                 const result = await PathfindrPayments.purchaseRemoveAds();
 
-                if (!result.success) {
+                if (result.success && result.alreadyPremium) {
+                    await updateSplashPlayerCard();
+                    updateProUserStatus();
+                    splashRemoveAdsBtn.disabled = false;
+                    return;
+                }
+
+                if (!result.success || result.requiresAuth) {
                     splashRemoveAdsBtn.disabled = false;
                     if (result.error) {
                         alert('Purchase failed: ' + result.error);
@@ -2002,7 +2013,14 @@
                 await PathfindrPayments.init();
                 const result = await PathfindrPayments.purchaseRemoveAds();
 
-                if (!result.success) {
+                if (result.success && result.alreadyPremium) {
+                    await updateAuthUI();
+                    updateProUserStatus();
+                    removeAdsBtn.disabled = false;
+                    return;
+                }
+
+                if (!result.success || result.requiresAuth) {
                     removeAdsBtn.disabled = false;
                     removeAdsBtn.textContent = 'Remove Ads - $2';
                     if (result.error) {
@@ -2067,6 +2085,11 @@
 
                 updateSplashPlayerCard();
             }
+
+            window.refreshPremiumUI = async function refreshPremiumUI() {
+                updateProUserStatus();
+                await updateAuthUI();
+            };
 
             // Listen for auth changes
             PathfindrAuth.onAuthStateChange(() => {
