@@ -747,6 +747,9 @@ const PathfindrAuth = {
         // Update UI if purchase status changed
         if (data.has_purchased) {
           this.updateProfileModal();
+          if (typeof window.refreshPremiumUI === 'function') {
+            window.refreshPremiumUI();
+          }
           // Remove ads if now premium
           if (typeof PathfindrAds !== 'undefined' && PathfindrAds.removeAllAds) {
             PathfindrAds.removeAllAds();

@@ -7868,6 +7868,73 @@ function selectRandomEndpoints(options = {}) {
     const idealDistance = (scale.min + scale.max) * 0.5;
     const minBalance = GameState.currentRound >= 3 ? 0.26 : 0.18;
     const minAngleDelta = recentBearings.length > 0 ? (GameState.currentRound >= 3 ? 28 : 20) : 0;
+    const routeShapePool = [];
+
+    const rememberRouteCandidate = (candidate) => {
+        routeShapePool.push(candidate);
+        routeShapePool.sort((a, b) => b.score - a.score);
+        if (routeShapePool.length > 28) routeShapePool.length = 28;
+    };
+
+    const getRouteShapeMetrics = (candidate) => {
+        const path = runAStar(candidate.startNode, candidate.endNode).path;
+        if (!path || path.length < 2) {
+            return { path, score: -10, turnScore: 0, routeBalance: 0, straightness: 1 };
+        }
+
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLng = Infinity;
+        let maxLng = -Infinity;
+        let previousBearing = null;
+        let meaningfulTurns = 0;
+
+        for (let i = 0; i < path.length; i++) {
+            const pos = GameState.nodes.get(path[i]);
+            if (!pos) continue;
+            minLat = Math.min(minLat, pos.lat);
+            maxLat = Math.max(maxLat, pos.lat);
+            minLng = Math.min(minLng, pos.lng);
+            maxLng = Math.max(maxLng, pos.lng);
+
+            if (i > 0) {
+                const prev = GameState.nodes.get(path[i - 1]);
+                if (!prev) continue;
+                const bearing = getUndirectedBearing(prev, pos);
+                if (previousBearing !== null) {
+                    const turn = getAngularDifference(previousBearing, bearing);
+                    if (turn >= 24) meaningfulTurns++;
+                }
+                previousBearing = bearing;
+            }
+        }
+
+        const routeLatKm = haversineDistance(minLat, minLng, maxLat, minLng);
+        const routeLngKm = haversineDistance(minLat, minLng, minLat, maxLng);
+        const routeDominant = Math.max(routeLatKm, routeLngKm, 0.001);
+        const routeBalance = Math.min(routeLatKm, routeLngKm) / routeDominant;
+        const routedDistance = calculateNodePathDistance(path);
+        const directDistance = haversineDistance(
+            candidate.startPos.lat,
+            candidate.startPos.lng,
+            candidate.endPos.lat,
+            candidate.endPos.lng
+        );
+        const straightness = directDistance / Math.max(routedDistance, 0.001);
+        const turnScore = Math.min(meaningfulTurns / 3, 1);
+        const routeBalanceScore = Math.min(routeBalance / 0.34, 1);
+        const straightnessScore = straightness > 0.92
+            ? Math.max(0, (1 - straightness) / 0.08)
+            : Math.min(straightness / 0.58, 1);
+
+        return {
+            path,
+            score: (turnScore * 2.4) + (routeBalanceScore * 1.8) + (straightnessScore * 1.2),
+            turnScore,
+            routeBalance,
+            straightness,
+        };
+    };
 
     let bestQualified = null;
     let bestFallback = null;
@@ -7912,6 +7979,7 @@ function selectRandomEndpoints(options = {}) {
 
             const candidate = { startNode, endNode, startPos, endPos, bearing, score, balance, angleDelta, componentRatio };
             const qualifies = balance >= minBalance && componentRatio >= 0.16 && angleDelta >= minAngleDelta;
+            rememberRouteCandidate(candidate);
 
             if (qualifies && (!bestQualified || candidate.score > bestQualified.score)) {
                 bestQualified = candidate;
@@ -7928,16 +7996,43 @@ function selectRandomEndpoints(options = {}) {
     }
 
     const selected = bestQualified || bestFallback;
-    if (!selected) {
+    const shapeCandidates = routeShapePool.length > 0 ? routeShapePool : [selected].filter(Boolean);
+    let shapedSelected = null;
+
+    for (const candidate of shapeCandidates) {
+        const shape = getRouteShapeMetrics(candidate);
+        const shapedScore = candidate.score + shape.score;
+        const shapeQualifies = shape.path?.length >= 4
+            && shape.turnScore >= 0.34
+            && shape.routeBalance >= 0.18
+            && shape.straightness < 0.94;
+
+        if (shapeQualifies && (!shapedSelected || shapedScore > shapedSelected.shapedScore)) {
+            shapedSelected = { ...candidate, shapedScore };
+        }
+    }
+
+    if (!shapedSelected) {
+        for (const candidate of shapeCandidates) {
+            const shape = getRouteShapeMetrics(candidate);
+            const shapedScore = candidate.score + shape.score;
+            if (!shapedSelected || shapedScore > shapedSelected.shapedScore) {
+                shapedSelected = { ...candidate, shapedScore };
+            }
+        }
+    }
+
+    const finalSelected = shapedSelected || selected;
+    if (!finalSelected) {
         console.error('Failed to find endpoint pair!');
         return;
     }
 
-    GameState.startNode = selected.startNode;
-    GameState.endNode = selected.endNode;
+    GameState.startNode = finalSelected.startNode;
+    GameState.endNode = finalSelected.endNode;
     GameState.endpointSelection.recentBearings = [
         ...recentBearings.slice(-3),
-        selected.bearing,
+        finalSelected.bearing,
     ];
 
     const startPos = GameState.nodes.get(GameState.startNode);
