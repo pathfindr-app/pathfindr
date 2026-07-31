@@ -6600,6 +6600,7 @@ const GameState = {
     edges: new Map(),
     edgeList: [],
     edgeLookup: new Map(),  // Fast lookup: edgeKey -> edge object
+    roadNetworkBounds: null,
 
     // Debug state
     debug: {
@@ -6657,6 +6658,7 @@ const GameState = {
     endLabel: null,
     endpointSelection: {
         recentBearings: [],
+        recentRoutes: [],
         cityKey: null,
         preparedRounds: new Map(),
         currentPreparedRoute: null,
@@ -7831,12 +7833,40 @@ const PathfindrPerformance = window.PathfindrPerformance = window.PathfindrPerfo
     endpointSelection: null,
 };
 
+function calculateRoadNetworkBounds() {
+    const validNodes = GameState.debug.largestComponentNodes;
+    let south = Infinity;
+    let west = Infinity;
+    let north = -Infinity;
+    let east = -Infinity;
+
+    for (const [nodeId, pos] of GameState.nodes) {
+        if (pos?.virtual) continue;
+        if (validNodes instanceof Set && !validNodes.has(nodeId)) continue;
+        south = Math.min(south, pos.lat);
+        west = Math.min(west, pos.lng);
+        north = Math.max(north, pos.lat);
+        east = Math.max(east, pos.lng);
+    }
+
+    if (![south, west, north, east].every(Number.isFinite)) return null;
+    return {
+        south,
+        west,
+        north,
+        east,
+        centerLat: (south + north) * 0.5,
+        centerLng: (west + east) * 0.5,
+    };
+}
+
 function processRoadData(data) {
     const processStartedAt = performance.now();
     cancelEndpointPrecompute();
     GameState.roadGraphVersion++;
     GameState.endpointSelection.preparedRounds.clear();
     GameState.endpointSelection.currentPreparedRoute = null;
+    GameState.endpointSelection.recentRoutes = [];
     GameState.nodes.clear();
     GameState.edges.clear();
     GameState.edgeList = [];
@@ -7904,6 +7934,7 @@ function processRoadData(data) {
     // Analyze graph connectivity
     analyzeGraphConnectivity();
     RoadSpatialIndex.build();
+    GameState.roadNetworkBounds = calculateRoadNetworkBounds();
 
     // Invalidate all projected caches - new road data loaded
     invalidateProjectedCaches();
@@ -8078,6 +8109,47 @@ function playAgain() {
     showModeSelector();
 }
 
+function getEndpointPairKey(startNode, endNode) {
+    return String(startNode) < String(endNode)
+        ? `${startNode}|${endNode}`
+        : `${endNode}|${startNode}`;
+}
+
+function getRouteEdgeSignature(path = []) {
+    const edgeKeys = new Set();
+    for (let i = 1; i < path.length; i++) {
+        edgeKeys.add(getCanonicalEdgeKey(path[i - 1], path[i]));
+    }
+    return edgeKeys;
+}
+
+function getRouteContainmentOverlap(edgeKeysA, edgeKeysB) {
+    if (!edgeKeysA?.size || !edgeKeysB?.size) return 0;
+    const smaller = edgeKeysA.size <= edgeKeysB.size ? edgeKeysA : edgeKeysB;
+    const larger = smaller === edgeKeysA ? edgeKeysB : edgeKeysA;
+    let shared = 0;
+    for (const edgeKey of smaller) {
+        if (larger.has(edgeKey)) shared++;
+    }
+    return shared / smaller.size;
+}
+
+function rememberAppliedRoute(candidate) {
+    const path = candidate?.preparedRoute?.path || [];
+    if (path.length < 2) return;
+
+    const routeRecord = {
+        pairKey: getEndpointPairKey(candidate.startNode, candidate.endNode),
+        edgeKeys: getRouteEdgeSignature(path),
+        startPos: candidate.startPos || GameState.nodes.get(candidate.startNode),
+        endPos: candidate.endPos || GameState.nodes.get(candidate.endNode),
+        round: GameState.currentRound,
+    };
+
+    const recentRoutes = GameState.endpointSelection.recentRoutes || [];
+    GameState.endpointSelection.recentRoutes = [...recentRoutes.slice(-3), routeRecord];
+}
+
 function applyEndpointCandidate(candidate, options = {}) {
     const { deferMarkerPlacement = true, markerDelayMs = 100, adjustViewport = true } = options;
     if (!candidate || !GameState.nodes.has(candidate.startNode) || !GameState.nodes.has(candidate.endNode)) {
@@ -8125,6 +8197,13 @@ function applyEndpointCandidate(candidate, options = {}) {
         scheduleMapPresentationRefresh();
     }
 
+    rememberAppliedRoute(candidate);
+    console.log(
+        `[RouteDiversity] Round ${GameState.currentRound} pair ` +
+        `${getEndpointPairKey(candidate.startNode, candidate.endNode)} ` +
+        `overlap ${Math.round((candidate.routeOverlap || 0) * 100)}%`
+    );
+
     return true;
 }
 
@@ -8146,9 +8225,12 @@ function selectRandomEndpoints(options = {}) {
                 candidatePoolSize: 1,
                 round: selectionRound,
                 source: 'prepared',
+                routeOverlap: preselectedCandidate.routeOverlap || 0,
+                endpointNovelty: preselectedCandidate.endpointNovelty || 0,
             };
             console.log(`[Performance] Applied prepared round ${selectionRound} endpoints in ` +
-                `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms`);
+                `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms ` +
+                `(overlap ${(PathfindrPerformance.endpointSelection.routeOverlap * 100).toFixed(0)}%)`);
             return preselectedCandidate;
         }
     }
@@ -8169,18 +8251,26 @@ function selectRandomEndpoints(options = {}) {
         return;
     }
 
+    // Endpoint selection must use stable graph bounds. The live map camera is
+    // fitted to each route and would otherwise make later rounds search inside
+    // the previous route's viewport.
+    const graphBounds = GameState.roadNetworkBounds;
     const mapBounds = GameState.map.getBounds();
-    const centerLat = mapBounds.getCenter().lat;
-    const centerLng = mapBounds.getCenter().lng;
-    const boundsWidth = mapBounds.getEast() - mapBounds.getWest();
-    const boundsHeight = mapBounds.getNorth() - mapBounds.getSouth();
+    const centerLat = graphBounds?.centerLat ?? mapBounds.getCenter().lat;
+    const centerLng = graphBounds?.centerLng ?? mapBounds.getCenter().lng;
+    const boundsWidth = graphBounds
+        ? graphBounds.east - graphBounds.west
+        : mapBounds.getEast() - mapBounds.getWest();
+    const boundsHeight = graphBounds
+        ? graphBounds.north - graphBounds.south
+        : mapBounds.getNorth() - mapBounds.getSouth();
 
     const eligibleNodes = nodeIds.filter(nodeId => {
         const pos = GameState.nodes.get(nodeId);
         if (!pos) return false;
         const latDiff = Math.abs(pos.lat - centerLat);
         const lngDiff = Math.abs(pos.lng - centerLng);
-        return latDiff < boundsHeight * 0.35 && lngDiff < boundsWidth * 0.35;
+        return latDiff < boundsHeight * 0.46 && lngDiff < boundsWidth * 0.46;
     });
 
     const nodesToUse = eligibleNodes.length >= 20 ? eligibleNodes : nodeIds;
@@ -8206,6 +8296,7 @@ function selectRandomEndpoints(options = {}) {
     if (GameState.endpointSelection.cityKey !== cityKey) {
         GameState.endpointSelection.cityKey = cityKey;
         GameState.endpointSelection.recentBearings = [];
+        GameState.endpointSelection.recentRoutes = [];
     }
 
     const getUndirectedBearing = (startPos, endPos) => {
@@ -8224,6 +8315,7 @@ function selectRandomEndpoints(options = {}) {
     };
 
     const recentBearings = GameState.endpointSelection.recentBearings || [];
+    const recentRoutes = GameState.endpointSelection.recentRoutes || [];
     const idealDistance = (scale.min + scale.max) * 0.5;
     const minBalance = selectionRound >= 3 ? 0.26 : 0.18;
     const minAngleDelta = recentBearings.length > 0 ? (selectionRound >= 3 ? 28 : 20) : 0;
@@ -8231,10 +8323,31 @@ function selectRandomEndpoints(options = {}) {
     const routeShapeCache = new Map();
     let routeSearchCount = 0;
 
+    const getEndpointNovelty = (startPos, endPos) => {
+        if (recentRoutes.length === 0) return 1;
+        const noveltyTargetKm = Math.max(0.35, scale.min * 0.65);
+        let closestAverageKm = Infinity;
+
+        for (const previous of recentRoutes) {
+            if (!previous.startPos || !previous.endPos) continue;
+            const sameDirection = (
+                haversineDistance(startPos.lat, startPos.lng, previous.startPos.lat, previous.startPos.lng) +
+                haversineDistance(endPos.lat, endPos.lng, previous.endPos.lat, previous.endPos.lng)
+            ) * 0.5;
+            const reverseDirection = (
+                haversineDistance(startPos.lat, startPos.lng, previous.endPos.lat, previous.endPos.lng) +
+                haversineDistance(endPos.lat, endPos.lng, previous.startPos.lat, previous.startPos.lng)
+            ) * 0.5;
+            closestAverageKm = Math.min(closestAverageKm, sameDirection, reverseDirection);
+        }
+
+        return Math.min(1, closestAverageKm / noveltyTargetKm);
+    };
+
     const rememberRouteCandidate = (candidate) => {
         routeShapePool.push(candidate);
         routeShapePool.sort((a, b) => b.score - a.score);
-        if (routeShapePool.length > 12) routeShapePool.length = 12;
+        if (routeShapePool.length > 20) routeShapePool.length = 20;
     };
 
     const getRouteShapeMetrics = (candidate) => {
@@ -8244,7 +8357,14 @@ function selectRandomEndpoints(options = {}) {
         routeSearchCount++;
         const path = runAStar(candidate.startNode, candidate.endNode, { trackExplored: false }).path;
         if (!path || path.length < 2) {
-            const result = { path, score: -10, turnScore: 0, routeBalance: 0, straightness: 1 };
+            const result = {
+                path,
+                score: -10,
+                turnScore: 0,
+                routeBalance: 0,
+                straightness: 1,
+                maxRouteOverlap: 1,
+            };
             routeShapeCache.set(candidate, result);
             return result;
         }
@@ -8293,6 +8413,10 @@ function selectRandomEndpoints(options = {}) {
         const straightnessScore = straightness > 0.92
             ? Math.max(0, (1 - straightness) / 0.08)
             : Math.min(straightness / 0.58, 1);
+        const pathEdges = getRouteEdgeSignature(path);
+        const maxRouteOverlap = recentRoutes.reduce((maxOverlap, previous) => {
+            return Math.max(maxOverlap, getRouteContainmentOverlap(pathEdges, previous.edgeKeys));
+        }, 0);
 
         const result = {
             path,
@@ -8300,6 +8424,7 @@ function selectRandomEndpoints(options = {}) {
             turnScore,
             routeBalance,
             straightness,
+            maxRouteOverlap,
         };
         routeShapeCache.set(candidate, result);
         return result;
@@ -8322,6 +8447,9 @@ function selectRandomEndpoints(options = {}) {
 
             const startNode = nodesToUse[startIdx];
             const endNode = nodesToUse[endIdx];
+            const pairKey = getEndpointPairKey(startNode, endNode);
+            if (recentRoutes.some((route) => route.pairKey === pairKey)) continue;
+
             const startPos = GameState.nodes.get(startNode);
             const endPos = GameState.nodes.get(endNode);
             if (!startPos || !endPos) continue;
@@ -8344,9 +8472,22 @@ function selectRandomEndpoints(options = {}) {
             const balanceScore = Math.min(balance / 0.45, 1);
             const angleScore = Math.min(angleDelta / 45, 1);
             const componentScore = Math.min(componentRatio / 0.34, 1);
-            const score = (distanceScore * 1.1) + (balanceScore * 1.9) + (angleScore * 1.4) + (componentScore * 1.6);
+            const endpointNovelty = getEndpointNovelty(startPos, endPos);
+            const score = (distanceScore * 1.1) + (balanceScore * 1.9) + (angleScore * 1.4) +
+                (componentScore * 1.6) + (endpointNovelty * 1.8);
 
-            const candidate = { startNode, endNode, startPos, endPos, bearing, score, balance, angleDelta, componentRatio };
+            const candidate = {
+                startNode,
+                endNode,
+                startPos,
+                endPos,
+                bearing,
+                score,
+                balance,
+                angleDelta,
+                componentRatio,
+                endpointNovelty,
+            };
             const qualifies = balance >= minBalance && componentRatio >= 0.16 && angleDelta >= minAngleDelta;
             rememberRouteCandidate(candidate);
 
@@ -8370,23 +8511,37 @@ function selectRandomEndpoints(options = {}) {
 
     for (const candidate of shapeCandidates) {
         const shape = getRouteShapeMetrics(candidate);
-        const shapedScore = candidate.score + shape.score;
+        const shapedScore = candidate.score + shape.score +
+            ((1 - shape.maxRouteOverlap) * 2.8) + (candidate.endpointNovelty * 1.2);
         const shapeQualifies = shape.path?.length >= 4
             && shape.turnScore >= 0.34
             && shape.routeBalance >= 0.18
-            && shape.straightness < 0.94;
+            && shape.straightness < 0.94
+            && shape.maxRouteOverlap <= 0.58;
 
         if (shapeQualifies && (!shapedSelected || shapedScore > shapedSelected.shapedScore)) {
-            shapedSelected = { ...candidate, shapedScore };
+            shapedSelected = { ...candidate, shapedScore, routeOverlap: shape.maxRouteOverlap };
         }
     }
 
     if (!shapedSelected) {
+        const fallbackSelections = [];
         for (const candidate of shapeCandidates) {
             const shape = getRouteShapeMetrics(candidate);
-            const shapedScore = candidate.score + shape.score;
-            if (!shapedSelected || shapedScore > shapedSelected.shapedScore) {
-                shapedSelected = { ...candidate, shapedScore };
+            const shapedScore = candidate.score + shape.score +
+                ((1 - shape.maxRouteOverlap) * 3.2) + (candidate.endpointNovelty * 1.2);
+            fallbackSelections.push({
+                ...candidate,
+                shapedScore,
+                routeOverlap: shape.maxRouteOverlap,
+            });
+        }
+
+        const meaningfullyDifferent = fallbackSelections.filter((candidate) => candidate.routeOverlap <= 0.78);
+        const fallbackPool = meaningfullyDifferent.length > 0 ? meaningfullyDifferent : fallbackSelections;
+        for (const candidate of fallbackPool) {
+            if (!shapedSelected || candidate.shapedScore > shapedSelected.shapedScore) {
+                shapedSelected = candidate;
             }
         }
     }
@@ -8413,10 +8568,13 @@ function selectRandomEndpoints(options = {}) {
         candidatePoolSize: shapeCandidates.length,
         round: selectionRound,
         source: applySelection ? 'foreground' : 'background',
+        routeOverlap: finalSelected.routeOverlap || 0,
+        endpointNovelty: finalSelected.endpointNovelty || 0,
     };
     console.log(
         `[Performance] Selected round endpoints with ${routeSearchCount} route searches in ` +
-        `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms`
+        `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms ` +
+        `(overlap ${(PathfindrPerformance.endpointSelection.routeOverlap * 100).toFixed(0)}%)`
     );
     return finalSelected;
 }
