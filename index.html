@@ -1565,6 +1565,12 @@
                 dashboardState.animationFrame = requestAnimationFrame(drawDashboardGlobe);
             };
 
+            const stopDashboardGlobe = () => {
+                if (dashboardState.animationFrame === null) return;
+                cancelAnimationFrame(dashboardState.animationFrame);
+                dashboardState.animationFrame = null;
+            };
+
             const ensureDashboardMiniMap = () => {
                 if (dashboardState.miniMap || !dashboardMapPreview || typeof maplibregl === 'undefined') return dashboardState.miniMap;
 
@@ -1630,8 +1636,10 @@
                 if (dashboardGlobeCanvas) dashboardGlobeCanvas.classList.toggle('hidden', showingMap);
 
                 if (showingMap) {
+                    stopDashboardGlobe();
                     syncDashboardMiniMap();
                 } else {
+                    ensureDashboardGlobe();
                     if (dashboardMapPreview) dashboardMapPreview.classList.add('hidden');
                     if (dashboardMapEmpty) dashboardMapEmpty.classList.add('hidden');
                     if (dashboardViewportCopy) dashboardViewportCopy.textContent = 'Cities pulse across the globe so the lobby feels alive before you even launch a run.';
@@ -1655,6 +1663,7 @@
             };
 
             const hideDashboardOverlay = () => {
+                stopDashboardGlobe();
                 if (splashScreen) {
                     splashScreen.classList.remove('dashboard-overlay-active');
                     splashScreen.classList.add('hidden');
@@ -1677,6 +1686,9 @@
                 },
                 updateMobileCompass() {
                     updateMobileCompass();
+                },
+                isGlobeRunning() {
+                    return dashboardState.animationFrame !== null;
                 }
             };
 
@@ -1955,6 +1967,14 @@
                     dashboardState.miniMap.resize();
                 }
                 updateMobileCompass();
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopDashboardGlobe();
+                } else if (dashboardState.view === 'globe' && !splashScreen?.classList.contains('hidden')) {
+                    ensureDashboardGlobe();
+                }
             });
 
             ensureDashboardGlobe();

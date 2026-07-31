@@ -6658,7 +6658,12 @@ const GameState = {
     endpointSelection: {
         recentBearings: [],
         cityKey: null,
+        preparedRounds: new Map(),
+        currentPreparedRoute: null,
+        idlePrecomputeId: null,
+        idlePrecomputeKind: null,
     },
+    roadGraphVersion: 0,
 
     // User drawing - SINGLE SOURCE OF TRUTH
     isDrawing: false,
@@ -6675,6 +6680,14 @@ const GameState = {
         inputType: null,
         signature: null,
     },
+    snapPreviewInput: {
+        frameId: null,
+        pending: null,
+        lastClientX: null,
+        lastClientY: null,
+        lastInputType: null,
+    },
+    previewRouteCache: new Map(),
     mobileClickHandlerAdded: false,
     pathPreviewHandlersAdded: false,
     touchPreviewActive: false,
@@ -7376,7 +7389,7 @@ function setupMobileTouchHandling() {
             clearSnapPreview();
             return;
         }
-        updateSnapPreviewFromClient(e.clientX, e.clientY, 'mouse');
+        scheduleSnapPreviewFromClient(e.clientX, e.clientY, 'mouse');
     });
 
     inputSurface.addEventListener('mouseleave', () => {
@@ -7406,7 +7419,7 @@ function setupMobileTouchHandling() {
         }
 
         const touch = e.touches[0];
-        updateSnapPreviewFromClient(touch.clientX, touch.clientY, 'touch');
+        scheduleSnapPreviewFromClient(touch.clientX, touch.clientY, 'touch');
         e.preventDefault();
     }, { passive: false });
 
@@ -7444,6 +7457,152 @@ function setupMobileTouchHandling() {
 // =============================================================================
 // ROAD NETWORK LOADING
 // =============================================================================
+
+const RoadNetworkCache = {
+    dbName: 'pathfindr-road-cache',
+    storeName: 'networks',
+    schemaVersion: 1,
+    dataVersion: 1,
+    maxAgeMs: 7 * 24 * 60 * 60 * 1000,
+    maxEntries: 8,
+    openPromise: null,
+
+    open() {
+        if (!('indexedDB' in window)) return Promise.resolve(null);
+        if (this.openPromise) return this.openPromise;
+
+        this.openPromise = new Promise((resolve) => {
+            const request = indexedDB.open(this.dbName, this.schemaVersion);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                const store = db.objectStoreNames.contains(this.storeName)
+                    ? request.transaction.objectStore(this.storeName)
+                    : db.createObjectStore(this.storeName, { keyPath: 'key' });
+                if (!store.indexNames.contains('accessedAt')) {
+                    store.createIndex('accessedAt', 'accessedAt');
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => {
+                console.warn('[RoadCache] IndexedDB unavailable:', request.error);
+                this.openPromise = null;
+                resolve(null);
+            };
+        });
+
+        return this.openPromise;
+    },
+
+    createKey(bounds) {
+        const round = (value) => Number(value).toFixed(4);
+        const read = (methodName, propertyName) => typeof bounds[methodName] === 'function'
+            ? bounds[methodName]()
+            : bounds[propertyName];
+        return [
+            `v${this.dataVersion}`,
+            round(read('getSouth', 'south')),
+            round(read('getWest', 'west')),
+            round(read('getNorth', 'north')),
+            round(read('getEast', 'east')),
+        ].join(':');
+    },
+
+    async get(key) {
+        const db = await this.open();
+        if (!db) return null;
+
+        return new Promise((resolve) => {
+            const transaction = db.transaction(this.storeName, 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const request = store.get(key);
+
+            request.onsuccess = () => {
+                const entry = request.result;
+                if (!entry || entry.version !== this.dataVersion || !entry.data?.elements) {
+                    resolve(null);
+                    return;
+                }
+
+                if ((Date.now() - entry.createdAt) > this.maxAgeMs) {
+                    store.delete(key);
+                    resolve(null);
+                    return;
+                }
+
+                entry.accessedAt = Date.now();
+                store.put(entry);
+                resolve(entry.data);
+            };
+            request.onerror = () => resolve(null);
+        });
+    },
+
+    async set(key, data) {
+        if (!data?.elements?.length) return;
+        const db = await this.open();
+        if (!db) return;
+
+        await new Promise((resolve) => {
+            const transaction = db.transaction(this.storeName, 'readwrite');
+            transaction.objectStore(this.storeName).put({
+                key,
+                version: this.dataVersion,
+                createdAt: Date.now(),
+                accessedAt: Date.now(),
+                data,
+            });
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => resolve();
+            transaction.onabort = () => resolve();
+        });
+
+        await this.trim(db);
+        console.log(`[RoadCache] Stored ${data.elements.length} elements for future sessions`);
+    },
+
+    async trim(db) {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(this.storeName, 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            const countRequest = store.count();
+
+            countRequest.onsuccess = () => {
+                let entriesToDelete = Math.max(0, countRequest.result - this.maxEntries);
+                if (entriesToDelete === 0) return;
+
+                const cursorRequest = store.index('accessedAt').openCursor();
+                cursorRequest.onsuccess = () => {
+                    const cursor = cursorRequest.result;
+                    if (!cursor || entriesToDelete === 0) return;
+                    store.delete(cursor.primaryKey);
+                    entriesToDelete--;
+                    cursor.continue();
+                };
+            };
+
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => resolve();
+            transaction.onabort = () => resolve();
+        });
+    },
+};
+
+function completeRoadNetworkLoad(data, location, source = 'network') {
+    processRoadData(data);
+    PathfindrPerformance.graphProcessing.source = source;
+
+    document.getElementById('current-location').textContent = location.name;
+    hideLoading();
+    if (location?.name && GameState.gameMode !== 'explorer' && GameState.gameMode !== 'visualizer') {
+        CityFacts.startTicker(location);
+    }
+
+    if (GameState.gameMode === 'explorer') {
+        startExplorerMode();
+    } else if (GameState.gameMode !== 'visualizer' && GameState.gameMode !== 'challenge') {
+        showInstructions();
+    }
+}
 
 async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, requestId = null) {
     if (requestId === null) {
@@ -7484,12 +7643,23 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, reques
 
     try {
         const bounds = GameState.map.getBounds();
+        const cacheKey = RoadNetworkCache.createKey(bounds);
         const query = buildRoadNetworkQuery({
             south: bounds.getSouth(),
             west: bounds.getWest(),
             north: bounds.getNorth(),
             east: bounds.getEast(),
         });
+
+        if (retryCount === 0) {
+            const cachedData = await RoadNetworkCache.get(cacheKey);
+            if (isStale()) return;
+            if (cachedData) {
+                console.log(`[RoadCache] Loaded ${cachedData.elements.length} elements from IndexedDB`);
+                completeRoadNetworkLoad(cachedData, location, 'cache');
+                return;
+            }
+        }
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
@@ -7514,26 +7684,11 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, reques
             throw new Error('No road data returned');
         }
 
-        processRoadData(data);
-
         if (isStale()) return;
-        document.getElementById('current-location').textContent = location.name;
-        hideLoading();
-        if (location?.name && GameState.gameMode !== 'explorer' && GameState.gameMode !== 'visualizer') {
-            CityFacts.startTicker(location);
-        }
-
-        // Handle different game modes after road network loads
-        if (GameState.gameMode === 'explorer') {
-            startExplorerMode();
-        } else if (GameState.gameMode === 'visualizer') {
-            // Visualizer handles its own flow
-        } else if (GameState.gameMode === 'challenge') {
-            // Challenge handles its own flow in beginChallengeGame
-        } else {
-            // Competitive mode - show instructions
-            showInstructions();
-        }
+        RoadNetworkCache.set(cacheKey, data).catch((cacheError) => {
+            console.warn('[RoadCache] Could not persist road data:', cacheError);
+        });
+        completeRoadNetworkLoad(data, location, 'network');
 
     } catch (error) {
         if (isStale()) return;
@@ -7570,12 +7725,125 @@ async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, reques
     }
 }
 
+// Uniform geographic grid used by interactive snapping. The cell size is large
+// enough to keep queries cheap while still narrowing dense city graphs sharply.
+const RoadSpatialIndex = {
+    cellSizeDeg: 0.0015,
+    nodeCells: new Map(),
+    edgeCells: new Map(),
+    ready: false,
+
+    clear() {
+        this.nodeCells.clear();
+        this.edgeCells.clear();
+        this.ready = false;
+    },
+
+    getCellKey(latCell, lngCell) {
+        return `${latCell}:${lngCell}`;
+    },
+
+    getCellCoords(lat, lng) {
+        return {
+            latCell: Math.floor(lat / this.cellSizeDeg),
+            lngCell: Math.floor(lng / this.cellSizeDeg),
+        };
+    },
+
+    addToCell(cells, key, value) {
+        let bucket = cells.get(key);
+        if (!bucket) {
+            bucket = [];
+            cells.set(key, bucket);
+        }
+        bucket.push(value);
+    },
+
+    build() {
+        this.clear();
+        const validNodes = GameState.debug.largestComponentNodes;
+
+        for (const [nodeId, pos] of GameState.nodes) {
+            if (pos?.virtual) continue;
+            if (validNodes instanceof Set && !validNodes.has(nodeId)) continue;
+            const { latCell, lngCell } = this.getCellCoords(pos.lat, pos.lng);
+            this.addToCell(this.nodeCells, this.getCellKey(latCell, lngCell), nodeId);
+        }
+
+        for (const edge of GameState.edgeList) {
+            if (validNodes instanceof Set && (!validNodes.has(edge.from) || !validNodes.has(edge.to))) continue;
+
+            const minLat = Math.min(edge.fromPos.lat, edge.toPos.lat);
+            const maxLat = Math.max(edge.fromPos.lat, edge.toPos.lat);
+            const minLng = Math.min(edge.fromPos.lng, edge.toPos.lng);
+            const maxLng = Math.max(edge.fromPos.lng, edge.toPos.lng);
+            const minCell = this.getCellCoords(minLat, minLng);
+            const maxCell = this.getCellCoords(maxLat, maxLng);
+
+            for (let latCell = minCell.latCell; latCell <= maxCell.latCell; latCell++) {
+                for (let lngCell = minCell.lngCell; lngCell <= maxCell.lngCell; lngCell++) {
+                    this.addToCell(this.edgeCells, this.getCellKey(latCell, lngCell), edge);
+                }
+            }
+        }
+
+        this.ready = true;
+    },
+
+    getCellRange(lat, lng, radiusMeters) {
+        const metersPerDegLat = 111320;
+        const metersPerDegLng = Math.max(1, metersPerDegLat * Math.cos(lat * Math.PI / 180));
+        const latRadius = radiusMeters / metersPerDegLat;
+        const lngRadius = radiusMeters / metersPerDegLng;
+        return {
+            min: this.getCellCoords(lat - latRadius, lng - lngRadius),
+            max: this.getCellCoords(lat + latRadius, lng + lngRadius),
+        };
+    },
+
+    query(cells, lat, lng, radiusMeters) {
+        if (!this.ready) return null;
+        const range = this.getCellRange(lat, lng, radiusMeters);
+        const matches = new Set();
+
+        for (let latCell = range.min.latCell; latCell <= range.max.latCell; latCell++) {
+            for (let lngCell = range.min.lngCell; lngCell <= range.max.lngCell; lngCell++) {
+                const bucket = cells.get(this.getCellKey(latCell, lngCell));
+                if (!bucket) continue;
+                for (const value of bucket) matches.add(value);
+            }
+        }
+
+        return Array.from(matches);
+    },
+
+    queryNodeIds(lat, lng, radiusMeters) {
+        return this.query(this.nodeCells, lat, lng, radiusMeters);
+    },
+
+    queryEdges(lat, lng, radiusMeters) {
+        return this.query(this.edgeCells, lat, lng, radiusMeters);
+    },
+};
+
+const PathfindrPerformance = window.PathfindrPerformance = window.PathfindrPerformance || {
+    graphProcessing: null,
+    endpointSelection: null,
+};
+
 function processRoadData(data) {
+    const processStartedAt = performance.now();
+    cancelEndpointPrecompute();
+    GameState.roadGraphVersion++;
+    GameState.endpointSelection.preparedRounds.clear();
+    GameState.endpointSelection.currentPreparedRoute = null;
     GameState.nodes.clear();
     GameState.edges.clear();
     GameState.edgeList = [];
     GameState.edgeLookup.clear();
     GameState.virtualNodeIds.clear();
+    GameState.previewRouteCache.clear();
+    RoadSpatialIndex.clear();
     clearScreenSpaceTransientEffects();
 
     const nodeMap = new Map();
@@ -7635,6 +7903,7 @@ function processRoadData(data) {
 
     // Analyze graph connectivity
     analyzeGraphConnectivity();
+    RoadSpatialIndex.build();
 
     // Invalidate all projected caches - new road data loaded
     invalidateProjectedCaches();
@@ -7654,6 +7923,18 @@ function processRoadData(data) {
     if (GameState.showCustomRoads) {
         drawRoadNetwork();
     }
+
+    PathfindrPerformance.graphProcessing = {
+        durationMs: performance.now() - processStartedAt,
+        nodes: GameState.nodes.size,
+        edges: GameState.edgeList.length,
+        indexedNodeCells: RoadSpatialIndex.nodeCells.size,
+        indexedEdgeCells: RoadSpatialIndex.edgeCells.size,
+    };
+    console.log(
+        `[Performance] Processed ${GameState.nodes.size} nodes and ${GameState.edgeList.length} edges in ` +
+        `${PathfindrPerformance.graphProcessing.durationMs.toFixed(1)}ms`
+    );
 }
 
 // =============================================================================
@@ -7672,6 +7953,7 @@ function startGame() {
     // Start unified animation loop after the route and camera are ready
     GameController.startLoop();
     GameController.enterPhase(GamePhase.PLAYING);
+    scheduleNextRoundEndpointPrecompute();
 
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
@@ -7732,10 +8014,12 @@ async function nextRound() {
                 preloadNextCity();
             }
 
-            // Stay in same city, just pick new endpoints with increased distance
-            selectRandomEndpoints();
+            // Use the route prepared during the previous round when it is still valid.
+            const preparedCandidate = takePreparedEndpointCandidate(GameState.currentRound);
+            selectRandomEndpoints({ preselectedCandidate: preparedCandidate });
             enableDrawing();
             GameController.enterPhase(GamePhase.PLAYING);
+            scheduleNextRoundEndpointPrecompute();
 
             // Analytics: Track round start for rounds 2-5
             if (typeof PathfindrAnalytics !== 'undefined') {
@@ -7756,6 +8040,9 @@ async function nextRound() {
 }
 
 function playAgain() {
+    cancelEndpointPrecompute();
+    GameState.endpointSelection.preparedRounds.clear();
+    GameState.endpointSelection.currentPreparedRoute = null;
     hideGameOver();
     GameState.currentRound = 1;
     GameState.totalScore = 0;
@@ -7791,8 +8078,81 @@ function playAgain() {
     showModeSelector();
 }
 
-function selectRandomEndpoints(options = {}) {
+function applyEndpointCandidate(candidate, options = {}) {
     const { deferMarkerPlacement = true, markerDelayMs = 100, adjustViewport = true } = options;
+    if (!candidate || !GameState.nodes.has(candidate.startNode) || !GameState.nodes.has(candidate.endNode)) {
+        return false;
+    }
+
+    GameState.startNode = candidate.startNode;
+    GameState.endNode = candidate.endNode;
+    GameState.endpointSelection.currentPreparedRoute = candidate.preparedRoute ? {
+        ...candidate.preparedRoute,
+        startNode: candidate.startNode,
+        endNode: candidate.endNode,
+        graphVersion: GameState.roadGraphVersion,
+    } : null;
+    const recentBearings = GameState.endpointSelection.recentBearings || [];
+    GameState.endpointSelection.recentBearings = [
+        ...recentBearings.slice(-3),
+        candidate.bearing,
+    ];
+
+    const startPos = GameState.nodes.get(GameState.startNode);
+    const endPos = GameState.nodes.get(GameState.endNode);
+    const bounds = [
+        [Math.min(startPos.lng, endPos.lng), Math.min(startPos.lat, endPos.lat)],
+        [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
+    ];
+
+    if (adjustViewport) {
+        GameState.map.fitBounds(bounds, {
+            padding: 80,
+            maxZoom: 16
+        });
+        scheduleMapPresentationRefresh({ watchMoveEnd: true });
+    } else {
+        scheduleMapPresentationRefresh();
+    }
+
+    if (deferMarkerPlacement) {
+        setTimeout(() => {
+            placeMarkers();
+            scheduleMapPresentationRefresh();
+        }, markerDelayMs);
+    } else {
+        placeMarkers();
+        scheduleMapPresentationRefresh();
+    }
+
+    return true;
+}
+
+function selectRandomEndpoints(options = {}) {
+    const selectionStartedAt = performance.now();
+    const {
+        applySelection = true,
+        preselectedCandidate = null,
+        roundOverride = null,
+    } = options;
+    const selectionRound = roundOverride || GameState.currentRound || 1;
+
+    if (preselectedCandidate && applySelection) {
+        const applied = applyEndpointCandidate(preselectedCandidate, options);
+        if (applied) {
+            PathfindrPerformance.endpointSelection = {
+                durationMs: performance.now() - selectionStartedAt,
+                routeSearches: 0,
+                candidatePoolSize: 1,
+                round: selectionRound,
+                source: 'prepared',
+            };
+            console.log(`[Performance] Applied prepared round ${selectionRound} endpoints in ` +
+                `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms`);
+            return preselectedCandidate;
+        }
+    }
+
     // Only use nodes from the largest connected component to ensure paths exist
     const largestComponentNodes = GameState.debug.largestComponentNodes;
     let nodeIds;
@@ -7832,7 +8192,6 @@ function selectRandomEndpoints(options = {}) {
         // Visualizer always gets epic, cinematic routes
         scale = { min: 3.0, max: 6.0 };
     } else {
-        const round = GameState.currentRound || 1;
         const distanceScales = [
             { min: 0.3, max: 0.6 },   // Round 1: warm up (~3-6 blocks)
             { min: 0.5, max: 1.0 },   // Round 2: getting comfortable
@@ -7840,7 +8199,7 @@ function selectRandomEndpoints(options = {}) {
             { min: 2.0, max: 3.5 },   // Round 4: cross-neighborhood
             { min: 3.0, max: 6.0 }    // Round 5: epic cityscape (~quarter city)
         ];
-        scale = distanceScales[Math.min(round - 1, 4)];
+        scale = distanceScales[Math.min(selectionRound - 1, 4)];
     }
 
     const cityKey = GameState.currentCity?.name || 'default';
@@ -7866,20 +8225,28 @@ function selectRandomEndpoints(options = {}) {
 
     const recentBearings = GameState.endpointSelection.recentBearings || [];
     const idealDistance = (scale.min + scale.max) * 0.5;
-    const minBalance = GameState.currentRound >= 3 ? 0.26 : 0.18;
-    const minAngleDelta = recentBearings.length > 0 ? (GameState.currentRound >= 3 ? 28 : 20) : 0;
+    const minBalance = selectionRound >= 3 ? 0.26 : 0.18;
+    const minAngleDelta = recentBearings.length > 0 ? (selectionRound >= 3 ? 28 : 20) : 0;
     const routeShapePool = [];
+    const routeShapeCache = new Map();
+    let routeSearchCount = 0;
 
     const rememberRouteCandidate = (candidate) => {
         routeShapePool.push(candidate);
         routeShapePool.sort((a, b) => b.score - a.score);
-        if (routeShapePool.length > 28) routeShapePool.length = 28;
+        if (routeShapePool.length > 12) routeShapePool.length = 12;
     };
 
     const getRouteShapeMetrics = (candidate) => {
-        const path = runAStar(candidate.startNode, candidate.endNode).path;
+        const cached = routeShapeCache.get(candidate);
+        if (cached) return cached;
+
+        routeSearchCount++;
+        const path = runAStar(candidate.startNode, candidate.endNode, { trackExplored: false }).path;
         if (!path || path.length < 2) {
-            return { path, score: -10, turnScore: 0, routeBalance: 0, straightness: 1 };
+            const result = { path, score: -10, turnScore: 0, routeBalance: 0, straightness: 1 };
+            routeShapeCache.set(candidate, result);
+            return result;
         }
 
         let minLat = Infinity;
@@ -7927,13 +8294,15 @@ function selectRandomEndpoints(options = {}) {
             ? Math.max(0, (1 - straightness) / 0.08)
             : Math.min(straightness / 0.58, 1);
 
-        return {
+        const result = {
             path,
             score: (turnScore * 2.4) + (routeBalanceScore * 1.8) + (straightnessScore * 1.2),
             turnScore,
             routeBalance,
             straightness,
         };
+        routeShapeCache.set(candidate, result);
+        return result;
     };
 
     let bestQualified = null;
@@ -8022,47 +8391,99 @@ function selectRandomEndpoints(options = {}) {
         }
     }
 
-    const finalSelected = shapedSelected || selected;
+    let finalSelected = shapedSelected || selected;
     if (!finalSelected) {
         console.error('Failed to find endpoint pair!');
         return;
     }
 
-    GameState.startNode = finalSelected.startNode;
-    GameState.endNode = finalSelected.endNode;
-    GameState.endpointSelection.recentBearings = [
-        ...recentBearings.slice(-3),
-        finalSelected.bearing,
-    ];
+    // Preserve the full visualization result so submit and future-round activation
+    // do not need to run A* again on the interaction path.
+    const preparedRoute = runAStar(finalSelected.startNode, finalSelected.endNode);
+    routeSearchCount++;
+    finalSelected = { ...finalSelected, preparedRoute };
 
-    const startPos = GameState.nodes.get(GameState.startNode);
-    const endPos = GameState.nodes.get(GameState.endNode);
+    if (applySelection) {
+        applyEndpointCandidate(finalSelected, options);
+    }
 
-    // MapLibre fitBounds expects [[west, south], [east, north]] = [[minLng, minLat], [maxLng, maxLat]]
-    const bounds = [
-        [Math.min(startPos.lng, endPos.lng), Math.min(startPos.lat, endPos.lat)],
-        [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
-    ];
+    PathfindrPerformance.endpointSelection = {
+        durationMs: performance.now() - selectionStartedAt,
+        routeSearches: routeSearchCount,
+        candidatePoolSize: shapeCandidates.length,
+        round: selectionRound,
+        source: applySelection ? 'foreground' : 'background',
+    };
+    console.log(
+        `[Performance] Selected round endpoints with ${routeSearchCount} route searches in ` +
+        `${PathfindrPerformance.endpointSelection.durationMs.toFixed(1)}ms`
+    );
+    return finalSelected;
+}
 
-    if (adjustViewport) {
-        GameState.map.fitBounds(bounds, {
-            padding: 80,
-            maxZoom: 16
+function cancelEndpointPrecompute() {
+    const endpointState = GameState.endpointSelection;
+    if (endpointState.idlePrecomputeId === null) return;
+
+    if (endpointState.idlePrecomputeKind === 'idle' && typeof cancelIdleCallback === 'function') {
+        cancelIdleCallback(endpointState.idlePrecomputeId);
+    } else {
+        clearTimeout(endpointState.idlePrecomputeId);
+    }
+
+    endpointState.idlePrecomputeId = null;
+    endpointState.idlePrecomputeKind = null;
+}
+
+function scheduleNextRoundEndpointPrecompute() {
+    cancelEndpointPrecompute();
+    if (GameState.gameMode !== 'competitive') return;
+    if (GameState.currentRound >= CONFIG.totalRounds) return;
+
+    const targetRound = GameState.currentRound + 1;
+    const graphVersion = GameState.roadGraphVersion;
+    const cityKey = GameState.currentCity?.name || 'default';
+
+    const prepare = () => {
+        GameState.endpointSelection.idlePrecomputeId = null;
+        GameState.endpointSelection.idlePrecomputeKind = null;
+
+        if (GameController.phase !== GamePhase.PLAYING) return;
+        if (GameState.roundTransitionInFlight) return;
+        if (GameState.currentRound + 1 !== targetRound) return;
+        if (GameState.roadGraphVersion !== graphVersion) return;
+        if ((GameState.currentCity?.name || 'default') !== cityKey) return;
+
+        const candidate = selectRandomEndpoints({
+            applySelection: false,
+            roundOverride: targetRound,
         });
-        scheduleMapPresentationRefresh({ watchMoveEnd: true });
-    } else {
-        scheduleMapPresentationRefresh();
-    }
+        if (!candidate) return;
 
-    if (deferMarkerPlacement) {
-        setTimeout(() => {
-            placeMarkers();
-            scheduleMapPresentationRefresh();
-        }, markerDelayMs);
+        GameState.endpointSelection.preparedRounds.set(targetRound, {
+            candidate,
+            graphVersion,
+            cityKey,
+        });
+        console.log(`[Performance] Round ${targetRound} endpoints prepared in background`);
+    };
+
+    if (typeof requestIdleCallback === 'function') {
+        GameState.endpointSelection.idlePrecomputeKind = 'idle';
+        GameState.endpointSelection.idlePrecomputeId = requestIdleCallback(prepare, { timeout: 1200 });
     } else {
-        placeMarkers();
-        scheduleMapPresentationRefresh();
+        GameState.endpointSelection.idlePrecomputeKind = 'timeout';
+        GameState.endpointSelection.idlePrecomputeId = setTimeout(prepare, 250);
     }
+}
+
+function takePreparedEndpointCandidate(round) {
+    const prepared = GameState.endpointSelection.preparedRounds.get(round);
+    GameState.endpointSelection.preparedRounds.delete(round);
+    if (!prepared) return null;
+    if (prepared.graphVersion !== GameState.roadGraphVersion) return null;
+    if (prepared.cityKey !== (GameState.currentCity?.name || 'default')) return null;
+    return prepared.candidate;
 }
 
 function centerOnRoute() {
@@ -8303,6 +8724,18 @@ function calculateCoordPathDistance(coords) {
 function clearSnapPreview(options = {}) {
     const { redraw = true } = options;
 
+    const previewInput = GameState.snapPreviewInput;
+    if (previewInput?.frameId !== null) {
+        cancelAnimationFrame(previewInput.frameId);
+        previewInput.frameId = null;
+    }
+    if (previewInput) {
+        previewInput.pending = null;
+        previewInput.lastClientX = null;
+        previewInput.lastClientY = null;
+        previewInput.lastInputType = null;
+    }
+
     GameState.snapPreview.active = false;
     GameState.snapPreview.point = null;
     GameState.snapPreview.pathCoords = [];
@@ -8370,7 +8803,7 @@ function buildPreviewPathCoords(anchorNodeId, snapTarget) {
         const targetNodeId = snapTarget.nodeId;
         if (targetNodeId === anchorNodeId) return [];
 
-        const pathNodes = findShortestPathBetween(anchorNodeId, targetNodeId);
+        const pathNodes = getCachedPreviewNodePath(anchorNodeId, targetNodeId);
         return buildNodePathCoords(pathNodes);
     }
 
@@ -8394,7 +8827,7 @@ function buildPreviewPathCoords(anchorNodeId, snapTarget) {
             const endpointPos = GameState.nodes.get(endpointNodeId);
             if (!endpointPos) return null;
 
-            const pathNodes = findShortestPathBetween(anchorNodeId, endpointNodeId);
+            const pathNodes = getCachedPreviewNodePath(anchorNodeId, endpointNodeId);
             if (pathNodes.length === 0) return null;
 
             const nodePathCoords = buildNodePathCoords(pathNodes);
@@ -8417,6 +8850,23 @@ function buildPreviewPathCoords(anchorNodeId, snapTarget) {
         .sort((a, b) => a.totalDistance - b.totalDistance);
 
     return endpointOptions[0]?.coords || [];
+}
+
+function getCachedPreviewNodePath(startNode, endNode) {
+    const cache = GameState.previewRouteCache;
+    const cacheKey = `${startNode}|${endNode}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const path = findShortestPathBetween(startNode, endNode);
+    cache.set(cacheKey, path);
+
+    // Pointer exploration can touch many targets; keep the cache deliberately small.
+    if (cache.size > 120) {
+        cache.delete(cache.keys().next().value);
+    }
+
+    return path;
 }
 
 function updateSnapPreview(lat, lng, inputType = 'mouse') {
@@ -8492,6 +8942,36 @@ function updateSnapPreview(lat, lng, inputType = 'mouse') {
 function updateSnapPreviewFromClient(clientX, clientY, inputType = 'mouse') {
     const { lat, lng } = getLatLngFromClient(clientX, clientY);
     return updateSnapPreview(lat, lng, inputType);
+}
+
+function scheduleSnapPreviewFromClient(clientX, clientY, inputType = 'mouse') {
+    const previewInput = GameState.snapPreviewInput;
+    if (!previewInput) return updateSnapPreviewFromClient(clientX, clientY, inputType);
+
+    const sameInputType = previewInput.lastInputType === inputType;
+    const movement = previewInput.lastClientX === null
+        ? Infinity
+        : Math.hypot(clientX - previewInput.lastClientX, clientY - previewInput.lastClientY);
+
+    // Sub-pixel pointer noise produces the same snap target and route preview.
+    if (sameInputType && movement < 3) return null;
+
+    previewInput.pending = { clientX, clientY, inputType };
+    if (previewInput.frameId !== null) return null;
+
+    previewInput.frameId = requestAnimationFrame(() => {
+        previewInput.frameId = null;
+        const pending = previewInput.pending;
+        previewInput.pending = null;
+        if (!pending) return;
+
+        previewInput.lastClientX = pending.clientX;
+        previewInput.lastClientY = pending.clientY;
+        previewInput.lastInputType = pending.inputType;
+        updateSnapPreviewFromClient(pending.clientX, pending.clientY, pending.inputType);
+    });
+
+    return null;
 }
 
 function commitPathPoint(lat, lng) {
@@ -9097,13 +9577,14 @@ function undoLastSegment() {
 // A* ALGORITHM
 // =============================================================================
 
-function runAStar(startNode, endNode) {
+function runAStar(startNode, endNode, options = {}) {
+    const { trackExplored = true } = options;
     const openSet = new MinHeap();
     const closedSet = new Set();
     const cameFrom = new Map();
     const gScore = new Map();
     const fScore = new Map();
-    const exploredOrder = [];
+    const exploredOrder = trackExplored ? [] : null;
 
     gScore.set(startNode, 0);
     const endPos = GameState.nodes.get(endNode);
@@ -9120,12 +9601,12 @@ function runAStar(startNode, endNode) {
                 node = cameFrom.get(node);
                 path.unshift(node);
             }
-            return { path, explored: exploredOrder };
+            return { path, explored: exploredOrder || [] };
         }
 
         if (closedSet.has(current)) continue;
         closedSet.add(current);
-        exploredOrder.push(current);
+        if (exploredOrder) exploredOrder.push(current);
 
         for (const { neighbor, weight } of (GameState.edges.get(current) || [])) {
             if (closedSet.has(neighbor)) continue;
@@ -9141,7 +9622,7 @@ function runAStar(startNode, endNode) {
         }
     }
 
-    return { path: [], explored: exploredOrder };
+    return { path: [], explored: exploredOrder || [] };
 }
 
 function heuristic(posA, posB) {
@@ -9218,8 +9699,15 @@ async function submitRoute() {
     // Brief anticipation pause before A* begins
     await sleep(400);
 
-    // Run A*
-    const { path, explored } = runAStar(GameState.startNode, GameState.endNode);
+    const preparedRoute = GameState.endpointSelection.currentPreparedRoute;
+    const canUsePreparedRoute = preparedRoute
+        && preparedRoute.graphVersion === GameState.roadGraphVersion
+        && preparedRoute.startNode === GameState.startNode
+        && preparedRoute.endNode === GameState.endNode;
+    const { path, explored } = canUsePreparedRoute
+        ? preparedRoute
+        : runAStar(GameState.startNode, GameState.endNode);
+    GameState.endpointSelection.currentPreparedRoute = null;
     GameState.optimalPath = path;
     GameState.exploredNodes = explored;
 
@@ -11000,6 +11488,8 @@ function pruneUnusedVirtualNodes(keepNodeIds = new Set()) {
     const removableNodeIds = Array.from(GameState.virtualNodeIds).filter((nodeId) => !keepNodeIds.has(nodeId));
     if (removableNodeIds.length === 0) return;
 
+    GameState.previewRouteCache.clear();
+
     for (const nodeId of removableNodeIds) {
         const neighbors = [...(GameState.edges.get(nodeId) || [])];
         for (const edge of neighbors) {
@@ -11029,14 +11519,20 @@ function findReusableVirtualNode(point, edgeKey) {
 }
 
 function findNearestNodeWithDist(lat, lng, options = {}) {
-    const { ignoreVirtual = true } = options;
+    const { ignoreVirtual = true, maxDistanceMeters = null } = options;
     let nearestNode = null;
     let nearestDist = Infinity;
 
     // Only search within the largest connected component to avoid disconnected nodes
     const validNodes = GameState.debug.largestComponentNodes || GameState.nodes;
+    const indexedNodeIds = Number.isFinite(maxDistanceMeters)
+        ? RoadSpatialIndex.queryNodeIds(lat, lng, maxDistanceMeters)
+        : null;
+    const nodeIds = indexedNodeIds || GameState.nodes.keys();
 
-    for (const [nodeId, pos] of GameState.nodes) {
+    for (const nodeId of nodeIds) {
+        const pos = GameState.nodes.get(nodeId);
+        if (!pos) continue;
         // Skip nodes not in the largest component
         if (validNodes instanceof Set && !validNodes.has(nodeId)) continue;
         if (ignoreVirtual && pos?.virtual) continue;
@@ -11072,7 +11568,10 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
 
     const validNodes = GameState.debug.largestComponentNodes;
 
-    for (const edge of GameState.edgeList) {
+    const indexedEdges = RoadSpatialIndex.queryEdges(lat, lng, maxDistanceMeters);
+    const candidateEdges = indexedEdges || GameState.edgeList;
+
+    for (const edge of candidateEdges) {
         const posA = edge.fromPos;
         const posB = edge.toPos;
 
@@ -11129,7 +11628,10 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
 function findSnapTarget(lat, lng) {
     const maxSnapDist = getSnapRadiusMeters();
     const anchorContext = getAnchorSnapContext();
-    const nearestNode = findNearestNodeWithDist(lat, lng, { ignoreVirtual: true });
+    const nearestNode = findNearestNodeWithDist(lat, lng, {
+        ignoreVirtual: true,
+        maxDistanceMeters: maxSnapDist,
+    });
     const nearestEdge = findNearestEdgePoint(lat, lng, maxSnapDist, { anchorContext });
 
     if (!nearestEdge && (!nearestNode.nodeId || nearestNode.distance > maxSnapDist)) {
@@ -11161,6 +11663,8 @@ function createVirtualNode(point, fromNode, toNode) {
     const edgeKey = getCanonicalEdgeKey(fromNode, toNode);
     const reusableNodeId = findReusableVirtualNode(point, edgeKey);
     if (reusableNodeId) return reusableNodeId;
+
+    GameState.previewRouteCache.clear();
 
     const nodeId = `virtual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     GameState.nodes.set(nodeId, {
@@ -14609,7 +15113,7 @@ function initChallengeCreationUI() {
 // CONTINUOUS COMPETITIVE PLAY
 // =============================================================================
 
-function preloadNextCity() {
+async function preloadNextCity() {
     // Don't preload if already preloading
     if (GameState.continuousPlay.preloadedCity) return;
 
@@ -14631,6 +15135,17 @@ function preloadNextCity() {
         west: nextCity.lng - lngOffset,
         east: nextCity.lng + lngOffset
     };
+    const cacheKey = RoadNetworkCache.createKey(bounds);
+
+    const cachedData = await RoadNetworkCache.get(cacheKey);
+    if (!GameState.continuousPlay.enabled) return;
+    if (GameState.continuousPlay.preloadRequestId !== requestId) return;
+    if (GameState.continuousPlay.preloadedCity !== nextCity) return;
+    if (cachedData) {
+        GameState.continuousPlay.preloadedData = cachedData;
+        console.log(`[RoadCache] Prepared ${nextCity.name} from IndexedDB`);
+        return;
+    }
 
     // Build the query
     const query = buildRoadNetworkQuery(bounds);
@@ -14639,18 +15154,26 @@ function preloadNextCity() {
     const servers = CONFIG.overpassServers;
     const server = servers[Math.floor(Math.random() * servers.length)];
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     fetch(server, {
         method: 'POST',
         body: `data=${encodeURIComponent(query)}`,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: controller.signal,
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+    })
     .then(data => {
         if (!GameState.continuousPlay.enabled) return;
         if (GameState.continuousPlay.preloadRequestId !== requestId) return;
         if (GameState.continuousPlay.preloadedCity !== nextCity) return;
         if (data.elements && data.elements.length > 0) {
             GameState.continuousPlay.preloadedData = data;
+            RoadNetworkCache.set(cacheKey, data).catch(() => {});
             console.log(`Preloaded ${nextCity.name}: ${data.elements.length} elements`);
         }
     })
@@ -14660,6 +15183,9 @@ function preloadNextCity() {
         console.warn('City preload failed (will fetch fresh):', error);
         GameState.continuousPlay.preloadedCity = null;
         GameState.continuousPlay.preloadedData = null;
+    })
+    .finally(() => {
+        clearTimeout(timeoutId);
     });
 }
 
@@ -14667,7 +15193,7 @@ function preloadNextCity() {
  * Preload road network data for a challenge city (fire-and-forget)
  * @param {Object} challenge - Challenge object with center_lat, center_lng, city_name, id
  */
-function preloadChallengeCity(challenge) {
+async function preloadChallengeCity(challenge) {
     // Skip if already preloaded
     if (GameState.challengeState.preloadCache.has(challenge.id)) {
         return;
@@ -14686,6 +15212,18 @@ function preloadChallengeCity(challenge) {
         west: lng - lngOffset,
         east: lng + lngOffset
     };
+    const cacheKey = RoadNetworkCache.createKey(bounds);
+
+    const cachedData = await RoadNetworkCache.get(cacheKey);
+    if (cachedData) {
+        GameState.challengeState.preloadCache.set(challenge.id, {
+            city: challenge.city_name,
+            data: cachedData,
+            timestamp: Date.now(),
+        });
+        console.log(`[Challenge] Prepared ${challenge.city_name} from IndexedDB`);
+        return;
+    }
 
     // Build the Overpass query
     const query = buildRoadNetworkQuery(bounds);
@@ -14693,13 +15231,19 @@ function preloadChallengeCity(challenge) {
     // Fetch in background
     const servers = CONFIG.overpassServers;
     const server = servers[Math.floor(Math.random() * servers.length)];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     fetch(server, {
         method: 'POST',
         body: `data=${encodeURIComponent(query)}`,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: controller.signal,
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        return response.json();
+    })
     .then(data => {
         if (data.elements && data.elements.length > 0) {
             GameState.challengeState.preloadCache.set(challenge.id, {
@@ -14707,11 +15251,15 @@ function preloadChallengeCity(challenge) {
                 data: data,
                 timestamp: Date.now()
             });
+            RoadNetworkCache.set(cacheKey, data).catch(() => {});
             console.log(`[Challenge] Preloaded ${challenge.city_name}: ${data.elements.length} elements`);
         }
     })
     .catch(error => {
         console.warn(`[Challenge] Preload failed for ${challenge.city_name}:`, error);
+    })
+    .finally(() => {
+        clearTimeout(timeoutId);
     });
 }
 
