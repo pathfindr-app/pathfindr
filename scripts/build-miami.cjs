@@ -7,13 +7,13 @@ const world=sandbox.window.PathfindrWorldData.convert(raw);
 vm.runInNewContext(fs.readFileSync(path.join(root,'engine/place-data.js'),'utf8'),sandbox);
 const bounds=[-80.210,25.755,-80.175,25.797];
 const inside=p=>p&&p[0]>=bounds[0]&&p[0]<=bounds[2]&&p[1]>=bounds[1]&&p[1]<=bounds[3];
-const allowed=new Set(['primary','primary_link','secondary','secondary_link','tertiary','tertiary_link','residential','service','unclassified','living_street','pedestrian']);
+const allowed=new Set(['motorway','trunk','trunk_link','primary','primary_link','secondary','secondary_link','tertiary','tertiary_link','residential','service','unclassified','living_street','pedestrian','motorway_link']);
 const nodes=new Map(),ways=[],labels=sandbox.window.PathfindrPlaceData.labels(raw,bounds);
 for(const e of raw.elements){
     const tags=e.tags||{},g=e.geometry;
     if(e.type==='way'&&allowed.has(tags.highway)&&tags.access!=='private'&&g?.length===e.nodes?.length){
         // Split ways at the pack boundary; never create cross-boundary shortcuts.
-        let run=[];const flush=()=>{if(run.length>1)ways.push({type:'way',id:e.id,nodes:run,tags:{name:tags.name,highway:tags.highway}});run=[];};
+        let run=[];const flush=()=>{if(run.length>1)ways.push({type:'way',id:e.id,nodes:run,tags:{name:tags.name,highway:tags.highway,bridge:tags.bridge,tunnel:tags.tunnel,layer:tags.layer}});run=[];};
         g.forEach((p,i)=>{if(!inside([p.lon,p.lat])){flush();return;}nodes.set(e.nodes[i],{type:'node',id:e.nodes[i],lat:p.lat,lon:p.lon});run.push(e.nodes[i]);});flush();
     }
 }

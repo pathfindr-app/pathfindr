@@ -4,8 +4,8 @@ function getRouteCameraPadding() {
     const recap = document.getElementById('results-panel');
     const bottom = GameController.phase === GamePhase.RESULTS && recap.classList.contains('visible')
         ? Math.min(recap.getBoundingClientRect().height + 24, height * 0.58)
-        : Math.min(window.innerWidth <= 600 ? 190 : 135, height * 0.3);
-    return { top: Math.min(105, height * 0.2), bottom, left: 45, right: 45 };
+        : Math.min(window.innerWidth <= 700 ? 86 : 135, height * 0.3);
+    return { top: Math.min(window.innerWidth<=700?96:105, height * 0.2), bottom, left: 35, right: 35 };
 }
 
 function initCityControls() {
@@ -59,16 +59,10 @@ function initCityControls() {
             if (!anchor || !target) return false;
             const coords = buildPreviewPathCoords(anchorId, target);
             if (coords.length < 2) return false;
-            const a = map.project([anchor.lng, anchor.lat]);
-            const dx = local.x - a.x, dy = local.y - a.y, length2 = dx * dx + dy * dy;
             const snap = coords.at(-1), tip = map.project([snap.lng, snap.lat]);
             if (Math.hypot(tip.x - local.x, tip.y - local.y) > 20) return false;
             // Reject computed detours outside the player's actual gesture corridor.
-            if (coords.some(c => {
-                const s = map.project([c.lng, c.lat]);
-                const t = length2 ? Math.max(0, Math.min(1, ((s.x - a.x) * dx + (s.y - a.y) * dy) / length2)) : 0;
-                return Math.hypot(s.x - a.x - dx * t, s.y - a.y - dy * t) > 18;
-            })) return false;
+            if (!PathfindrRouteInput.followsGesture(coords,map,anchor,geo,22)) return false;
             return commitPathPoint(geo.lat, geo.lng, { quiet: true });
         },
         end(submit) {

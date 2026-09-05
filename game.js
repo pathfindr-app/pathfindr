@@ -313,7 +313,7 @@ const CONFIG = {
     randomCityUrl: 'https://wxlglepsypmpnupxexoc.supabase.co/functions/v1/get-random-city',
 };
 
-const PLAYABLE_HIGHWAY_REGEX = '^(trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian|motorway_link)$';
+const PLAYABLE_HIGHWAY_REGEX = '^(motorway|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian|motorway_link)$';
 
 const SNAP_HIGHWAY_PENALTIES = Object.freeze({
     motorway_link: 18,
@@ -4423,7 +4423,7 @@ const AmbientViz = {
         const rounds = RoundHistory.getRounds();
 
         // During active visualization, dim previous rounds to 40% to not compete
-        const vizDimFactor = isVizActive ? 0.6 : 1.0;  // BUMPED from 0.4 for better visibility
+        const vizDimFactor = window.innerWidth<=700 ? (isVizActive ? .25 : .4) : (isVizActive ? .6 : 1);
 
         for (const round of rounds) {
             if(round.roundNumber===excludeRound)continue;
@@ -7486,7 +7486,7 @@ const RoadNetworkCache = {
     dbName: 'pathfindr-road-cache',
     storeName: 'networks',
     schemaVersion: 1,
-    dataVersion: 1,
+    dataVersion: 2,
     maxAgeMs: 7 * 24 * 60 * 60 * 1000,
     maxEntries: 8,
     openPromise: null,
@@ -9058,11 +9058,12 @@ function buildPreviewPathCoords(anchorNodeId, snapTarget) {
 
 function getCachedPreviewNodePath(startNode, endNode) {
     const cache = GameState.previewRouteCache;
-    const cacheKey = `${startNode}|${endNode}`;
+    const limit=GameState.gameMode==='explorer'?Infinity:(CONFIG.segmentDistance[GameState.difficulty]||CONFIG.segmentDistance.medium)*4.5+.12;
+    const cacheKey = `${startNode}|${endNode}|${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const path = findShortestPathBetween(startNode, endNode);
+    const path = findShortestPathBetween(startNode, endNode,limit);
     cache.set(cacheKey, path);
 
     // Pointer exploration can touch many targets; keep the cache deliberately small.
@@ -10979,8 +10980,9 @@ function addPointToUserPath(lat, lng) {
     }
 
     if (microPath.length === 0) {
-        // No path found - fall back to direct add (shouldn't happen often)
-        GameState.userPathNodes.push(targetNode);
+        // Never invent a connection across a railway, bridge deck or disconnected road.
+        pruneUnusedVirtualNodes(getReferencedVirtualNodeIds(GameState.userPathNodes));
+        return false;
     } else {
         // Add all nodes from the micro path (skip first since it's already in path)
         const newNodes = microPath.slice(1);
@@ -11590,7 +11592,8 @@ function scoreSnapEdgeCandidate(edge, distanceMeters, snappedPoint, anchorContex
         }
     }
 
-    return score;
+    // Continuity is a tie-breaker, not permission to ignore the pointer.
+    return distanceMeters + Math.max(-6, Math.min(10, score-distanceMeters));
 }
 
 function getSnapEdgeMeta(snapTarget) {
@@ -11742,6 +11745,7 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
     const maxLngDelta = metersPerDegLng > 0 ? maxDistanceMeters / metersPerDegLng : maxLatDelta;
 
     let best = null;
+    const candidates=[];
     let bestDist = Infinity;
     let bestScore = Infinity;
 
@@ -11787,6 +11791,7 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
         const snappedLng = originLng + (cx / metersPerDegLng);
         const snappedPoint = { lat: snappedLat, lng: snappedLng };
         const score = scoreSnapEdgeCandidate(edge, dist, snappedPoint, anchorContext);
+        candidates.push({fromNode:edge.from,toNode:edge.to,point:snappedPoint,distance:dist,score});
 
         if (score < bestScore || (score === bestScore && dist < bestDist)) {
             bestDist = dist;
@@ -11801,7 +11806,7 @@ function findNearestEdgePoint(lat, lng, maxDistanceMeters, options = {}) {
         }
     }
 
-    return best;
+    return options.allCandidates ? candidates.sort((a,b)=>a.score-b.score).slice(0,8) : best;
 }
 
 function findSnapTarget(lat, lng) {
@@ -11811,7 +11816,24 @@ function findSnapTarget(lat, lng) {
         ignoreVirtual: true,
         maxDistanceMeters: maxSnapDist,
     });
-    const nearestEdge = findNearestEdgePoint(lat, lng, maxSnapDist, { anchorContext });
+    const edgeCandidates = findNearestEdgePoint(lat, lng, maxSnapDist, { anchorContext,allCandidates:true });
+    const nearestEdge=edgeCandidates[0];
+
+    if(anchorContext){
+        const candidates=edgeCandidates.map(e=>({...e,type:'edge'}));
+        if(nearestNode.nodeId&&nearestNode.distance<=maxSnapDist)candidates.push({type:'node',nodeId:nearestNode.nodeId,score:nearestNode.distance-2});
+        candidates.sort((a,b)=>a.score-b.score);
+        for(const candidate of candidates){
+            const coords=buildPreviewPathCoords(anchorContext.anchorNodeId,candidate);
+            if(coords.length<2)continue;
+            const end=coords.at(-1),direct=haversineDistance(anchorContext.anchorPos.lat,anchorContext.anchorPos.lng,end.lat,end.lng);
+            if(direct<.001)continue;
+            if(GameState.gameMode!=='explorer'&&(direct>CONFIG.segmentDistance[GameState.difficulty]||calculateCoordPathDistance(coords)>getMaxRoutedSegmentDistanceKm(direct,candidate,anchorContext)))continue;
+            if(PathfindrTrace.active&&!PathfindrRouteInput.followsGesture(coords,GameState.map,anchorContext.anchorPos,{lat,lng},22))continue;
+            return candidate;
+        }
+        return null;
+    }
 
     if (!nearestEdge && (!nearestNode.nodeId || nearestNode.distance > maxSnapDist)) {
         return null;
@@ -11893,7 +11915,7 @@ function findEdgeBetween(nodeA, nodeB) {
     return edges.find(e => e.neighbor === nodeB) || null;
 }
 
-function findShortestPathBetween(startNode, endNode) {
+function findShortestPathBetween(startNode, endNode, maxDistance=Infinity) {
     if (startNode === endNode) return [startNode];
 
     // Quick check for direct neighbors
@@ -11943,6 +11965,7 @@ function findShortestPathBetween(startNode, endNode) {
             if (closedSet.has(neighbor)) continue;
 
             const tentativeG = gScore.get(current) + weight;
+            if(tentativeG>maxDistance)continue;
             if (!gScore.has(neighbor) || tentativeG < gScore.get(neighbor)) {
                 cameFrom.set(neighbor, current);
                 gScore.set(neighbor, tentativeG);

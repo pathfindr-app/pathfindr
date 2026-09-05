@@ -80,7 +80,7 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.1.0-dev',
-    buildId: 'pathfindr-complete-reserves-20260904.11',
+    buildId: 'pathfindr-mobile-roads-20260904.12',
   },
 
   // ===========================================

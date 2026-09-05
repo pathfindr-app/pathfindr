@@ -120,7 +120,7 @@ test('camera reserves room for both controls and the visible recap', () => {
         GameController: {phase:'playing'}, GamePhase: {RESULTS:'results'},
         document: {getElementById: () => ({classList:{contains:()=>true},getBoundingClientRect:()=>({height:380})})}
     });
-    assert.equal(env.context.getRouteCameraPadding().bottom,190);
+    assert.equal(env.context.getRouteCameraPadding().bottom,86);
     env.context.GameController.phase = 'results';
     const recap = env.context.getRouteCameraPadding();
     assert.equal(recap.bottom,404);

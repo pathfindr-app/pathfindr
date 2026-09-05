@@ -1,0 +1,52 @@
+/* Deliberately quiet chrome; the map owns the color and motion. */
+#mobile-options,.mobile-control-label { display:none; }
+/* Labels are information, never obstacles between a finger and the road. */
+body[data-game-phase="playing"] .map-label-text { pointer-events:none; }
+#mobile-options-sheet { color:#ecf0ef; background:#202727; border:1px solid #657371; border-radius:20px; padding:22px; width:min(480px,calc(100% - 24px)); max-height:80dvh; margin:auto auto 12px; overflow:auto; box-shadow:0 18px 60px #10151566; font-family:var(--font-sans-premium); }
+#mobile-options-sheet::backdrop { background:#10151599; }
+#mobile-options-sheet header { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+#mobile-options-sheet small { font-size:10px; letter-spacing:.16em; color:#a3b6b2; }
+#mobile-options-sheet h2 { margin:4px 0 0; font:600 23px var(--font-sans-premium); letter-spacing:-.03em; }
+#mobile-options-sheet .sheet-help { font-size:13px; line-height:1.6; color:#becbc8; margin:20px 0; }
+.mobile-settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#mobile-options-sheet button { min-height:46px; border:1px solid #61716e; border-radius:10px; background:#303b39; color:#edf4f1; font:500 14px var(--font-sans-premium); cursor:pointer; box-shadow:none; }
+#mobile-options-sheet .hud-btn { width:auto; height:auto; display:flex; gap:10px; align-items:center; justify-content:center; }
+#mobile-options-sheet svg { width:20px; height:20px; }
+#mobile-options-sheet #mobile-compass-btn { display:flex; width:auto; height:auto; align-items:center; justify-content:center; gap:8px; }
+#mobile-options-sheet .hud-mobile-compass-ring,#mobile-options-sheet .hud-mobile-compass-label { display:none; }
+#mobile-options-sheet .mobile-control-label { display:inline; }
+#mobile-options-sheet #discoveries-btn { margin:0; padding:8px; font-size:13px; }
+#mobile-options-sheet #graphics-panel { display:block; position:static; grid-column:1/-1; background:none; border:1px solid #61716e; border-radius:10px; padding:14px; font-size:13px; }
+#mobile-options-sheet #mobile-lobby { width:100%; margin-top:18px; background:#b5d9cc; color:#152620; border:none; }
+#mobile-options-sheet button:active { transform:scale(.98); }
+#mobile-options-sheet button:focus-visible { outline:2px solid #b5d9cc; outline-offset:3px; }
+@media(max-width:700px){
+    #gameplay-hud { display:grid!important; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:30px 24px; gap:0 12px; top:calc(8px + env(safe-area-inset-top)); left:10px; right:10px; width:auto; max-width:none; transform:none; padding:10px 12px; min-height:74px; border:1px solid #65737170; border-radius:14px; background:#202727f5; box-shadow:0 4px 18px #10151530; backdrop-filter:none; -webkit-backdrop-filter:none; }
+    #gameplay-hud::before,#gameplay-hud::after,#gameplay-hud .hud-brand,#gameplay-hud .hud-legend,#gameplay-hud .hud-controls,#gameplay-hud .hud-user,#gameplay-hud #hud-menu-btn,#gameplay-hud .hud-mode { display:none!important; }
+    #gameplay-hud .hud-location { grid-column:1; grid-row:1; order:0; width:auto; min-width:0; max-width:none; padding:0; border:0; margin:0; background:none; }
+    #gameplay-hud .location-display { min-height:30px; padding:0; gap:7px; border:0; background:none; box-shadow:none; border-radius:0; }
+    #gameplay-hud #current-location { font:600 15px var(--font-sans-premium); color:#edf4f1; max-width:none; letter-spacing:-.02em; }
+    #gameplay-hud .search-pro-badge,#gameplay-hud .location-icon { display:none; }
+    #gameplay-hud .hud-stats { display:flex!important; grid-column:1; grid-row:2; order:0; width:auto; margin:0; padding:0; gap:16px; justify-content:flex-start; border:0; background:none; box-shadow:none; border-radius:0; min-height:0; }
+    #gameplay-hud .hud-stat { display:flex!important; flex-direction:row; gap:5px; align-items:baseline; padding:0; min-width:0; }
+    #gameplay-hud .hud-label { display:inline!important; font:400 10px var(--font-sans-premium); text-transform:none; letter-spacing:0; color:#aebbb7; }
+    #gameplay-hud .hud-value,#gameplay-hud .hud-dim { font:600 12px var(--font-sans-premium); color:#edf4f1; text-shadow:none; }
+    #gameplay-hud .hud-divider,#gameplay-hud #stat-distance { display:none!important; }
+    #mobile-options { display:block; grid-column:2; grid-row:1/3; min-width:48px; min-height:44px; align-self:center; color:#d9e9e2; background:#34433e; border:0; border-radius:9px; font:500 12px var(--font-sans-premium); }
+    #route-tools { bottom:calc(12px + env(safe-area-inset-bottom)); left:12px; right:12px; width:auto; max-width:none; transform:none; padding:7px; border-radius:14px; background:#202727f5; border-color:#65737170; box-shadow:none; }
+    #route-tools .route-tool-row { display:grid; grid-template-columns:1fr 1fr 1fr 1.2fr; gap:4px; }
+    #route-tools button,#route-tools #route-recenter-btn { position:static; width:auto; min-height:44px; margin:0; padding:8px 5px; border:0; background:none; color:#d3dfda; border-radius:9px; box-shadow:none; font:500 13px var(--font-sans-premium); }
+    #route-tools button[aria-pressed=true] { color:#172a22; background:#b5d9cc; box-shadow:none; }
+    #route-tools #trace-hint,#route-tools .tool-divider { display:none; }
+    .map-pickup { width:40px; height:44px; padding:10px; border-radius:12px; box-shadow:none; background:#233330ed; border-color:#9cbbb680; }
+    .map-pickup svg { filter:none; }
+    #route-identity-legend { top:96px; left:12px; padding:5px 8px; font-size:9px; background:#202727e8; box-shadow:none; border-color:#65737170; }
+    #results-panel { left:10px; right:10px; width:auto; max-width:none; bottom:calc(10px + env(safe-area-inset-bottom)); transform:none!important; background:#26332ff5; border:1px solid #718b80; border-radius:16px; box-shadow:none; padding:14px; }
+    #results-panel .score-value { font-size:28px; }
+    #results-panel .btn-next { background:#b5d9cc; color:#172a22; border-radius:10px; }
+    #results-panel::before { display:none; }
+    #mobile-options-sheet .competitive-control { display:flex; }
+    body[data-game-mode="visualizer"] #mobile-options-sheet #clear-btn { display:none; }
+    #splash-screen .splash-video-stage,#splash-screen .splash-atlas,#splash-screen .splash-pill-row { display:none!important; }
+    #splash-screen h1 { font-size:34px; }
+}
