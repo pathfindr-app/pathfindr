@@ -79,7 +79,8 @@ const PathfindrConfig = {
   app: {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
-    version: '1.0.0',
+    version: '1.1.0-dev',
+    buildId: 'pathfindr-complete-reserves-20260904.11',
   },
 
   // ===========================================
@@ -100,6 +101,7 @@ const PathfindrConfig = {
   // AD PLACEMENT SETTINGS
   // ===========================================
   ads: {
+    showInlineBetweenRounds: false,   // Keep the route recap and Next Round unobstructed
     showBannerOnMenu: false,           // No banner on main menu
     showBannerBetweenRounds: true,     // Show banner during round recaps
     interstitialAfterRounds: [3],      // First ad after round 3

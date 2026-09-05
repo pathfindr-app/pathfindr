@@ -1,0 +1,219 @@
+/* Geographic, procedural materials in MapLibre's existing WebGL context.
+ * Three r160 is pinned; see RENDERING_RESEARCH.md for sources and tradeoffs. */
+(() => {
+    let map, renderer, scene, camera, origin, scale, group, latest, clock=0, last=0;
+    const materials=[], landmarks=[];
+    const state={ready:false,surfaces:0,trees:0,landmarks:0,flowingWater:0,error:null,quality:'high',frameMs:16.7};
+    let lastStats=0;
+    const vertex=`varying vec2 world; void main(){ world=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+    const common=`precision highp float;
+        varying vec2 world; uniform float uTime; uniform float uAudio; uniform vec3 uView;
+        float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
+        float fbm(vec2 p){float v=0.0,a=0.5;for(int i=0;i<4;i++){v+=a*noise(p);p=mat2(1.6,-1.2,1.2,1.6)*p+7.3;a*=0.5;}return v;}
+    `;
+    const water=`${common}
+        varying vec2 flow; uniform float uHasFlow;
+        void main(){
+            vec2 current=flow*uHasFlow;
+            vec2 p=world-current*uTime*1.8;
+            vec2 slope=vec2(0.0);
+            float footprint=max(length(fwidth(world)),0.05);
+            for(int i=0;i<6;i++){
+                float fi=float(i),angle=fi*2.399963+0.35;
+                vec2 d=vec2(cos(angle),sin(angle));
+                float frequency=0.10*pow(1.85,fi);
+                float phase=dot(p,d)*frequency-uTime*(0.46+fi*0.17);
+                float aa=1.0-smoothstep(0.7,3.0,frequency*footprint);
+                slope+=d*cos(phase)*0.11*aa;
+            }
+            vec3 n=normalize(vec3(-slope,1.0));
+            vec3 v=normalize(uView),l=normalize(vec3(-0.45,-0.55,0.8)),h=normalize(l+v);
+            float nv=max(dot(n,v),0.01),nh=max(dot(n,h),0.0);
+            float fresnel=0.025+0.975*pow(1.0-nv,5.0);
+            float rough=0.18, a2=rough*rough*rough*rough;
+            float denom=nh*nh*(a2-1.0)+1.0;
+            float ggx=a2/(3.14159*denom*denom);
+            vec3 reflected=reflect(-v,n);
+            vec3 sky=mix(vec3(0.025,0.045,0.10),vec3(0.38,0.56,0.68),smoothstep(-0.3,0.9,reflected.z));
+            float deep=fbm(world*0.006);
+            vec3 body=mix(vec3(0.009,0.047,0.070),vec3(0.017,0.14,0.17),deep);
+            float caustic=pow(1.0-abs(sin(dot(p,vec2(0.055,0.08))+fbm(p*0.032)*4.0+uTime*0.12)),14.0);
+            vec3 col=mix(body,sky,fresnel*0.75)+vec3(0.035,0.14,0.13)*caustic*(0.35+deep*0.3);
+            col+=vec3(0.72,0.87,1.0)*min(ggx*0.035,1.2)*(0.7+uAudio*0.8);
+            col+=vec3(0.018,0.08,0.10)*uAudio*(0.4+caustic);
+            col=col/(1.0+col); col=pow(col,vec3(1.0/2.2));
+            gl_FragColor=vec4(col,1.0);
+        }`;
+    const park=`${common}
+        uniform float uForest;
+        void main(){
+            float footprint=max(length(fwidth(world)),0.1);
+            float soil=fbm(world*0.055),patchiness=fbm(world*0.012);
+            float wind=noise(world*0.018+vec2(uTime*0.08,0.0));
+            float detail=1.0-smoothstep(0.8,4.0,footprint);
+            vec2 cell=floor(world*1.4);float seed=hash(cell);
+            float blade=pow(max(0.0,1.0-abs(sin(world.x*4.4+wind*0.45+seed*2.0))),8.0)*detail;
+            vec3 dark=mix(vec3(0.013,0.059,0.038),vec3(0.012,0.037,0.032),uForest);
+            vec3 light=mix(vec3(0.065,0.18,0.087),vec3(0.027,0.11,0.077),uForest);
+            vec3 col=mix(dark,light,soil*0.55+patchiness*0.35);
+            col+=vec3(0.04,0.065,0.025)*blade*(0.3+wind*0.3);
+            col+=vec3(0.005,0.014,0.008)*sin(world.x*0.04+world.y*0.017-uTime*0.65)*wind;
+            gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(1.0/2.2)),1.0);
+        }`;
+    function local(pos){const p=maplibregl.MercatorCoordinate.fromLngLat(pos);return [(p.x-origin.x)/scale,(origin.y-p.y)/scale];}
+    function dispose(){
+        if(!group)return;
+        group.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of [].concat(o.material))m.dispose();});
+        scene.remove(group);materials.length=0;landmarks.length=0;
+    }
+    function mat(fragment, extra={}) {
+        const material=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:fragment,side:THREE.DoubleSide,
+            uniforms:{uTime:{value:clock},uAudio:{value:0},uView:{value:new THREE.Vector3(0,-0.5,1)},...extra},extensions:{derivatives:true}});
+        materials.push(material);return material;
+    }
+    function triangles(rings,z=0.3){
+        const flat=[],holes=[];let count=0;
+        rings.forEach((ring,i)=>{if(i)holes.push(count);for(const p of ring.slice(0,-1)){flat.push(...local(p));count++;}});
+        const indices=earcut(flat,holes,2),positions=[];
+        for(const index of indices)positions.push(flat[index*2],flat[index*2+1],z);
+        const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+        geometry.computeVertexNormals();return geometry;
+    }
+    function pointIn(p,rings){return PathfindrWorldData.contains(p,rings[0])&&!rings.slice(1).some(r=>PathfindrWorldData.contains(p,r));}
+    function flowAt(p,segments){
+        let closest=Infinity,result=[0,0];
+        for(const [a,b] of segments){const dx=b[0]-a[0],dy=b[1]-a[1],len2=dx*dx+dy*dy;
+            if(!len2)continue;const t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len2));
+            const d=(p[0]-a[0]-t*dx)**2+(p[1]-a[1]-t*dy)**2;
+            if(d<closest){closest=d;result=[dx/Math.sqrt(len2),dy/Math.sqrt(len2)];}}
+        return closest<600*600 ? result : [0,0];
+    }
+    function model(poi) {
+        const g=new THREE.Group(), brass=new THREE.MeshStandardMaterial({color:0xc59864,metalness:0.55,roughness:0.42,emissive:0x704520,emissiveIntensity:0.18});
+        const stone=new THREE.MeshStandardMaterial({color:0xc9cebe,roughness:0.6,metalness:0.1});
+        const mesh=(geometry,material,z)=>{const m=new THREE.Mesh(geometry,material);m.rotation.x=Math.PI/2;m.position.z=z;g.add(m);return m;};
+        if(/eiffel|tour eiffel/i.test(poi.name)) {
+            // Open lattice silhouette, four tapered legs and two observation decks.
+            for(const x of [-1,1])for(const y of [-1,1]){
+                const a=new THREE.Vector3(x*18,y*18,0),b=new THREE.Vector3(x*3,y*3,75),dir=b.clone().sub(a);
+                const leg=new THREE.Mesh(new THREE.CylinderGeometry(1.1,2.1,dir.length(),5),brass);
+                leg.position.copy(a.clone().add(b).multiplyScalar(0.5));leg.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());g.add(leg);
+            }
+            for(const [z,size] of [[25,26],[48,15]]){const deck=new THREE.Mesh(new THREE.BoxGeometry(size,size,2.4),brass);deck.position.z=z;g.add(deck);}
+            mesh(new THREE.CylinderGeometry(0.2,3,33,5),brass,88);
+        } else if(/washington monument/i.test(poi.name)) {
+            mesh(new THREE.CylinderGeometry(5,8,95,4),stone,47.5);
+            mesh(new THREE.ConeGeometry(7.1,14,4),stone,102);
+        } else {
+            mesh(new THREE.CylinderGeometry(9,11,4,6),stone,2);
+            mesh(new THREE.CylinderGeometry(3,5,20,6),brass,14);
+            mesh(new THREE.OctahedronGeometry(6,0),brass,29);
+        }
+        const [x,y]=local(poi.pos);g.position.set(x,y,0.5);group.add(g);landmarks.push(g);
+    }
+    function build(data,location,edges=[]) {
+        latest={data,location,edges};if(!state.ready)return;
+        const buildStarted=performance.now();
+        dispose();group=new THREE.Group();scene.add(group);
+        origin=maplibregl.MercatorCoordinate.fromLngLat([location.lng,location.lat]);scale=origin.meterInMercatorCoordinateUnits();
+        const segments=data.flows.flatMap(f=>f.points.slice(1).map((p,i)=>[local(f.points[i]),local(p)])).slice(0,1500);
+        state.surfaces=0;state.flowingWater=0;
+        const batches=new Map();
+        const treePositions=[];
+        for(const surface of data.surfaces){
+            const geometry=triangles(surface.rings);if(!geometry.attributes.position.count)continue;
+            let material,batchKey=surface.kind;
+            if(surface.kind==='water'){
+                const centroid=local(surface.rings[0][0]),direction=flowAt(centroid,segments);
+                const river=['river','canal'].includes(surface.tags.water)||surface.tags.waterway==='riverbank';
+                const hasFlow=river&&surface.tags.tidal!=='yes'&&Math.hypot(...direction)>0;
+                const flows=[];for(let i=0;i<geometry.attributes.position.count;i++)flows.push(...direction);
+                geometry.setAttribute('aFlow',new THREE.Float32BufferAttribute(flows,2));
+                batchKey=hasFlow?'water-flow':'water-still';
+                if(!batches.has(batchKey)){
+                    material=mat(water,{uHasFlow:{value:hasFlow?1:0}});
+                    material.vertexShader='attribute vec2 aFlow; varying vec2 flow; '+vertex.replace('world=position.xy;','world=position.xy; flow=aFlow;');
+                }
+                if(hasFlow)state.flowingWater++;
+            }else{
+                if(!batches.has(batchKey))material=mat(park,{uForest:{value:surface.kind==='forest'?1:0}});
+                const ring=surface.rings[0],l=ring.map(local),xs=l.map(p=>p[0]),ys=l.map(p=>p[1]);
+                const step=surface.kind==='forest'?28:47;
+                const minX=Math.max(-2200,Math.min(...xs)),maxX=Math.min(2200,Math.max(...xs));
+                const minY=Math.max(-2200,Math.min(...ys)),maxY=Math.min(2200,Math.max(...ys));
+                for(let x=minX;x<maxX && treePositions.length<900;x+=step)for(let y=minY;y<maxY && treePositions.length<900;y+=step){
+                    const r=Math.sin(x*1.71+y*0.33)*43758.5453,seed=r-Math.floor(r);
+                    const p=[x+seed*step*0.7,y+seed*step*0.4];
+                    const geo=new maplibregl.MercatorCoordinate(origin.x+p[0]*scale,origin.y-p[1]*scale).toLngLat();
+                    if(pointIn([geo.lng,geo.lat],surface.rings))treePositions.push({p,seed,conifer:surface.tags.leaf_type==='needleleaved'});
+                }
+            }
+            if(!batches.has(batchKey))batches.set(batchKey,{material,positions:[],flows:[]});
+            const batch=batches.get(batchKey);
+            for(const value of geometry.attributes.position.array)batch.positions.push(value);
+            if(geometry.attributes.aFlow)for(const value of geometry.attributes.aFlow.array)batch.flows.push(value);
+            geometry.dispose();state.surfaces++;
+        }
+        for(const batch of batches.values()){
+            const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(batch.positions,3));
+            if(batch.flows.length)geometry.setAttribute('aFlow',new THREE.Float32BufferAttribute(batch.flows,2));
+            group.add(new THREE.Mesh(geometry,batch.material));
+        }
+        for(const tree of data.trees.slice(0,200)){const p=local(tree.pos);treePositions.push({p,seed:(tree.id%997)/997,conifer:tree.tags.leaf_type==='needleleaved'||/pinus|picea|abies/i.test(tree.tags.genus||'')});}
+        // Exclude trees close to road segments using a coarse spatial lookup.
+        const cells=new Map();
+        for(const edge of edges){const a=local([edge.fromPos.lng,edge.fromPos.lat]),b=local([edge.toPos.lng,edge.toPos.lat]);
+            const steps=Math.min(100,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/32));
+            for(let i=0;i<=steps;i++){const t=steps?i/steps:0,key=`${Math.floor((a[0]+(b[0]-a[0])*t)/32)},${Math.floor((a[1]+(b[1]-a[1])*t)/32)}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push([a,b]);}}
+        const clear=treePositions.filter(({p})=>{
+            const cx=Math.floor(p[0]/32),cy=Math.floor(p[1]/32);
+            for(let x=cx-1;x<=cx+1;x++)for(let y=cy-1;y<=cy+1;y++)for(const [a,b] of cells.get(`${x},${y}`)||[]){
+                const dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy||1)));
+                if(Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)<11)return false;}
+            return true;
+        }).slice(0,900);
+        const dummy=new THREE.Object3D();
+        for(const conifer of [false,true]){
+            const list=clear.filter(p=>p.conifer===conifer);if(!list.length)continue;
+            const geometry=conifer?new THREE.ConeGeometry(4,13,6):new THREE.IcosahedronGeometry(5,0);
+            if(conifer)geometry.rotateX(Math.PI/2);
+            const foliage=new THREE.MeshStandardMaterial({color:conifer?0x346b59:0x63916b,roughness:0.88,flatShading:true});
+            const trees=new THREE.InstancedMesh(geometry,foliage,list.length);
+            list.forEach(({p,seed},i)=>{dummy.position.set(p[0],p[1],conifer?8:6);dummy.scale.setScalar(0.7+seed*0.75);dummy.rotation.z=seed*6.28;dummy.updateMatrix();trees.setMatrixAt(i,dummy.matrix);trees.setColorAt(i,new THREE.Color().setHSL(0.32+seed*0.09,0.20+seed*0.18,0.20+seed*0.11));});
+            trees.instanceMatrix.needsUpdate=true;group.add(trees);
+        }
+        data.pois.filter(p=>p.type==='landmark').slice(0,20).forEach(model);
+        state.trees=clear.length;state.landmarks=landmarks.length;state.buildMs=Math.round((performance.now()-buildStarted)*10)/10;
+        if(state.quality==='balanced')group.traverse(o=>{if(o.isInstancedMesh)o.count=Math.ceil(o.instanceMatrix.count*.45);});
+        map.triggerRepaint();
+    }
+    const layer={id:'living-environment',type:'custom',renderingMode:'3d',
+        onAdd(instance,gl){map=instance;camera=new THREE.Camera();scene=new THREE.Scene();
+            const ambient=new THREE.AmbientLight(0x9bcbd6,1.5);scene.add(ambient);
+            const sun=new THREE.DirectionalLight(0xffdec2,2.4);sun.position.set(-400,-600,1000);scene.add(sun);
+            renderer=new THREE.WebGLRenderer({canvas:map.getCanvas(),context:gl});renderer.autoClear=false;
+            renderer.debug.onShaderError=(context,program,vs,fs)=>{state.error=[context.getProgramInfoLog(program),context.getShaderInfoLog(vs),context.getShaderInfoLog(fs)].join('\n').slice(0,2000);console.error('[Living materials]',state.error);};
+            renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+            state.ready=true;if(latest)build(latest.data,latest.location,latest.edges);
+        },
+        render(gl,matrix){if(!origin||!group)return;
+            const now=performance.now(),delta=now-(last||now);if(delta>0&&delta<250)state.frameMs=state.frameMs*.95+delta*.05;
+            if(!document.hidden && !PathfindrMotion.reduced())clock+=Math.min(50,delta)/1000;last=now;
+            const pitch=map.getPitch()*Math.PI/180,bearing=map.getBearing()*Math.PI/180;
+            for(const m of materials){m.uniforms.uTime.value=clock;m.uniforms.uAudio.value=window.PathfindrAudio?.state.energy||0;m.uniforms.uView.value.set(Math.sin(bearing)*Math.sin(pitch),-Math.cos(bearing)*Math.sin(pitch),Math.cos(pitch));}
+            const reveal=Math.max(0.18,Math.min(1,(map.getZoom()-12.5)/3.5));for(const model of landmarks)model.scale.setScalar(reveal*reveal*(3-2*reveal));
+            const transform=new THREE.Matrix4().makeTranslation(origin.x,origin.y,origin.z||0).scale(new THREE.Vector3(scale,-scale,scale));
+            camera.projectionMatrix=new THREE.Matrix4().fromArray(matrix).multiply(transform);
+            renderer.resetState();renderer.render(scene,camera);renderer.resetState();
+            state.drawCalls=renderer.info.render.calls;
+            if(now-lastStats>500){lastStats=now;const output=document.getElementById('graphics-readout');if(output)output.textContent=`${state.surfaces} land/water areas · ${state.trees} trees\n${state.landmarks} landmarks · ${state.drawCalls} environment draws\nMap frame interval: ${state.frameMs.toFixed(1)} ms\nEmission: ${PathfindrEmission.state.hdr?'HDR':'standard'}${PathfindrEmission.state.error?' · fallback':''}\n${state.error?'Material error: '+state.error:'Materials ready'}`;}
+            // Repaint scheduling belongs to the game controller, not a second loop.
+        },
+        onRemove(){dispose();renderer?.dispose();state.ready=false;}
+    };
+    window.PathfindrWorldRenderer={state,build,setQuality(quality){state.quality=quality==='balanced'?'balanced':'high';
+        group?.traverse(o=>{if(o.isInstancedMesh)o.count=state.quality==='balanced'?Math.ceil(o.instanceMatrix.count*.45):o.instanceMatrix.count;});
+        PathfindrEmission.state.enabled=state.quality==='high';map?.triggerRepaint();
+    },init(instance){if(!instance.getLayer(layer.id))instance.addLayer(layer,'city-blocks');},clear(){latest=null;dispose();group=null;origin=null;state.surfaces=state.trees=state.landmarks=state.flowingWater=0;}};
+})();

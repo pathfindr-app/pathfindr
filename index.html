@@ -11,6 +11,7 @@
     <!-- MapLibre GL JS for map rendering with rotation/pitch support -->
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="engine/city-ui.css" />
 
     <!-- Capacitor (when running as native app) -->
     <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
@@ -250,6 +251,26 @@
                 <canvas id="viz-canvas"></canvas>
                 <canvas id="preview-canvas"></canvas>
                 <div id="marker-container"></div>
+                <div id="collectibles-layer" aria-label="Map collectibles"></div>
+                <section id="discovery-panel" aria-label="City discoveries" hidden></section>
+                <span id="discovery-status" class="sr-only" role="status" aria-live="polite"></span>
+                <details id="graphics-panel"><summary>Graphics</summary>
+                    <label>Detail <select id="graphics-quality"><option value="high">High</option><option value="balanced">Balanced</option></select></label>
+                    <output id="graphics-readout"></output>
+                </details>
+                <button type="button" id="route-recenter-btn" aria-label="Recenter route">Recenter</button>
+                <div id="route-tools" aria-label="Route controls">
+                    <div class="route-tool-row">
+                        <button type="button" data-input-mode="tap" aria-pressed="true">Tap</button>
+                        <button type="button" data-input-mode="trace" aria-pressed="false">Trace</button>
+                        <button type="button" id="route-undo-btn" aria-label="Undo route edit">Undo</button>
+                        <span class="tool-divider"></span>
+                        <button type="button" id="city-depth-btn" aria-pressed="false">3D view</button>
+                        <button type="button" id="audio-motion-btn" aria-pressed="true">Audio motion</button>
+                    </div>
+                    <span id="trace-hint">Tap streets to build your route.</span>
+                    <button type="button" id="discoveries-btn">Discoveries · 0</button>
+                </div>
 
                 <!-- Splash Screen (Alpha Welcome) -->
                 <div id="splash-screen" class="overlay splash-video-active">
@@ -369,6 +390,11 @@
 
                                     </div>
 
+                                    <div class="lobby-route-sharing">
+                                        <div><strong>Your city. Their challenge.</strong><p>Create a route, or share one you just played.</p></div>
+                                        <button id="create-route-btn" type="button">Create a challenge</button>
+                                        <button id="saved-routes-btn" type="button">Saved routes / Open share</button>
+                                    </div>
                                     <div class="splash-ops-footer">
                                         <div class="difficulty-selector splash-difficulty-card">
                                             <span class="difficulty-label">Draw Precision</span>
@@ -691,6 +717,14 @@
                         <h2>Choose Your Destination</h2>
                         <p class="location-subtitle">Where do you want to pathfind?</p>
                         <div class="location-options">
+                            <button class="location-option" data-mode="miami">
+                                <span class="location-option-title">Miami</span>
+                                <span class="location-option-desc">Downtown &amp; Brickell · bundled city with labels</span>
+                            </button>
+                            <button class="location-option" data-mode="washington">
+                                <span class="option-label">Washington, DC</span>
+                                <span class="option-desc">Living city showcase · parks, water, monuments</span>
+                            </button>
                             <button class="location-option" data-mode="local">
                                 <div class="option-icon">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -734,7 +768,7 @@
                         <ol>
                             <li>You'll see a <span class="start-marker">START</span> and <span class="end-marker">END</span> point on the map</li>
                             <li>Draw what you think is the shortest path between them</li>
-                            <li>Tap to draw line segments along the roads</li>
+                            <li>Tap streets, or choose Trace and drag from the route tip. Lift to pause.</li>
                             <li>Reach the <span class="end-marker">END</span> point to submit your route</li>
                             <li>Watch the A* algorithm find the optimal path</li>
                             <li>Your score is based on how close your route is to optimal!</li>
@@ -1048,10 +1082,12 @@
                         </div>
                         <p id="rank-message" class="gameover-rank">Great pathfinding!</p>
                         <button id="play-again-btn" class="btn btn-glow">Play Again</button>
+                        <button id="share-run-btn" class="btn" type="button">Save / share this run</button>
                     </div>
                 </div>
 
                 <!-- Results Panel - Bottom Slide-Up -->
+                <div id="route-identity-legend" aria-label="Route key"><span class="route-key-yours">Your route · solid</span><span class="route-key-algo">A* shortest · dashed</span></div>
                 <div id="results-panel">
                     <div class="results-content">
                         <!-- Hero Score Section -->
@@ -1107,6 +1143,8 @@
                         </div>
 
                         <!-- Next Round Button with attention glow -->
+                        <section id="round-discoveries" aria-label="Collected this round"></section>
+                        <div class="round-share-actions"><button id="save-round-btn" type="button">Save</button><button id="share-round-btn" type="button">Share / challenge</button></div>
                         <div class="next-round-wrapper">
                             <div class="glow-border"></div>
                             <button id="next-round-btn" class="btn btn-next">
@@ -1148,7 +1186,30 @@
     <script src="vendor/d3-geo.min.js"></script>
     <script src="vendor/topojson-client.min.js"></script>
     <script src="payments.js"></script>
-    <script src="game.js"></script>
+    <script src="engine/audio-reactivity.js"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/earcut.min.js"></script>
+    <script src="engine/motion.js"></script>
+    <script src="engine/road-motion.js"></script>
+    <script src="data/cities/miami.js"></script>
+    <script src="engine/map-labels.js"></script>
+    <script src="engine/place-data.js"></script>
+    <script src="engine/route-cinema.js"></script>
+    <script src="engine/world-data.js"></script>
+    <script src="engine/world-renderer.js"></script>
+    <script src="engine/emission.js"></script>
+    <script src="engine/city-scene.js?v=11"></script>
+    <script src="engine/trace-input.js"></script>
+    <script src="engine/collections.js"></script>
+    <script src="engine/share-data.js"></script>
+    <script src="engine/route-archive.js"></script>
+    <script src="engine/lobby-preload.js?v=11"></script>
+    <script src="engine/search-afterglow.js"></script>
+    <script src="game.js?v=11"></script>
+    <script src="engine/game-adapter.js"></script>
+    <script src="engine/share-game.js"></script>
+    <script src="engine/share-cloud.js"></script>
+    <script src="engine/share-ui.js"></script>
 
     <!-- Initialize monetization modules after DOM ready -->
     <script>

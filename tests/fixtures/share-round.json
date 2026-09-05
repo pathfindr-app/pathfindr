@@ -1,0 +1,1 @@
+{"v":1,"kind":"challenge","title":"Sharing QA","maps":[{"location":{"name":"Miami QA","lng":-80.192,"lat":25.776},"nodes":[[-80.193,25.775],[-80.191,25.775],[-80.191,25.777]],"edges":[[0,1],[1,2]]}],"rounds":[{"map":0,"start":[-80.193,25.775],"end":[-80.191,25.777],"difficulty":"easy","pickups":[{"key":"spark:qa","type":"spark","name":"QA Street Spark","pos":[-80.192,25.776]}]}]}

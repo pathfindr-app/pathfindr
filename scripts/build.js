@@ -8,6 +8,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
+require('./sync-render-vendor.cjs');
+require('./build-miami.cjs');
 
 // Files to copy to dist
 const FILES = [
@@ -19,9 +21,11 @@ const FILES = [
     'auth.js',
     'payments.js',
     'ads.js',
+    'analytics.js',
+    'build-info.json',
+    'Scanning.wav',
     'Scanning1.wav',
     'Found1.wav',
-    'Pathfindr1.wav',
 ];
 
 // Directories to copy
@@ -29,7 +33,10 @@ const DIRS = [
     'public',
     'Visual Assets',
     'Music',
-    'worldcities',
+    'engine',
+    'data',
+    'vendor',
+    'sounds',
 ];
 
 function ensureDir(dir) {

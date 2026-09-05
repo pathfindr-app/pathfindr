@@ -262,7 +262,7 @@ const CONFIG = {
         },
 
         getUserPathColor() {
-            return this.userPath;
+            return { r:255,g:184,b:105 };
         },
 
         getOptimalPathColor() {
@@ -564,7 +564,12 @@ async function getNextVisualizerCity() {
         const override = await fetchStreamOverrideCity();
         if (override) return override;
     }
-    return getRandomCity(Math.random() > 0.5 ? 'global' : 'us');
+    const mode=Math.random() > 0.5 ? 'global' : 'us';
+    if(StreamConfig.enabled)return getRandomCity(mode);
+    const reserve=await getLobbyCityPreparation().take(mode);
+    if(reserve.scene)PathfindrCity.prime(reserve.city,reserve.scene);
+    if(reserve.data)preparedLocationRoads.set(reserve.city,reserve.data);
+    return reserve.city||getRandomCity(mode);
 }
 
 // =============================================================================
@@ -609,6 +614,8 @@ const GameController = {
 
         // Enter new phase
         this.phase = newPhase;
+        document.body.dataset.gamePhase = newPhase;
+        if (newPhase !== GamePhase.PLAYING) window.PathfindrTrace?.cancel?.();
         this._enterPhase(newPhase, options);
 
         console.log(`[GameController] ${oldPhase} → ${newPhase}`);
@@ -668,6 +675,9 @@ const GameController = {
                 clearInteractivePathOverlay();
                 break;
             case GamePhase.PLAYING:
+                window.PathfindrCollections?.beginRound(GameState.currentRound);
+                window.PathfindrArchive?.begin(GameState.currentRound);
+                document.getElementById('save-round-btn').textContent='Save';
                 // Ensure ambient viz is running for gameplay
                 if (!AmbientViz.active) {
                     AmbientViz.start();
@@ -704,6 +714,7 @@ const GameController = {
     // This prevents competing loops and ensures consistent frame timing.
 
     startLoop() {
+        PathfindrMotion.managed = true;
         if (this.animationId) return; // Already running
 
         // Stop AmbientViz's independent loop if it's running
@@ -719,6 +730,7 @@ const GameController = {
     },
 
     stopLoop() {
+        PathfindrMotion.managed = false;
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
@@ -752,6 +764,16 @@ const GameController = {
     },
 
     _renderFrame(deltaTime) {
+        PathfindrMotion.tick?.(deltaTime);
+        PathfindrCollections.update();
+        this.frameDelta = Math.min(100, deltaTime);
+        const audio = PathfindrAudio.update(deltaTime, SoundEngine.muted);
+        const audioButton = document.getElementById('audio-motion-btn');
+        if(audioButton) {
+            audioButton.style.setProperty('--audio-level', String(audio.energy));
+            audioButton.title = `Audio motion: ${audio.status}`;
+        }
+        PathfindrCity.update(performance.now(), audio, this.phase);
         const ctx = GameState.vizCtx;
         if (!ctx) return;
 
@@ -797,9 +819,13 @@ const GameController = {
                 renderVisualization({ advanceState });
                 break;
 
+            case GamePhase.RESULTS:
+                // The summary is an overlay, not the end of the search's visual lifetime.
+                renderVisualization({ advanceState });
+                break;
+
             case GamePhase.PLAYING:
             case GamePhase.IDLE:
-            case GamePhase.RESULTS:
                 // Normal gameplay - AmbientViz handles all layers
                 this._renderAmbientFrame(ctx, width, height, deltaTime);
                 break;
@@ -963,6 +989,7 @@ const CityFacts = {
      * Results are cached locally and on the server
      */
     async fetchFacts(cityInput) {
+        if(cityInput?.packId)return [];
         const city = this.resolveCityInput(cityInput);
         const cityName = this.getWikiName(city);
         const cacheKey = this.getCacheKey(city);
@@ -1085,6 +1112,7 @@ const CityFacts = {
      * Preload facts for a city (call during loading screens)
      */
     preload(cityInput) {
+        if(cityInput?.packId)return;
         // Fire and forget - just populate the cache
         this.fetchFacts(cityInput).catch(() => {});
     },
@@ -1106,6 +1134,7 @@ const CityFacts = {
      * Start the facts ticker for Explorer/Visualizer modes
      */
     async startTicker(cityInput) {
+        if(cityInput?.packId){this.stopTicker();return;}
         const tickerEl = document.getElementById('facts-ticker');
         const textEl = document.getElementById('ticker-text');
         if (!tickerEl || !textEl) return;
@@ -1224,6 +1253,7 @@ const CityDB = {
 
             const response = await fetch(url, {
                 method: 'GET',
+                signal: AbortSignal.timeout(8000),
                 headers: {
                     'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
                 },
@@ -1451,6 +1481,7 @@ const WebGLRenderer = {
             uniform float u_heatFloor;  // Minimum heat value
             uniform float u_flicker;    // Pre-computed flicker (CPU-side sin)
             uniform float u_frontierPulse;  // Pre-computed frontier pulse
+            uniform float u_afterglow;
 
             varying float v_heat;  // Actually explorationTime (or -1 if never explored)
             varying vec2 v_position;
@@ -1466,7 +1497,7 @@ const WebGLRenderer = {
 
                 // Linear decay
                 float timeSinceExplored = u_time - v_heat;
-                float heat = max(u_heatFloor, 1.0 - timeSinceExplored * u_decaySpeed);
+                float heat = 0.32 + 0.68 * exp(-max(timeSinceExplored,0.0)*0.24);
 
                 if (heat < 0.02) discard;
 
@@ -1475,7 +1506,7 @@ const WebGLRenderer = {
                 float edgePos = v_position.x * 0.008 + v_position.y * 0.008;
 
                 // Frontier detection (recent edges)
-                float frontierStrength = smoothstep(0.4, 0.95, heat);
+                float frontierStrength = exp(-max(timeSinceExplored,0.0)*1.1);
 
                 // === PERSISTENT ENERGY FLOW (always active on explored edges) ===
                 // Slow traveling wave - gives "energy flowing through network" feel
@@ -1483,7 +1514,7 @@ const WebGLRenderer = {
                 flowWave *= sin(edgePos * 1.5 + u_time * 1.3) * 0.3 + 0.7;
 
                 // Subtle shimmer on ALL explored edges (not just frontier)
-                float baseShimmer = hash11(edgePos + floor(u_time * 8.0) * 0.1) * 0.15;
+                float baseShimmer = (sin(edgePos*2.1-u_time*1.3)*0.5+0.5)*0.08;
 
                 // === FRONTIER-SPECIFIC EFFECTS (more intense) ===
                 float electricNoise = 0.0;
@@ -1491,8 +1522,8 @@ const WebGLRenderer = {
 
                 if (frontierStrength > 0.05) {
                     // Fast electric flicker
-                    electricNoise = hash11(edgePos + u_time * 25.0) * 0.4;
-                    electricNoise += hash11(edgePos * 2.3 - u_time * 18.0) * 0.3;
+                    electricNoise = pow(sin(edgePos*19.0-u_time*12.0)*0.5+0.5,5.0)*0.4;
+                    electricNoise += pow(sin(edgePos*11.3+u_time*9.0)*0.5+0.5,4.0)*0.3;
 
                     // Intense plasma pulse on frontier
                     float plasma = sin(edgePos * 6.0 - u_time * 10.0) * 0.5 + 0.5;
@@ -1505,7 +1536,8 @@ const WebGLRenderer = {
 
                 // === BRIGHTNESS CALCULATION ===
                 // Base: all explored edges glow with flowing energy
-                float baseBrightness = 0.4 + heat * 0.3 + flowWave * 0.2 + baseShimmer;
+                float echo = pow(0.5+0.5*cos(timeSinceExplored*2.6),8.0)*exp(-max(timeSinceExplored,0.0)*0.10);
+                float baseBrightness = 0.48 + heat * 0.3 + flowWave * 0.26 + baseShimmer + echo*0.4;
 
                 // Frontier boost: dramatic increase for wavefront
                 float frontierBoost = 1.0 + frontierStrength * 4.0 + electricNoise * frontierStrength * 3.0;
@@ -1539,7 +1571,7 @@ const WebGLRenderer = {
                 float alpha = (0.5 + heat * 0.35) * (0.8 + frontierStrength * 0.3);
                 alpha += plasmaGlow * 0.15 + flowWave * heat * 0.1;
 
-                gl_FragColor = vec4(color * alpha, alpha);
+                gl_FragColor = vec4(color * alpha, alpha * u_afterglow);
             }
         `,
 
@@ -1555,6 +1587,7 @@ const WebGLRenderer = {
             uniform float u_decaySpeed;
             uniform float u_heatFloor;
             uniform float u_glowPulse;  // Pre-computed glow pulse
+            uniform float u_afterglow;
 
             varying float v_heat;  // Actually explorationTime
             varying vec2 v_position;
@@ -1593,7 +1626,7 @@ const WebGLRenderer = {
                 float glow = heat * 0.4 * pulse;
                 glow += frontierStrength * 0.15;
 
-                gl_FragColor = vec4(color * glow, glow);
+                gl_FragColor = vec4(color * glow, glow * u_afterglow);
             }
         `,
 
@@ -1823,6 +1856,7 @@ const WebGLRenderer = {
             // Pre-computed effect values (CPU-side sin calculations)
             flicker: gl.getUniformLocation(program, 'u_flicker'),
             frontierPulse: gl.getUniformLocation(program, 'u_frontierPulse'),
+            afterglow: gl.getUniformLocation(program, 'u_afterglow'),
             glowPulse: gl.getUniformLocation(program, 'u_glowPulse'),
         };
 
@@ -2239,12 +2273,14 @@ const WebGLRenderer = {
 
         // Only draw heat/glow if we have explored edges
         if (this.exploredIndexCount > 0) {
+            const bloom = PathfindrEmission.begin(gl, width, height);
             // Draw heat-mapped edges on top (additive blending) - ONLY explored edges
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE);  // Additive
             this.renderHeatEdges(timeSeconds, width, height);
 
             // Draw glow layer - ONLY explored edges
-            this.renderGlow(timeSeconds, width, height);
+            if (bloom) PathfindrEmission.end();
+            else this.renderGlow(timeSeconds, width, height);
 
             // Reset blend mode
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -2286,7 +2322,8 @@ const WebGLRenderer = {
         // Set uniforms - much wider line for soft atmospheric glow
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
-        gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wide soft glow
+        const reactiveWidth = PathfindrAudio.state.bass * (GameController.phase === GamePhase.PLAYING ? 2 : 5);
+        gl.uniform1f(program.uniforms.lineWidth, 8.0 + reactiveWidth);
         gl.uniform2f(program.uniforms.center, width / 2, height / 2);
         if (program.uniforms.opacity) gl.uniform1f(program.uniforms.opacity, this.globalOpacity);
 
@@ -2351,6 +2388,7 @@ const WebGLRenderer = {
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 4.0);
+        gl.uniform1f(program.uniforms.afterglow, getSearchCoolingGain());
 
         // Linear decay: heat = 1.0 - time * decaySpeed
         // Visualizer mode gets dynamic settling so the handoff to ambient does not hard-cut.
@@ -2367,7 +2405,7 @@ const WebGLRenderer = {
         gl.uniform3f(program.uniforms.roundColor, c.r / 255, c.g / 255, c.b / 255);
 
         // Pre-computed effect values (CPU-side sin() - one call per frame instead of millions)
-        const flicker = 0.9 + Math.sin(time * 8.0) * 0.05;
+        const flicker = 0.9 + PathfindrAudio.state.bass * 2.2;
         const frontierPulse = Math.sin(time * 12.0);  // Range -1 to 1
         gl.uniform1f(program.uniforms.flicker, flicker);
         gl.uniform1f(program.uniforms.frontierPulse, frontierPulse);
@@ -2399,6 +2437,7 @@ const WebGLRenderer = {
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
         gl.uniform1f(program.uniforms.lineWidth, 12.0);  // Wider for glow
+        gl.uniform1f(program.uniforms.afterglow, getSearchCoolingGain());
 
         // Linear decay parameters (same as heat edges)
         const inVizSettling = GameState.gameMode === 'visualizer' && GameState.vizState?.phase === 'settling';
@@ -2527,6 +2566,7 @@ const SoundEngine = {
         this.masterGain = this.ctx.createGain();
         this.masterGain.connect(this.ctx.destination);
         this.masterGain.gain.value = 1.0;  // Full volume
+        if (this.musicPlayer) PathfindrAudio.attach(this.musicPlayer, this.ctx);
 
         // Load mute preference
         this.muted = localStorage.getItem('pathfindr_muted') === 'true';
@@ -2652,6 +2692,7 @@ const SoundEngine = {
         });
 
         this.musicPlayer = audio;
+        if (this.ctx) PathfindrAudio.attach(audio, this.ctx);
         return audio;
     },
 
@@ -3863,7 +3904,8 @@ const AmbientViz = {
         particle.active = true;
         particle.edgeIndex = edgeIndex;
         particle.edgeProgress = Math.random();
-        particle.speed = 0.002 + Math.random() * 0.004; // Progress per frame
+        particle.speed = 12 + Math.random() * 10; // Geographic meters per second
+        particle.reverse = false;
         particle.color = colors[colorIndex];
         particle.alpha = 0;
         particle.size = 0.5 + Math.random() * 0.5;
@@ -3883,49 +3925,15 @@ const AmbientViz = {
                 if (particle.alpha >= 1) particle.fadeIn = false;
             }
 
-            // Move along edge
-            particle.edgeProgress += particle.speed * dt;
-
-            // When reaching end of edge, jump to connected edge or die
-            if (particle.edgeProgress >= 1) {
-                const edge = GameState.edgeList[particle.edgeIndex];
-                if (!edge) {
-                    particle.active = false;
-                    continue;
-                }
-
-                // Find connected edges
-                const neighbors = GameState.edges.get(edge.to);
-                if (neighbors && neighbors.length > 0) {
-                    // Pick random neighbor edge
-                    const nextNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    // Find the edge in edgeList
-                    const nextEdgeIndex = GameState.edgeList.findIndex(e =>
-                        (e.from === edge.to && e.to === nextNeighbor.neighbor) ||
-                        (e.to === edge.to && e.from === nextNeighbor.neighbor)
-                    );
-
-                    if (nextEdgeIndex >= 0) {
-                        particle.edgeIndex = nextEdgeIndex;
-                        particle.edgeProgress = 0;
-                        // Small chance to die anyway for variety
-                        if (Math.random() < 0.1) {
-                            particle.active = false;
-                        }
-                    } else {
-                        particle.active = false;
-                    }
-                } else {
-                    particle.active = false;
-                }
-            }
+            PathfindrRoadMotion.advance(particle, deltaTime / 1000);
 
             // Calculate screen position
             if (particle.active) {
                 const edge = GameState.edgeList[particle.edgeIndex];
                 if (edge) {
-                    const lat = edge.fromPos.lat + (edge.toPos.lat - edge.fromPos.lat) * particle.edgeProgress;
-                    const lng = edge.fromPos.lng + (edge.toPos.lng - edge.fromPos.lng) * particle.edgeProgress;
+                    const progress = particle.reverse ? 1-particle.edgeProgress : particle.edgeProgress;
+                    const lat = edge.fromPos.lat + (edge.toPos.lat - edge.fromPos.lat) * progress;
+                    const lng = edge.fromPos.lng + (edge.toPos.lng - edge.fromPos.lng) * progress;
                     const screen = GameState.map.project([lng, lat]);
                     particle.x = screen.x;
                     particle.y = screen.y;
@@ -4385,19 +4393,18 @@ const AmbientViz = {
         const round = rounds[rounds.length - 1];
         if (!round) return;
 
-        const enteredAt = GameState.resultsPresentation.enteredAt || performance.now();
-        const elapsed = Math.max(0, performance.now() - enteredAt);
-        const userReveal = Math.max(0, Math.min(1, elapsed / 260));
-        const optimalReveal = Math.max(0, Math.min(1, (elapsed - 260) / 420));
-        const overlayAlpha = 0.54 - (0.08 * optimalReveal);
+        // Both routes have already been revealed. Never hide and replay them
+        // when switching to the recap renderer.
+        const userReveal = 1;
+        const optimalReveal = 1;
 
         const userPoints = this.projectNodePath(round.userPath, round.userPathCoords);
         const optimalPoints = this.projectNodePath(round.optimalPath, round.optimalPathCoords);
 
-        this.renderRoundReviewBackdrop(ctx, [userPoints, optimalPoints], overlayAlpha);
+        // The cooling search supplies context; do not abruptly black it out.
 
         if (userPoints.length > 1) {
-            this.renderResultsUserPath(ctx, userPoints, 0.7 + 0.3 * userReveal);
+            PathfindrRouteCinema.route(ctx, userPoints, {r:255,g:184,b:105}, performance.now()*0.001);
         }
 
         if (optimalPoints.length > 1 && optimalReveal > 0) {
@@ -4405,24 +4412,21 @@ const AmbientViz = {
                 round.resultsOptimalSweep = ElectricitySystem.createSweep();
             }
 
-            this.renderOptimalPathWithElectricity(
-                ctx,
-                optimalPoints,
-                CONFIG.color.getOptimalPathColor(),
-                0.25 + (0.75 * optimalReveal),
-                round.resultsOptimalSweep
-            );
+            PathfindrRouteCinema.route(ctx, optimalPoints, CONFIG.color.getOptimalPathColor(), performance.now()*0.001, true);
         }
+        PathfindrRouteCinema.tag(ctx,userPoints,'YOUR ROUTE','#ffb869',.35);
+        PathfindrRouteCinema.tag(ctx,optimalPoints,'A* SHORTEST','#55dfe2',.7);
     },
 
     // Render persisted rounds with electricity effects
-    renderRoundHistory(ctx, deltaTime, isVizActive = false) {
+    renderRoundHistory(ctx, deltaTime, isVizActive = false, excludeRound = null) {
         const rounds = RoundHistory.getRounds();
 
         // During active visualization, dim previous rounds to 40% to not compete
         const vizDimFactor = isVizActive ? 0.6 : 1.0;  // BUMPED from 0.4 for better visibility
 
         for (const round of rounds) {
+            if(round.roundNumber===excludeRound)continue;
             const screenEdges = this.projectEdgeHistory(round.exploredSegments, round.exploredEdges);
 
             // Render explored edges with electricity (dimmed during active viz)
@@ -4430,6 +4434,10 @@ const AmbientViz = {
             const effectiveIntensity = round.intensity * vizDimFactor;
             ElectricitySystem.renderElectrifiedEdges(ctx, screenEdges, round.color, effectiveIntensity, isActive);
 
+            // User casing first; algorithm dashes remain visible on shared streets.
+            const savedUserPoints=this.projectNodePath(round.userPath,round.userPathCoords);
+            ctx.save();ctx.globalAlpha=effectiveIntensity;
+            PathfindrRouteCinema.route(ctx,savedUserPoints,{r:255,g:184,b:105},performance.now()*.001);ctx.restore();
             // Render optimal path with distinct optimal color (dimmed during active viz)
             if (round.optimalPath.length > 1 || round.optimalPathCoords?.length > 1) {
                 const optimalPoints = this.projectNodePath(round.optimalPath, round.optimalPathCoords);
@@ -4440,7 +4448,9 @@ const AmbientViz = {
                     if (!round.optimalSweep) {
                         round.optimalSweep = ElectricitySystem.createSweep();
                     }
-                    this.renderOptimalPathWithElectricity(ctx, optimalPoints, pathColor, effectiveIntensity, round.optimalSweep);
+                    ctx.save();ctx.globalAlpha=effectiveIntensity;
+                    PathfindrRouteCinema.route(ctx,optimalPoints,{r:85,g:223,b:226},performance.now()*.001,true);
+                    PathfindrRouteCinema.tag(ctx,optimalPoints,`R${round.roundNumber} · A*`,'#55dfe2',.7);ctx.restore();
                 }
             }
 
@@ -4449,7 +4459,8 @@ const AmbientViz = {
                 const userPoints = this.projectNodePath(round.userPath, round.userPathCoords);
                 if (userPoints.length > 1) {
                     // Use stored userPathColor from round theme
-                    ElectricitySystem.renderUserPathElectricity(ctx, userPoints, effectiveIntensity, round.midColor);
+                    ctx.save();ctx.globalAlpha=effectiveIntensity;
+                    PathfindrRouteCinema.tag(ctx,userPoints,`R${round.roundNumber} · YOU`,'#ffb869',.35);ctx.restore();
                 }
             }
         }
@@ -5006,8 +5017,8 @@ const RoundHistory = {
             hotColor: theme.hot,              // Hot shade (optimal path - brightest)
             midColor: theme.mid,              // Mid shade (user path)
             coolColor: theme.cool,            // Cool shade (ambient history falloff)
-            state: 'rising',                  // 'rising' | 'settling' | 'idle'
-            intensity: 0.15,                  // Start dim, fade UP to avoid brightness pop
+            state: 'idle',                    // Carry settled energy into history
+            intensity: CONFIG.electricity.idleIntensity,
             surgeStartTime: performance.now(),
         });
     },
@@ -6856,6 +6867,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initInlineLocationSearch();  // Click-to-search on location display
     initCustomCursor();  // Custom cursor for web version
     initSplashScreen();  // Show splash screen first
+    initCityControls();
+    scheduleLobbyCityPreparation();
+    setInterval(()=>{if(!document.hidden&&!StreamConfig.enabled)getLobbyCityPreparation().warm();},30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleLobbyCityPreparation();});
 });
 
 // Initialize sound on first user interaction
@@ -6923,6 +6938,8 @@ function initMap() {
         touchPitch: true, // Enable pitch with two-finger gesture
         cooperativeGestures: isMobile, // Require two-finger pan on mobile
     });
+
+    PathfindrCity.init(GameState.map);
 
     // Add navigation control (zoom + compass) - hidden on mobile
     if (!isMobile) {
@@ -7364,6 +7381,7 @@ function setupMobileTouchHandling() {
     if (!GameState.mobileClickHandlerAdded) {
         GameState.map.on('click', (e) => {
             if (!shouldHandlePathInput()) return;
+            if (PathfindrTrace.mode === 'trace') return;
             if (Date.now() < GameState.suppressNextMapClickUntil) return;
 
             const rect = canvas.getBoundingClientRect();
@@ -7382,6 +7400,7 @@ function setupMobileTouchHandling() {
     if (GameState.pathPreviewHandlersAdded) return;
 
     inputSurface.addEventListener('mousemove', (e) => {
+        if (PathfindrTrace.mode === 'trace') return;
         if (!shouldHandlePathInput()) {
             clearSnapPreview();
             return;
@@ -7399,6 +7418,7 @@ function setupMobileTouchHandling() {
     });
 
     inputSurface.addEventListener('touchstart', (e) => {
+        if (PathfindrTrace.mode === 'trace') return;
         if (e.touches.length !== 1 || !shouldHandlePathInput()) {
             GameState.touchPreviewActive = false;
             clearSnapPreview();
@@ -7412,6 +7432,7 @@ function setupMobileTouchHandling() {
     }, { passive: false });
 
     inputSurface.addEventListener('touchmove', (e) => {
+        if (PathfindrTrace.mode === 'trace') return;
         if (!GameState.touchPreviewActive || e.touches.length !== 1) {
             if (e.touches.length > 1) {
                 GameState.touchPreviewActive = false;
@@ -7426,6 +7447,7 @@ function setupMobileTouchHandling() {
     }, { passive: false });
 
     inputSurface.addEventListener('touchend', (e) => {
+        if (PathfindrTrace.mode === 'trace') return;
         if (!GameState.touchPreviewActive) {
             clearSnapPreview();
             return;
@@ -7607,6 +7629,10 @@ function completeRoadNetworkLoad(data, location, source = 'network') {
 }
 
 async function loadRoadNetwork(location, retryCount = 0, serverIndex = 0, requestId = null) {
+    const prepared=preparedLocationRoads.get(location);
+    if(prepared){preparedLocationRoads.delete(location);GameState.roadLoadRequestId=(GameState.roadLoadRequestId||0)+1;completeRoadNetworkLoad(prepared,location,'complete-reserve');return;}
+    const bundled = window.PathfindrCityPacks?.[location.packId];
+    if(bundled){GameState.roadLoadRequestId=(GameState.roadLoadRequestId||0)+1;completeRoadNetworkLoad(bundled.roads,location,'bundled');return;}
     if (requestId === null) {
         GameState.roadLoadRequestId = (GameState.roadLoadRequestId || 0) + 1;
         requestId = GameState.roadLoadRequestId;
@@ -7861,6 +7887,7 @@ function calculateRoadNetworkBounds() {
 }
 
 function processRoadData(data) {
+    window.PathfindrArchive?.graph(data, GameState.currentCity);
     const processStartedAt = performance.now();
     cancelEndpointPrecompute();
     GameState.roadGraphVersion++;
@@ -7932,6 +7959,8 @@ function processRoadData(data) {
     }
 
     // Analyze graph connectivity
+    PathfindrRoadMotion.build(GameState.edgeList, haversineDistance);
+    AmbientViz.initParticlePool();
     analyzeGraphConnectivity();
     RoadSpatialIndex.build();
     GameState.roadNetworkBounds = calculateRoadNetworkBounds();
@@ -7962,6 +7991,7 @@ function processRoadData(data) {
         indexedNodeCells: RoadSpatialIndex.nodeCells.size,
         indexedEdgeCells: RoadSpatialIndex.edgeCells.size,
     };
+    if (GameState.currentCity) PathfindrCity.load(GameState.currentCity, GameState.edgeList, data);
     console.log(
         `[Performance] Processed ${GameState.nodes.size} nodes and ${GameState.edgeList.length} edges in ` +
         `${PathfindrPerformance.graphProcessing.durationMs.toFixed(1)}ms`
@@ -7973,6 +8003,7 @@ function processRoadData(data) {
 // =============================================================================
 
 function startGame() {
+    window.PathfindrSharedGame?.clear();
     SoundEngine.init();
     GameHaptics.init();
     // Old ambient drone removed - using wav files now
@@ -7985,6 +8016,9 @@ function startGame() {
     GameController.startLoop();
     GameController.enterPhase(GamePhase.PLAYING);
     scheduleNextRoundEndpointPrecompute();
+
+    // Give the next city the full session to prepare, not only the final rounds.
+    if(GameState.gameMode==='competitive'&&GameState.continuousPlay.enabled&&GameState.locationMode!=='local')preloadNextCity();
 
     // Initialize AmbientViz particles (loop handled by GameController)
     AmbientViz.start();
@@ -8006,6 +8040,7 @@ async function nextRound() {
     GameState.roundTransitionInFlight = true;
 
     try {
+        if(window.PathfindrSharedGame?.active()){await PathfindrSharedGame.next();return;}
         // Check if interstitial ad should be shown after this round
         const justCompletedRound = GameState.currentRound;
         const shouldShowAd = typeof PathfindrAds !== 'undefined' &&
@@ -8071,6 +8106,8 @@ async function nextRound() {
 }
 
 function playAgain() {
+    window.PathfindrSharedGame?.clear();
+    window.PathfindrCollections?.beginRound(1, true);
     cancelEndpointPrecompute();
     GameState.endpointSelection.preparedRounds.clear();
     GameState.endpointSelection.currentPreparedRoute = null;
@@ -8178,9 +8215,12 @@ function applyEndpointCandidate(candidate, options = {}) {
     ];
 
     if (adjustViewport) {
+        GameState.map.resize();
         GameState.map.fitBounds(bounds, {
-            padding: 80,
-            maxZoom: 16
+            padding: getRouteCameraPadding(),
+            maxZoom: 16,
+            pitch: 0,
+            duration: PathfindrMotion.reduced() ? 0 : 550
         });
         scheduleMapPresentationRefresh({ watchMoveEnd: true });
     } else {
@@ -8652,15 +8692,20 @@ function centerOnRoute() {
 
     if (!startPos || !endPos) return;
 
-    // MapLibre fitBounds expects [[west, south], [east, north]] = [[minLng, minLat], [maxLng, maxLat]]
+    // Frame the whole comparison, not just endpoints: detours may extend beyond them.
+    const positions=GameController.phase===GamePhase.RESULTS
+        ? [...GameState.userPathNodes,...GameState.optimalPath].map(id=>GameState.nodes.get(id)).filter(Boolean)
+        : [startPos,endPos];
+    positions.push(startPos,endPos);
     const bounds = [
-        [Math.min(startPos.lng, endPos.lng), Math.min(startPos.lat, endPos.lat)],
-        [Math.max(startPos.lng, endPos.lng), Math.max(startPos.lat, endPos.lat)]
+        [Math.min(...positions.map(p=>p.lng)),Math.min(...positions.map(p=>p.lat))],
+        [Math.max(...positions.map(p=>p.lng)),Math.max(...positions.map(p=>p.lat))]
     ];
 
     GameState.map.fitBounds(bounds, {
-        padding: 80,
-        maxZoom: 16
+        padding: getRouteCameraPadding(),
+        maxZoom: 16,
+        duration: PathfindrMotion.reduced() ? 0 : 550
     });
 }
 
@@ -8756,6 +8801,7 @@ function disableDrawing() {
 }
 
 function shouldHandlePathInput() {
+    if(document.querySelector('.route-share-dialog[open]'))return false;
     if (!GameState.gameStarted || !GameState.canDraw) return false;
     if (GameState.vizState.active) return false;
     return GameState.gameMode === 'competitive' || GameState.gameMode === 'challenge';
@@ -9132,7 +9178,7 @@ function scheduleSnapPreviewFromClient(clientX, clientY, inputType = 'mouse') {
     return null;
 }
 
-function commitPathPoint(lat, lng) {
+function commitPathPoint(lat, lng, options = {}) {
     if (!shouldHandlePathInput()) return false;
 
     // Start challenge timer on first click (for fair timing)
@@ -9158,9 +9204,11 @@ function commitPathPoint(lat, lng) {
     if (addPointToUserPath(lat, lng)) {
         redrawUserPath();
         SoundEngine.init();
-        SoundEngine.click();
-        GameState.drawCanvas.classList.add('click-feedback');
-        setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
+        if (!options.quiet) {
+            SoundEngine.click();
+            GameState.drawCanvas.classList.add('click-feedback');
+            setTimeout(() => GameState.drawCanvas.classList.remove('click-feedback'), 100);
+        }
         return true;
     }
 
@@ -9711,10 +9759,12 @@ function renderUserPathPulses(ctx, points, time, userColor) {
 }
 
 function clearUserPath() {
+    PathfindrTrace.undoStack = [];
     resetUserPath();
 }
 
 function undoLastSegment() {
+    if (PathfindrTrace.undo()) return;
     if (GameState.userPathNodes.length > 1) {
         // Remove last few nodes
         GameState.userPathNodes.splice(-Math.min(5, GameState.userPathNodes.length - 1));
@@ -9735,6 +9785,7 @@ function undoLastSegment() {
 // A* ALGORITHM
 // =============================================================================
 
+const AStarFrontiers = new WeakMap();
 function runAStar(startNode, endNode, options = {}) {
     const { trackExplored = true } = options;
     const openSet = new MinHeap();
@@ -9743,6 +9794,8 @@ function runAStar(startNode, endNode, options = {}) {
     const gScore = new Map();
     const fScore = new Map();
     const exploredOrder = trackExplored ? [] : null;
+    const frontier = trackExplored ? new Map() : null;
+    if (frontier) AStarFrontiers.set(exploredOrder, frontier);
 
     gScore.set(startNode, 0);
     const endPos = GameState.nodes.get(endNode);
@@ -9765,6 +9818,8 @@ function runAStar(startNode, endNode, options = {}) {
         if (closedSet.has(current)) continue;
         closedSet.add(current);
         if (exploredOrder) exploredOrder.push(current);
+        const discovered = [];
+        if (frontier) frontier.set(current, discovered);
 
         for (const { neighbor, weight } of (GameState.edges.get(current) || [])) {
             if (closedSet.has(neighbor)) continue;
@@ -9772,6 +9827,7 @@ function runAStar(startNode, endNode, options = {}) {
             const tentativeG = gScore.get(current) + weight;
             if (!gScore.has(neighbor) || tentativeG < gScore.get(neighbor)) {
                 cameFrom.set(neighbor, current);
+                if (frontier) discovered.push(neighbor);
                 gScore.set(neighbor, tentativeG);
                 const f = tentativeG + heuristic(GameState.nodes.get(neighbor), endPos);
                 fScore.set(neighbor, f);
@@ -9836,6 +9892,10 @@ class MinHeap {
 // =============================================================================
 
 async function submitRoute() {
+    if (!shouldHandlePathInput()) return;
+    const graphVersion = GameState.roadGraphVersion;
+    const round = GameState.currentRound;
+    const stillCurrent = () => GameState.roadGraphVersion === graphVersion && GameState.currentRound === round;
     SoundEngine.submit();
     disableDrawing();
     const submitBtn = document.getElementById('submit-btn');
@@ -9855,7 +9915,8 @@ async function submitRoute() {
     GameState.drawCtx.clearRect(0, 0, GameState.drawCanvas.width, GameState.drawCanvas.height);
 
     // Brief anticipation pause before A* begins
-    await sleep(400);
+    await sleep(80);
+    if (!stillCurrent() || GameController.phase !== GamePhase.PLAYING) return;
 
     const preparedRoute = GameState.endpointSelection.currentPreparedRoute;
     const canUsePreparedRoute = preparedRoute
@@ -9874,6 +9935,7 @@ async function submitRoute() {
 
     // Start visualization
     await runEpicVisualization(explored, path);
+    if (!stillCurrent() || GameController.phase !== GamePhase.VISUALIZING) return;
 
     // Enter RESULTS phase immediately - no additional delay
     GameController.enterPhase(GamePhase.RESULTS);
@@ -9896,7 +9958,7 @@ async function playUserPathLockInAnimation() {
     if (points.length < 2) return;
 
     const uc = CONFIG.color.getUserPathColor();
-    const duration = 600; // ms
+    const duration = PathfindrMotion.reduced() ? 1 : 280;
     const startTime = performance.now();
     GameState.pathLockInActive = true;
 
@@ -9986,163 +10048,75 @@ async function playComparisonAnimation() {
 
 async function runEpicVisualization(explored, path, shouldContinue = null, options = {}) {
     const viz = GameState.vizState;
-    const speed = GameState.replaySpeed;
-    const canContinue = typeof shouldContinue === 'function' ? shouldContinue : () => true;
-    const onBeforeSettling = typeof options.onBeforeSettling === 'function' ? options.onBeforeSettling : null;
-    const abortVisualization = () => {
-        if (GameState.gameMode === 'visualizer' && SoundEngine.initialized) {
-            SoundEngine.stopScanning();
-        }
-    };
-
-    if (!canContinue()) {
-        abortVisualization();
-        return;
-    }
-
-    // Reset visualization state
+    const graph = GameState.roadGraphVersion, phase = GameController.phase;
+    const valid = () => graph === GameState.roadGraphVersion && phase === GameController.phase &&
+        (typeof shouldContinue !== 'function' || shouldContinue());
+    if (!valid() || path.length < 2) return;
+    const speed = Math.max(0.1, GameState.replaySpeed);
     viz.active = true;
-    viz.exploredSet.clear();
-    viz.nodeHeat.clear();
-    viz.edgeHeat.clear();
-    viz.discoveryTime.clear();
-    viz.particles = [];
-    viz.phase = 'exploring';
-    viz.pathProgress = 0;
-    viz.pulsePhase = 0;
-
-    startRenderLoop();
-
-    // Play scanning sound when A* exploration begins
-    SoundEngine.scanning();
-
-    const startTime = performance.now();
-    const explorationDelay = CONFIG.viz.explorationDelay / speed;
-
-    // Animate exploration
-    for (let i = 0; i < explored.length; i++) {
-        if (!canContinue()) {
-            abortVisualization();
-            return;
+    viz.exploredSet.clear(); viz.nodeHeat.clear(); viz.edgeHeat.clear(); viz.discoveryTime.clear();
+    viz.particles = []; viz.pathProgress = 0; viz.pulsePhase = 0; viz.phase = 'exploring';
+    viz.optimalRevealStartTime = 0; viz.optimalRevealEndTime = 0;
+    viz.coolingEdges=[];viz.lastHeatFrame=performance.now();
+    startRenderLoop(); SoundEngine.scanning();
+    const started = performance.now();
+    const exploreMs = Math.min(5200, 2300 + explored.length * 1.1) / speed;
+    const pathStart = exploreMs * 0.88, pathMs = 1150 / speed;
+    const settleStart = pathStart + pathMs;
+    // Interactive rounds hand off immediately; autonomous visualizer may linger.
+    const settleMs = (GameState.gameMode === 'visualizer' ? 2200 : 120) / speed;
+    viz.shockOrigin = GameState.nodes.get(path[0]);
+    viz.shockRadiusLng = explored.reduce((radius,id)=>{
+        const p=GameState.nodes.get(id);return p && viz.shockOrigin ? Math.max(radius,Math.hypot(p.lng-viz.shockOrigin.lng,(p.lat-viz.shockOrigin.lat)/Math.cos(p.lat*Math.PI/180))) : radius;
+    },0.002);
+    const duration = settleStart + settleMs;
+    const distances = PathfindrMotion.distances(path, GameState.nodes, haversineDistance);
+    const events = AStarFrontiers.get(explored);
+    let cursor = 0, settled = false;
+    const completed = await PathfindrMotion.animate(duration, progress => {
+        const t = progress * duration;
+        viz.sequenceMs = t;
+        const limit = Math.min(explored.length, Math.ceil(t / exploreMs * explored.length));
+        for (; cursor < limit; cursor++) {
+            const node = explored[cursor];
+            viz.exploredSet.add(node); viz.nodeHeat.set(node, 1);
+            viz.discoveryTime.set(node, performance.now() - started);
+            const discoveries = events?.get(node) ||
+                (GameState.edges.get(node) || []).filter(e => viz.exploredSet.has(e.neighbor)).map(e => e.neighbor);
+            for (const neighbor of discoveries) {
+                const key = getCanonicalEdgeKey(node, neighbor);
+                viz.edgeHeat.set(key, 1);
+                if (GameState.useWebGL && WebGLRenderer.canUseWebGL) WebGLRenderer.setEdgeHeat(key, 1);
+            }
+            if (!PathfindrMotion.reduced() && cursor % 3 === 0 && viz.particles.length < 70) {
+                const pos = GameState.nodes.get(node);
+                if (pos) viz.particles.push(createParticle(pos, 'explore'));
+            }
         }
-
-        const nodeId = explored[i];
-        viz.exploredSet.add(nodeId);
-        viz.nodeHeat.set(nodeId, 1.0);
-        viz.discoveryTime.set(nodeId, performance.now() - startTime);
-
-        const neighbors = GameState.edges.get(nodeId) || [];
-        for (const { neighbor } of neighbors) {
-            if (viz.exploredSet.has(neighbor)) {
-                const edgeKey = `${Math.min(nodeId, neighbor)}-${Math.max(nodeId, neighbor)}`;
-                viz.edgeHeat.set(edgeKey, 1.0);
-                // Sync to WebGL
-                if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
-                    WebGLRenderer.setEdgeHeat(edgeKey, 1.0);
+        if (t >= pathStart) {
+            if (!viz.optimalRevealStartTime) viz.optimalRevealStartTime = performance.now();
+            viz.phase = 'path';
+            const fraction = Math.min(1, (t - pathStart) / pathMs);
+            // Continuous spatial velocity; no node-density-dependent stepping.
+            viz.pathProgress = PathfindrMotion.indexAt(distances, fraction);
+        }
+        if (t >= settleStart) {
+            if (!settled) {
+                settled = true;
+                viz.optimalRevealEndTime = performance.now();
+                viz.settleStartTime = performance.now();
+                viz.settleDuration = settleMs;
+                viz.coolingEdges=[...viz.edgeHeat.keys()].slice(-24);
+                if (typeof options.onBeforeSettling === 'function') {
+                    try { options.onBeforeSettling(); } catch(error) { console.warn('[Visualization] Settle callback:',error); }
                 }
+                const end = GameState.nodes.get(path.at(-1));
+                if (end && !PathfindrMotion.reduced()) for (let i = 0; i < 6; i++) viz.particles.push(createParticle(end, 'finale'));
             }
+            viz.phase = 'settling';
         }
-
-        // Reduced particles - only spawn occasionally
-        if (i % 3 === 0 && viz.particles.length < CONFIG.viz.maxParticles) {
-            const pos = GameState.nodes.get(nodeId);
-            if (pos) {
-                viz.particles.push(createParticle(pos, 'explore'));
-            }
-        }
-
-        // Rising ping sound removed - using WAV file only
-
-        if (i % CONFIG.viz.batchSize === 0) {
-            await sleep(explorationDelay);
-            if (!canContinue()) {
-                abortVisualization();
-                return;
-            }
-        }
-    }
-
-    await sleep(400 / speed);
-    if (!canContinue()) {
-        abortVisualization();
-        return;
-    }
-
-    // Animate optimal path - BATCHED for performance
-    viz.phase = 'path';
-    viz.optimalRevealStartTime = performance.now();
-    viz.optimalRevealEndTime = 0;
-
-    // Target ~1.5 seconds for path animation regardless of path length
-    const targetDuration = 1500 / speed;
-    const frameTime = 16; // ~60fps
-    const totalFrames = Math.ceil(targetDuration / frameTime);
-    const nodesPerFrame = Math.max(1, Math.ceil(path.length / totalFrames));
-
-    for (let i = 0; i < path.length - 1; i += nodesPerFrame) {
-        if (!canContinue()) {
-            abortVisualization();
-            return;
-        }
-
-        viz.pathProgress = Math.min(i, path.length - 2);
-
-        // Spawn path particles occasionally
-        if (viz.particles.length < CONFIG.viz.maxParticles) {
-            const pos = GameState.nodes.get(path[i]);
-            if (pos) {
-                viz.particles.push(createParticle(pos, 'path'));
-            }
-        }
-
-        await sleep(frameTime);
-        if (!canContinue()) {
-            abortVisualization();
-            return;
-        }
-    }
-
-    viz.pathProgress = path.length - 1;
-    viz.phase = 'complete';
-    viz.optimalRevealEndTime = performance.now();
-
-    // Final burst - limited
-    const endPos = GameState.nodes.get(path[path.length - 1]);
-    if (endPos) {
-        for (let p = 0; p < 10; p++) {
-            viz.particles.push(createParticle(endPos, 'finale'));
-        }
-    }
-
-    // Brief pause at full brightness
-    const holdAtPeakMs = GameState.gameMode === 'visualizer' ? 340 : (250 / speed);
-    await sleep(holdAtPeakMs);
-    if (!canContinue()) {
-        abortVisualization();
-        return;
-    }
-
-    // Commit path into persistent history before settling so the handoff can blend smoothly.
-    if (onBeforeSettling) {
-        try {
-            onBeforeSettling();
-        } catch (error) {
-            console.warn('[Visualization] onBeforeSettling callback failed:', error);
-        }
-    }
-
-    // === SETTLING PHASE: Quick blend to ambient ===
-    // Heat map blends into ambient (never fully fades)
-    viz.phase = 'settling';
-    viz.settleStartTime = performance.now();
-    viz.settleDuration = GameState.gameMode === 'visualizer' ? 1150 : 400;
-
-    // Wait for settling to complete (renderVisualization handles the animation)
-    const settleWait = GameState.gameMode === 'visualizer' ? viz.settleDuration : (viz.settleDuration / speed);
-    await sleep(settleWait);
-    if (!canContinue()) {
-        abortVisualization();
-    }
+    }, valid);
+    if (!completed && SoundEngine.initialized) SoundEngine.stopScanning();
 }
 
 async function replayVisualization() {
@@ -10267,6 +10241,30 @@ function getCurrentVizTheme() {
     return CONFIG.color.getThemeByIndex(colorIndex);
 }
 
+function getSearchCoolingGain(now=performance.now()){
+    const viz=GameState.vizState;
+    if(GameState.gameMode==='visualizer'||viz.phase!=='settling')return 1;
+    return PathfindrSearchAfterglow.gain(now-viz.settleStartTime,PathfindrMotion.reduced());
+}
+
+function renderSearchEmbers(ctx,now){
+    const viz=GameState.vizState;
+    if(GameState.gameMode==='visualizer'||viz.phase!=='settling'||PathfindrMotion.reduced()||now-viz.settleStartTime>18000)return;
+    const sprite=AmbientViz.sprites.glowWhite;if(!sprite)return;
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(let i=0;i<(viz.coolingEdges?.length||0);i++){
+        const edge=GameState.edgeLookup.get(viz.coolingEdges[i]);if(!edge)continue;
+        const a=GameState.map.project([edge.fromPos.lng,edge.fromPos.lat]),b=GameState.map.project([edge.toPos.lng,edge.toPos.lat]);
+        if(Math.hypot(b.x-a.x,b.y-a.y)>3000)continue;
+        const p=PathfindrSearchAfterglow.packet(now-viz.settleStartTime,i);
+        const t=(viz.discoveryTime.get(edge.from)||0)>(viz.discoveryTime.get(edge.to)||0)?1-p.position:p.position;
+        const x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;
+        if(x<0||y<0||x>GameState.vizCanvas.width||y>GameState.vizCanvas.height)continue;
+        ctx.globalAlpha=p.alpha;ctx.drawImage(sprite,x-p.size,y-p.size,p.size*2,p.size*2);
+    }
+    ctx.restore();
+}
+
 function renderVisualization(options = {}) {
     const { advanceState = true } = options;
     const ctx = GameState.vizCtx;
@@ -10277,6 +10275,11 @@ function renderVisualization(options = {}) {
 
     ctx.clearRect(0, 0, width, height);
 
+    // Ownership remains explicit while the algorithm searches/reveals.
+    if(GameState.gameMode!=='visualizer'&&!scene.isResultsPhase){
+        const userPoints=AmbientViz.projectNodePath(GameState.userPathNodes);
+        PathfindrRouteCinema.tag(ctx,userPoints,'YOUR ROUTE','#ffb869',.35);
+    }
     // Render persistent history FIRST (underneath current visualization)
     // This ensures previous paths stay visible during new visualizations
     if (scene.isExplorerMode && ExplorerHistory.hasHistory()) {
@@ -10285,7 +10288,7 @@ function renderVisualization(options = {}) {
         VisualizerVibeRenderer.render(ctx, width, height, true);
     } else if (!scene.isExplorerMode && !scene.isVisualizerMode) {
         // Competitive mode - render round history
-        AmbientViz.renderRoundHistory(ctx, 16, true);
+        AmbientViz.renderRoundHistory(ctx, 16, true,scene.isResultsPhase?GameState.currentRound:null);
     }
 
     if (advanceState) {
@@ -10300,7 +10303,7 @@ function renderVisualization(options = {}) {
         Math.sin(time * 7.3) * 0.04 +          // Slow breathing
         Math.sin(time * 47) * 0.015 +          // High frequency shimmer
         Math.sin(time * 3.7 + 1.2) * 0.02 +    // Very slow undulation
-        (Math.random() - 0.5) * 0.04;          // Organic noise
+        Math.sin(time * 5.1 + 2.4) * 0.02;    // Continuous shimmer, no per-frame random jump
 
     // === SETTLING PHASE: Calculate crossfade progress ===
     let settleProgress = 0;
@@ -10324,10 +10327,9 @@ function renderVisualization(options = {}) {
             heatOpacity = 1 - (smoothBlend * 0.9);  // Keep a little residual glow
             ambientOpacity = 0.08 + (smoothBlend * 0.92);
         } else {
-            // Other modes: Heat map blends into ambient - never fully fades out
-            // Keep minimum 25% heat visibility so it blends smoothly
-            heatOpacity = 1 - (easeOut * 0.75);
-            ambientOpacity = easeOut;
+            // Keep the same live network through the recap, cooling to a visible floor.
+            heatOpacity = getSearchCoolingGain(now);
+            ambientOpacity = 0;
         }
     }
 
@@ -10350,12 +10352,14 @@ function renderVisualization(options = {}) {
 
     // Only run CPU decay loop for Canvas 2D fallback
     if (advanceState && (!GameState.useWebGL || !WebGLRenderer.canUseWebGL)) {
+        const frameScale=Math.min(100,Math.max(0,now-(viz.lastHeatFrame||now)))/(1000/60);
+        viz.lastHeatFrame=now;
         for (const [nodeId, heat] of viz.nodeHeat) {
-            const newHeat = heat * settlingDecay;
+            const newHeat = heat * Math.pow(settlingDecay,frameScale);
             viz.nodeHeat.set(nodeId, Math.max(newHeat, heatFloor));
         }
         for (const [edgeKey, heat] of viz.edgeHeat) {
-            const newHeat = heat * settlingDecay;
+            const newHeat = heat * Math.pow(settlingDecay,frameScale);
             viz.edgeHeat.set(edgeKey, Math.max(newHeat, heatFloor));
         }
     }
@@ -10382,6 +10386,8 @@ function renderVisualization(options = {}) {
     let roadOpacity = 1;
     if (viz.phase === 'path') {
         roadOpacity = optimalDimMin;
+    } else if(viz.phase==='settling'&&!isVisualizerMode){
+        roadOpacity=optimalDimMin+(1-optimalDimMin)*(1-getSearchCoolingGain(now));
     } else if (viz.phase === 'complete' && viz.optimalRevealEndTime) {
         const t = Math.min(1, (now - viz.optimalRevealEndTime) / 600);
         const easeOut = 1 - Math.pow(1 - t, 2);
@@ -10576,11 +10582,11 @@ function renderVisualization(options = {}) {
     ctx.globalCompositeOperation = 'source-over';
 
     // Draw optimal path (always on Canvas 2D)
-    // During settling, fade out the path along with the heat map
-    if (viz.phase === 'path' || viz.phase === 'complete' || viz.phase === 'settling') {
+    // The winning route remains legible while the surrounding search cools.
+    if (!scene.isResultsPhase && (viz.phase === 'path' || viz.phase === 'complete' || viz.phase === 'settling')) {
         if (viz.phase === 'settling') {
             ctx.save();
-            ctx.globalAlpha = heatOpacity;
+            ctx.globalAlpha = 1;
         }
         drawOptimalPath(ctx);
         if (viz.phase === 'settling') {
@@ -10593,6 +10599,8 @@ function renderVisualization(options = {}) {
         updateParticles();
     }
     drawParticles(ctx);
+    renderSearchEmbers(ctx,now);
+    if(scene.isResultsPhase)AmbientViz.renderRoundReview(ctx,0);
 
     // Crossfade layer for phase handoffs (ambient->viz and viz->ambient).
     if (GameState.gameMode === 'visualizer') {
@@ -10658,15 +10666,20 @@ function drawOptimalPath(ctx) {
 
     // Use round-specific hot color for optimal path (round-coded)
     const theme = getCurrentVizTheme();
-    const oc = theme.hot;
+    const oc = GameState.gameMode==='visualizer' ? theme.hot : CONFIG.color.getOptimalPathColor();
 
-    const drawTo = Math.min(progress + 1, path.length - 1);
+    const drawTo = Math.min(Math.floor(progress), path.length - 1);
 
     const points = [];
     for (let i = 0; i <= drawTo; i++) {
         const pos = GameState.nodes.get(path[i]);
         if (!pos) continue;
         points.push(GameState.map.project([pos.lng, pos.lat]));
+    }
+    if (drawTo < path.length - 1 && progress > drawTo) {
+        const a = GameState.nodes.get(path[drawTo]), b = GameState.nodes.get(path[drawTo + 1]);
+        const fraction = progress - drawTo;
+        if (a && b) points.push(GameState.map.project([a.lng + (b.lng - a.lng) * fraction, a.lat + (b.lat - a.lat) * fraction]));
     }
 
     if (points.length < 2) return;
@@ -10675,7 +10688,7 @@ function drawOptimalPath(ctx) {
     ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
 
-    // CLEAN OPTIMAL PATH TRACE - Boosted contrast for readability
+    // CLEAN OPTIMAL PATH TRACE - Saturated filament and soft atmospheric halo
     // Dark outline pass for separation against busy backgrounds
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = `rgba(10, 10, 18, 0.55)`;
@@ -10683,32 +10696,35 @@ function drawOptimalPath(ctx) {
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'source-over';
 
     // Wide atmospheric bloom
-    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.16)`;
-    ctx.lineWidth = 30;
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.06)`;
+    ctx.lineWidth = 24;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Outer glow
-    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.30)`;
-    ctx.lineWidth = 18;
+    ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.16)`;
+    ctx.lineWidth = 12;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
-    // Main colored line
+    // Main colored line: dashes encode algorithm ownership, independent of color.
+    ctx.setLineDash([11,7]);
     ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.95)`;
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 5;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
     // Bright white core - crisp definition
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(230, 255, 251, 0.65)';
+    ctx.lineWidth = 1;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
+    ctx.setLineDash([]);
+    PathfindrRouteCinema.tag(ctx,points,'A* SHORTEST','#55dfe2',.7);
     ctx.globalCompositeOperation = 'source-over';
 
     // LEAD POINT during tracing - boosted visibility with particle-like head
@@ -10721,7 +10737,7 @@ function drawOptimalPath(ctx) {
         ctx.globalCompositeOperation = 'lighter';
 
         // Core glow
-        const radius = 20 + 7 * pulse;
+        const radius = 18 + 4 * pulse + PathfindrAudio.state.mid * 8;
         const gradient = ctx.createRadialGradient(leadPoint.x, leadPoint.y, 0, leadPoint.x, leadPoint.y, radius);
         gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
         gradient.addColorStop(0.3, `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.9)`);
@@ -10808,16 +10824,17 @@ function drawOptimalPath(ctx) {
 
 function updateParticles() {
     const particles = GameState.vizState.particles;
+    const dt = Math.min(3, (GameController.frameDelta || 16.67) / 16.67);
 
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
 
-        p.lat += p.vy * 0.00001;
-        p.lng += p.vx * 0.00001;
+        p.lat += p.vy * 0.00001 * dt;
+        p.lng += p.vx * 0.00001 * dt;
 
-        p.life -= p.decay;
-        p.vx *= 0.97;
-        p.vy *= 0.97;
+        p.life -= p.decay * dt;
+        p.vx *= Math.pow(0.97, dt);
+        p.vy *= Math.pow(0.97, dt);
 
         if (p.life <= 0) {
             particles.splice(i, 1);
@@ -10869,6 +10886,7 @@ function clearVisualizationState() {
     viz.optimalRevealEndTime = 0;
     viz.settleStartTime = 0;
     viz.settleDuration = 0;
+    viz.coolingEdges=[];viz.lastHeatFrame=0;
 
     // Clear WebGL heat data
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {
@@ -10968,7 +10986,7 @@ function addPointToUserPath(lat, lng) {
         const newNodes = microPath.slice(1);
 
         // Start trace animation for visual feedback
-        startTraceAnimation(microPath);
+        if (!PathfindrTrace.active) startTraceAnimation(microPath);
 
         // Add all intermediate nodes
         for (const nodeId of newNodes) {
@@ -10977,7 +10995,7 @@ function addPointToUserPath(lat, lng) {
     }
 
     // Haptic feedback when node is snapped
-    GameHaptics.nodeSnap();
+    if (!PathfindrTrace.active) GameHaptics.nodeSnap();
 
     recalculateUserDistance();
     updateAllDistanceDisplays();
@@ -10993,6 +11011,7 @@ function addPointToUserPath(lat, lng) {
             (endPos && nodePos && haversineDistance(nodePos.lat, nodePos.lng, endPos.lat, endPos.lng) < 0.03);
 
         if (isAtEnd) {
+            if (PathfindrTrace.active) return true;
             // Haptic feedback when path reaches destination
             GameHaptics.pathComplete();
 
@@ -11232,6 +11251,7 @@ function updateAllDistanceDisplays() {
  * Clear the user's path completely.
  */
 function resetUserPath() {
+    PathfindrTrace.undoStack = [];
     pruneUnusedVirtualNodes();
     GameState.userPathNodes = [];
     GameState.userDrawnPoints = [];  // Reset raw drawn points
@@ -11286,6 +11306,7 @@ function calculateAndShowScore() {
         userDistance: userDistance,
         optimalDistance: optimalDistance
     });
+    window.PathfindrSharedGame?.capture({score:roundScore,userDistance,optimalDistance});
 
     // Update the round legend in HUD
     updateRoundLegend();
@@ -11300,7 +11321,7 @@ function calculateAndShowScore() {
     );
 
     // Submit score to Supabase (if logged in)
-    if (typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn()) {
+    if (!window.PathfindrSharedGame?.active() && typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn()) {
         const mapCenter = GameState.map.getCenter();
         const locationName = document.getElementById('current-location')?.textContent || 'Unknown';
 
@@ -11406,8 +11427,8 @@ function calculateAndShowScore() {
     // Update next button text
     const nextBtn = document.getElementById('next-round-btn');
     if (nextBtn) {
-        if (GameState.currentRound >= CONFIG.totalRounds) {
-            nextBtn.innerHTML = `<span>Next City</span>
+        if (GameState.currentRound >= (window.PathfindrSharedGame?.roundCount() || CONFIG.totalRounds)) {
+            nextBtn.innerHTML = `<span>${GameState.continuousPlay.enabled?'Next City':'Session Results'}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>`;
@@ -12280,6 +12301,8 @@ function initSplashScreen() {
 }
 
 function showModeSelector() {
+    lobbySelectionVersion++;
+    scheduleLobbyCityPreparation();
     if (StreamConfig.enabled) return;
     document.getElementById('loading-overlay').classList.add('hidden');
     const splashScreen = document.getElementById('splash-screen');
@@ -13400,6 +13423,7 @@ const VisualizerTimeline = {
 };
 
 function startVisualizerMode() {
+    window.PathfindrSharedGame?.clear();
     GameState.visualizerState.active = true;
     GameState.visualizerState.currentVisualization = 0;
     VisualizerTimeline.invalidateRuns();
@@ -13764,6 +13788,7 @@ function initExplorerUI() {
 }
 
 function startExplorerMode() {
+    window.PathfindrSharedGame?.clear();
     GameState.gameMode = 'explorer';
     GameState.explorerState = {
         placingStart: false,
@@ -14708,6 +14733,7 @@ async function showChallengeInfoScreen(challenge) {
  * Begin the actual challenge game
  */
 async function beginChallengeGame(challenge) {
+    window.PathfindrSharedGame?.clear();
     GameState.gameMode = 'challenge';
     GameState.challengeState.activeChallenge = challenge;
     // Don't set startTime yet - set it on first user click for fair timing
@@ -15272,6 +15298,7 @@ function initChallengeCreationUI() {
 // =============================================================================
 
 async function preloadNextCity() {
+    if(!GameState.continuousPlay.enabled||GameState.locationMode==='local'||GameState.currentCity?.packId)return;
     // Don't preload if already preloading
     if (GameState.continuousPlay.preloadedCity) return;
 
@@ -15281,6 +15308,17 @@ async function preloadNextCity() {
     GameState.continuousPlay.preloadedData = null;
     GameState.continuousPlay.preloadRequestId += 1;
     const requestId = GameState.continuousPlay.preloadRequestId;
+    const prepareDetails=()=>{
+        if(GameState.continuousPlay.preloadRequestId!==requestId)return;
+        GameState.continuousPlay.preloadDetails='loading';
+        PathfindrCity.prepare(nextCity).then(()=>{
+            if(GameState.continuousPlay.preloadRequestId===requestId)GameState.continuousPlay.preloadDetails='ready';
+        }).catch(error=>{
+            if(GameState.continuousPlay.preloadRequestId===requestId)GameState.continuousPlay.preloadDetails='unavailable';
+            console.warn('[City preload] Optional details:',error.message);
+        });
+    };
+    GameState.continuousPlay.preloadDetails='waiting-for-roads';
 
     // Calculate bounds for the city
     const zoom = nextCity.zoom || 15;
@@ -15301,6 +15339,7 @@ async function preloadNextCity() {
     if (GameState.continuousPlay.preloadedCity !== nextCity) return;
     if (cachedData) {
         GameState.continuousPlay.preloadedData = cachedData;
+        prepareDetails();
         console.log(`[RoadCache] Prepared ${nextCity.name} from IndexedDB`);
         return;
     }
@@ -15315,7 +15354,7 @@ async function preloadNextCity() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    fetch(server, {
+    GameState.continuousPlay.preloadTask = fetch(server, {
         method: 'POST',
         body: `data=${encodeURIComponent(query)}`,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -15329,8 +15368,10 @@ async function preloadNextCity() {
         if (!GameState.continuousPlay.enabled) return;
         if (GameState.continuousPlay.preloadRequestId !== requestId) return;
         if (GameState.continuousPlay.preloadedCity !== nextCity) return;
+        if(data.remark||!data.elements?.length)throw Error('Incomplete next-city road data');
         if (data.elements && data.elements.length > 0) {
             GameState.continuousPlay.preloadedData = data;
+            prepareDetails();
             RoadNetworkCache.set(cacheKey, data).catch(() => {});
             console.log(`Preloaded ${nextCity.name}: ${data.elements.length} elements`);
         }
@@ -15442,6 +15483,7 @@ function preloadTopChallenges(count = 3) {
 }
 
 async function transitionToNextCity() {
+    const transitionGraphVersion=GameState.roadGraphVersion;
     // For local mode, stay in the same location - just reset rounds
     if (GameState.locationMode === 'local') {
         GameController.enterPhase(GamePhase.IDLE);
@@ -15486,8 +15528,16 @@ async function transitionToNextCity() {
     // Determine next city (atomically consume preload slot if present).
     // This prevents late preload responses from a consumed city from writing
     // back into shared state and blocking future preloads.
-    const usedPreloadedCity = GameState.continuousPlay.preloadedCity;
-    const usedPreloadedData = GameState.continuousPlay.preloadedData;
+    // If a player finishes unusually quickly, reuse the bounded in-flight
+    // request rather than starting a duplicate fetch for the same city.
+    let usedPreloadedCity = GameState.continuousPlay.preloadedCity;
+    let usedPreloadedData = GameState.continuousPlay.preloadedData;
+    if(!usedPreloadedData||GameState.continuousPlay.preloadDetails!=='ready'){
+        const reserve=await getLobbyCityPreparation().take(GameState.locationMode==='global'?'global':'us');
+        if(!GameState.continuousPlay.enabled||GameState.roadGraphVersion!==transitionGraphVersion)return;
+        usedPreloadedCity=reserve.city;usedPreloadedData=reserve.data;
+        if(reserve.scene)PathfindrCity.prime(reserve.city,reserve.scene);
+    }
 
     let nextCity = usedPreloadedCity;
     if (usedPreloadedCity) {
@@ -15525,10 +15575,10 @@ async function transitionToNextCity() {
     RoundHistory.clear();
 
     // Wait for transition effect
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, PathfindrMotion.reduced()?0:350));
 
     // User may have exited continuous mode during transition.
-    if (!GameState.continuousPlay.enabled) {
+    if (!GameState.continuousPlay.enabled || GameState.roadGraphVersion!==transitionGraphVersion) {
         if (overlay) overlay.classList.add('hidden');
         return;
     }
@@ -15561,6 +15611,7 @@ async function transitionToNextCity() {
         showLoading('Mapping new territory...', false, nextCity);
         await loadRoadNetworkForContinuous(nextCity);
     }
+    if(GameController.phase===GamePhase.PLAYING){scheduleNextRoundEndpointPrecompute();preloadNextCity();}
 }
 
 async function loadRoadNetworkForContinuous(location) {
@@ -15660,8 +15711,22 @@ function hideLocationSelector() {
 }
 
 function selectLocationMode(mode) {
+    const selectionVersion=++lobbySelectionVersion;
+    GameState.roadLoadRequestId=(GameState.roadLoadRequestId||0)+1;
     GameState.locationMode = mode;
     hideLocationSelector();
+    if(mode==='miami'){
+        const pack=window.PathfindrCityPacks.miami;
+        GameState.continuousPlay.enabled=false;
+        GameState.map.setMaxBounds([[pack.bounds[0],pack.bounds[1]],[pack.bounds[2],pack.bounds[3]]]);
+        startGameWithLocation({...pack.location});return;
+    }
+    GameState.map.setMaxBounds(null);
+    if (mode === 'washington') {
+        GameState.locationMode = 'us';
+        startGameWithLocation({lat:38.8895,lng:-77.0353,name:'Washington, DC',zoom:15});
+        return;
+    }
 
     // Analytics: Track location mode selection
     if (typeof PathfindrAnalytics !== 'undefined') {
@@ -15703,15 +15768,11 @@ function selectLocationMode(mode) {
             const fallback = getRandomCity('us');
             startGameWithLocation(fallback);
         }
-    } else if (mode === 'us') {
-        // Use async version to potentially fetch from city database
-        getRandomCityAsync('us').then(city => {
-            startGameWithLocation(city);
-        });
-    } else if (mode === 'global') {
-        // Use async version to potentially fetch from city database
-        getRandomCityAsync('global').then(city => {
-            startGameWithLocation(city);
+    } else if (mode === 'us' || mode === 'global') {
+        getLobbyCityPreparation().take(mode).then(({city,data,scene})=>{
+            if(selectionVersion!==lobbySelectionVersion||GameState.locationMode!==mode)return;
+            if(scene)PathfindrCity.prime(city,scene);
+            startGameWithLocation(city||getRandomCity(mode),data);
         });
     }
 }
@@ -15841,7 +15902,41 @@ async function reverseGeocode(lat, lng) {
     }
 }
 
-function startGameWithLocation(location) {
+const preparedLocationRoads=new WeakMap();
+let lobbyCityPreparation=null,lobbyPreparationTimer=null,lobbySelectionVersion=0;
+function getLobbyCityPreparation(){
+    if(!lobbyCityPreparation)lobbyCityPreparation=PathfindrLobbyPreload.create({
+        seed:()=>{const pack=window.PathfindrCityPacks?.miami;return pack?{city:pack.location,data:pack.roads}:null;},
+        async restore(mode){const saved=await RoadNetworkCache.get(`lobby-reserve-v2:${mode}`);if(!saved?.scene)return null;return {city:saved.city,data:{elements:saved.elements},scene:saved.scene};},
+        save:(mode,reserve)=>RoadNetworkCache.set(`lobby-reserve-v2:${mode}`,{city:reserve.city,elements:reserve.data.elements,scene:reserve.scene}),
+        city:getRandomCityAsync,
+        details:location=>PathfindrCity.prepare(location),
+        async roads(location){
+            const scale=Math.pow(2,15-(location.zoom||15));
+            const bounds={south:location.lat-.015*scale,north:location.lat+.015*scale,west:location.lng-.02*scale,east:location.lng+.02*scale};
+            const key=RoadNetworkCache.createKey(bounds),cached=await RoadNetworkCache.get(key);
+            if(cached)return cached;
+            const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+            try{
+                const response=await fetch(CONFIG.overpassServers[0],{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`data=${encodeURIComponent(buildRoadNetworkQuery(bounds))}`,signal:controller.signal});
+                if(!response.ok)throw Error(`Road preparation failed (${response.status})`);
+                const data=await response.json();if(data.remark||!data.elements?.some(e=>e.type==='way'&&e.nodes?.length>1))throw Error('Incomplete roads');
+                RoadNetworkCache.set(key,data).catch(()=>{});return data;
+            }finally{clearTimeout(timeout);}
+        }
+    });
+    return lobbyCityPreparation;
+}
+function scheduleLobbyCityPreparation(){
+    if(lobbyPreparationTimer||StreamConfig.enabled)return;
+    lobbyPreparationTimer=setTimeout(()=>{
+        lobbyPreparationTimer=null;
+        if(!document.hidden)getLobbyCityPreparation().warm();
+    },0);
+}
+
+function startGameWithLocation(location,preparedRoads=null) {
+    lobbySelectionVersion++;
     GameState.currentCity = location;
     updateLocationDisplay(location.name);
 
@@ -15852,7 +15947,10 @@ function startGameWithLocation(location) {
     // Preload facts for this city (non-blocking)
     CityFacts.preload(location);
 
-    loadRoadNetwork(location);
+    if(preparedRoads){
+        GameState.roadLoadRequestId=(GameState.roadLoadRequestId||0)+1;
+        completeRoadNetworkLoad(preparedRoads,location,'lobby-preload');
+    }else loadRoadNetwork(location);
 }
 
 function updateLocationDisplay(name) {
@@ -15917,18 +16015,21 @@ function shouldShowRoundAd() {
 function showResults() {
     SoundEngine.slide();
     document.getElementById('results-panel').classList.add('visible');
+    document.getElementById('results-panel').scrollTop = 0;
     requestPresentationSync();
+    requestAnimationFrame(() => {
+        if (GameController.phase === GamePhase.RESULTS) centerOnRoute();
+    });
     CityFacts.stopTicker();
 
     // Show a city fact in the results panel
-    if (GameState.currentCity?.name) {
-        CityFacts.showFactInResults(GameState.currentCity);
-    }
+    // Keep recap focused on route comparison; facts belong in the city atlas.
 
     // Show banner ad during round recaps (progressive frequency, delayed)
     if (PathfindrConfig.ads.showBannerBetweenRounds && typeof PathfindrAds !== 'undefined') {
         if (shouldShowRoundAd()) {
             setTimeout(() => {
+                if (GameController.phase !== GamePhase.RESULTS) return;
                 PathfindrAds.showBanner(PathfindrConfig.ads.bannerPosition || 'top');
                 requestPresentationSync();
             }, 600);
@@ -15936,8 +16037,9 @@ function showResults() {
     }
 
     // Show inline interstitial above Next Round button (0.5s delay)
-    if (typeof PathfindrAds !== 'undefined') {
+    if (PathfindrConfig.ads.showInlineBetweenRounds && typeof PathfindrAds !== 'undefined') {
         setTimeout(() => {
+            if (GameController.phase !== GamePhase.RESULTS) return;
             PathfindrAds.showInlineInterstitial();
             requestPresentationSync();
         }, 500);
@@ -15972,7 +16074,7 @@ async function showGameOver() {
     const finalScoreEl = document.getElementById('final-score');
     animateFinalScore(GameState.totalScore, finalScoreEl);
 
-    const maxPossible = CONFIG.totalRounds * CONFIG.maxScore;
+    const maxPossible = (window.PathfindrSharedGame?.roundCount() || CONFIG.totalRounds) * CONFIG.maxScore;
     const percentage = (GameState.totalScore / maxPossible) * 100;
 
     let message;
@@ -16044,6 +16146,7 @@ function updateScoreDisplay() {
 }
 
 function updateRoundDisplay() {
+    const total=document.getElementById('stat-primary-total');if(total)total.textContent=window.PathfindrSharedGame?.roundCount()||CONFIG.totalRounds;
     const roundEl = document.getElementById('stat-primary-value');
     if (!roundEl) return;
     roundEl.textContent = GameState.currentRound;
@@ -16773,6 +16876,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Exit current game and return to main menu
  */
 function exitToMenu() {
+    window.PathfindrSharedGame?.clear();
     // Stop any active modes
     if (GameState.gameMode === 'explorer') {
         stopExplorerMode();
