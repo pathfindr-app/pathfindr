@@ -97,6 +97,7 @@ function initCityControls() {
         build: PathfindrConfig.app.buildId, phase: GameController.phase, mode: GameState.gameMode,
         coordinates: 'Screen pixels, origin top left, x right, y down', input: PathfindrTrace.mode, tracing: PathfindrTrace.active,
         city: GameState.currentCity?.name, cityScene: PathfindrCity.state, world:PathfindrWorldRenderer.state, emission:PathfindrEmission.state, collections:PathfindrCollections.state(),audio: PathfindrAudio.state,
+        assisted:!!GameState.assistedRound, pendingReports:window.PathfindrRouteReports?.pending()||0,
         round: GameState.currentRound, distanceKm: GameState.userDistance, pathNodes: GameState.userPathNodes.length,
         sharing:{archive:window.PathfindrArchive?.state(),friendChallenge:window.PathfindrSharedGame?.active(),rounds:window.PathfindrSharedGame?.roundCount()||null},
         preparation:{rounds:[...GameState.endpointSelection.preparedRounds.keys()],nextCity:GameState.continuousPlay.preloadedCity?.name||null,roadsReady:!!GameState.continuousPlay.preloadedData,details:GameState.continuousPlay.preloadDetails||'idle'},

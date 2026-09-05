@@ -21,7 +21,7 @@
         const rounds=array(value.rounds,5).map(r=>{
             if(!Number.isInteger(r.map)||!maps[r.map]||!['easy','medium','hard'].includes(r.difficulty))fail();
             const result={map:r.map,start:point(r.start),end:point(r.end),difficulty:r.difficulty,pickups:array(r.pickups,250).map(pickup)};
-            if(value.kind==='result')Object.assign(result,{score:number(r.score,0,1000),userDistance:number(r.userDistance,0,10000),optimalDistance:number(r.optimalDistance,0,10000),userPath:array(r.userPath,30000).map(point),optimalPath:array(r.optimalPath,30000).map(point),collected:array(r.collected,250).map(pickup)});
+            if(value.kind==='result')Object.assign(result,{assisted:r.assisted===true,score:r.assisted===true?0:number(r.score,0,1000),userDistance:number(r.userDistance,0,10000),optimalDistance:number(r.optimalDistance,0,10000),userPath:array(r.userPath,30000).map(point),optimalPath:array(r.optimalPath,30000).map(point),collected:array(r.collected,250).map(pickup)});
             return result;
         });
         if(!rounds.length)fail();return {v:1,kind:value.kind,title:string(value.title,100),maps,rounds};

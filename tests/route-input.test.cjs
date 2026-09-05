@@ -10,7 +10,7 @@ test('a nearby disconnected node cannot steal a valid bridge-edge snap',()=>{
     const c={getSnapRadiusMeters:()=>30,getAnchorSnapContext:()=>({anchorNodeId:1,anchorPos:{lat:0,lng:0}}),
         findNearestNodeWithDist:()=>({nodeId:99,distance:0}),findNearestEdgePoint:()=>[{fromNode:1,toNode:2,point:{lat:0,lng:.01},score:1}],
         buildPreviewPathCoords:(id,t)=>t.type==='node'?[]:[{lat:0,lng:0},t.point],haversineDistance:()=>.01,
-        calculateCoordPathDistance:()=>.01,getMaxRoutedSegmentDistanceKm:()=>1,
+        calculateCoordPathDistance:()=>.01,getMaxRoutedSegmentDistanceKm:()=>1,getRouteReachKm:()=>1,
         CONFIG:{segmentDistance:{medium:1}},GameState:{difficulty:'medium',gameMode:'competitive'},PathfindrTrace:{active:false}};
     vm.runInNewContext(src.slice(src.indexOf('function findSnapTarget('),src.indexOf('function createVirtualNode(')),c);
     assert.equal(c.findSnapTarget(0,.01).type,'edge');

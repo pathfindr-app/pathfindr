@@ -9,5 +9,8 @@
             return Math.hypot(s.x-a.x-dx*t,s.y-a.y-dy*t)<=tolerance;
         });
     }
-    window.PathfindrRouteInput={followsGesture};
+    function targetPixels(zoom, touch=false){
+        return Math.min(touch?44:34,(touch?28:20)+Math.max(0,15-zoom)*3);
+    }
+    window.PathfindrRouteInput={followsGesture,targetPixels};
 })();

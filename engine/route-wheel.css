@@ -1,0 +1,29 @@
+/* A thumb-reachable instrument, not a second HUD. All movement is compositor-only. */
+#route-tools { display:none!important; }
+#mobile-options { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:44px; padding:8px 12px; border:1px solid #879d97; border-radius:12px; background:#22312f; color:#ecf3ef; cursor:pointer; }
+#route-wheel { position:fixed; z-index:890; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:76px; height:76px; display:none; font-family:var(--font-sans-premium); }
+body[data-game-phase="playing"] #route-wheel { display:block; }
+#route-wheel button { cursor:pointer; font:600 12px var(--font-sans-premium); border:1px solid #879d97; color:#ecf3ef; background:#22312f; box-shadow:inset 0 1px 0 #ffffff26,0 5px 14px #10191870; }
+#route-wheel-toggle { width:76px; height:76px; border-radius:50%; display:grid; place-content:center; justify-items:center; gap:2px; position:relative; background:radial-gradient(circle at 35% 25%,#467066,#203c36 65%,#162b27)!important; border:2px solid #b9d8cb!important; }
+#route-wheel-toggle:before { content:''; position:absolute; inset:-6px; border:1px solid #8ccab970; border-radius:50%; pointer-events:none; }
+#route-wheel-toggle svg { width:30px; height:30px; transition:transform .28s ease; }
+#route-wheel.open #route-wheel-toggle svg { transform:rotate(90deg); }
+#route-wheel svg { fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.route-orbit { position:absolute; inset:0; pointer-events:none; }
+#route-wheel .orbit-action { position:absolute!important; left:0; top:0; width:76px!important; height:64px; min-height:64px; margin:0!important; padding:7px 3px!important; border-radius:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; opacity:0; visibility:hidden; transform:translate(0,0) scale(.45); transition:transform .3s cubic-bezier(.2,.85,.25,1.15),opacity .18s,visibility .3s; pointer-events:none; }
+#route-wheel .orbit-action svg { width:22px; height:22px; }
+#route-wheel.open .orbit-action { opacity:1; visibility:visible; transform:translate(var(--x),var(--y)) scale(1); pointer-events:auto; transition-delay:calc(var(--slot)*20ms); }
+.orbit-action:nth-child(1) { --x:-106px; --y:-16px; }
+.orbit-action:nth-child(2) { --x:-104px; --y:-96px; }
+.orbit-action:nth-child(3) { --x:-44px; --y:-171px; }
+.orbit-action:nth-child(4) { --x:44px; --y:-171px; }
+.orbit-action:nth-child(5) { --x:104px; --y:-96px; }
+.orbit-action:nth-child(6) { --x:106px; --y:-16px; }
+#route-wheel .orbit-action[aria-pressed=true] { color:#152e25; background:#b5d9cc; border:2px solid #e1f6ed; }
+#route-wheel .confirm { background:#edce98; color:#332613; }
+#route-wheel button:focus-visible { outline:3px solid #f4ca89; outline-offset:4px; }
+#route-wheel button:disabled { opacity:.6; cursor:wait; }
+#route-wheel-status { position:absolute; bottom:260px; left:50%; transform:translateX(-50%); width:min(310px,90vw); padding:12px 16px; background:#233430; color:#f1f5f3; border:1px solid #9bb8ac; border-radius:12px; font-size:13px; line-height:1.5; text-align:center; }
+#route-wheel-status:empty { display:none; }
+#assisted-result { color:#f4ca89; font:600 13px var(--font-sans-premium); margin:0 0 10px; }
+@media(prefers-reduced-motion:reduce){#route-wheel * { transition:none!important; }}

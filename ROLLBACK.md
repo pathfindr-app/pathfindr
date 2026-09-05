@@ -7,7 +7,15 @@ The original workspace was dirty. The complete archive includes its uncommitted
 files, ignored files, dependencies, and Git history. A Git checkout alone would
 not recover that exact build.
 
-New build: `pathfindr-mobile-roads-20260904.12`, branch `codex/visual-city-v2`.
+New build: `pathfindr-route-wheel-20260904.13`, branch `codex/visual-city-v2`.
+
+## Roll back the route wheel to .12
+
+Production before .13: `dpl_DejfKgXbG8Np9RwXiCdYPoj4ETNB`.
+
+```sh
+vercel rollback https://pathfindralpha-ky08x2omu-pathfindr-apps-projects.vercel.app --scope pathfindr-apps-projects
+```
 
 ## Roll back the mobile/road update to .11
 

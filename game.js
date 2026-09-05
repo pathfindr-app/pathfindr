@@ -4088,7 +4088,7 @@ const AmbientViz = {
         const time = performance.now() * 0.001;
 
         // Get the max click distance for current difficulty
-        const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+        const maxDistance = getRouteReachKm();
 
         // Convert km to pixels - account for latitude distortion
         const latRadians = pos.lat * Math.PI / 180;
@@ -9058,7 +9058,7 @@ function buildPreviewPathCoords(anchorNodeId, snapTarget) {
 
 function getCachedPreviewNodePath(startNode, endNode) {
     const cache = GameState.previewRouteCache;
-    const limit=GameState.gameMode==='explorer'?Infinity:(CONFIG.segmentDistance[GameState.difficulty]||CONFIG.segmentDistance.medium)*4.5+.12;
+    const limit=GameState.gameMode==='explorer'?Infinity:getRouteReachKm()*4.5+.12;
     const cacheKey = `${startNode}|${endNode}|${limit}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
@@ -9103,7 +9103,7 @@ function updateSnapPreview(lat, lng, inputType = 'mouse') {
         return null;
     }
 
-    const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    const maxDistance = getRouteReachKm();
     const clickDistance = haversineDistance(anchorPos.lat, anchorPos.lng, previewPoint.lat, previewPoint.lng);
     if (GameState.gameMode !== 'explorer' && clickDistance > maxDistance) {
         clearSnapPreview();
@@ -9376,6 +9376,21 @@ function redrawUserPath() {
     }
 
     renderSnapPreview(time);
+    if (GameController.phase === GamePhase.PLAYING) {
+        const tip=GameState.nodes.get(getActivePathAnchorNode());
+        if(tip){
+            const p=GameState.map.project([tip.lng,tip.lat]);
+            const pulse=matchMedia('(prefers-reduced-motion: reduce)').matches?0:(time*.75)%1;
+            ctx.save();ctx.globalAlpha=1;ctx.shadowBlur=0;
+            ctx.beginPath();ctx.arc(p.x,p.y,12+pulse*13,0,Math.PI*2);
+            ctx.strokeStyle=`rgba(255,210,143,${.8*(1-pulse)})`;ctx.lineWidth=2;ctx.stroke();
+            ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fillStyle='#f4ca89';ctx.fill();
+            ctx.strokeStyle='#172321';ctx.lineWidth=3;ctx.stroke();
+            ctx.font='600 11px sans-serif';ctx.textAlign='center';
+            ctx.fillStyle='#172321';ctx.fillRect(p.x-26,p.y-36,52,18);
+            ctx.fillStyle='#fff3dd';ctx.fillText('YOU',p.x,p.y-23);ctx.restore();
+        }
+    }
 }
 
 // Render click radius indicator around last path node
@@ -9392,7 +9407,7 @@ function renderClickRadiusIndicator(ctx, time) {
     const screen = GameState.map.project([lastPos.lng, lastPos.lat]);
 
     // Get the max click distance for current difficulty
-    const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    const maxDistance = getRouteReachKm();
 
     // Convert km to pixels at current zoom level
     // Account for latitude distortion (longitude degrees are shorter at higher latitudes)
@@ -10957,7 +10972,7 @@ function addPointToUserPath(lat, lng) {
         const targetPos = GameState.nodes.get(targetNode);
         if (lastPos && targetPos) {
             clickDistance = haversineDistance(lastPos.lat, lastPos.lng, targetPos.lat, targetPos.lng);
-            const maxDistance = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+            const maxDistance = getRouteReachKm();
             if (clickDistance > maxDistance) {
                 showDistanceRejectionFeedback();
                 return false;
@@ -11253,6 +11268,7 @@ function updateAllDistanceDisplays() {
  * Clear the user's path completely.
  */
 function resetUserPath() {
+    GameState.assistedRound = false;
     PathfindrTrace.undoStack = [];
     pruneUnusedVirtualNodes();
     GameState.userPathNodes = [];
@@ -11296,7 +11312,7 @@ function calculateAndShowScore() {
         efficiency = Math.min(100, (optimalDistance / userDistance) * 100);
     }
 
-    const roundScore = Math.round((efficiency / 100) * CONFIG.maxScore);
+    const roundScore = GameState.assistedRound ? 0 : Math.round((efficiency / 100) * CONFIG.maxScore);
     GameState.totalScore += roundScore;
 
     // Store round data for game-over summary
@@ -11304,11 +11320,12 @@ function calculateAndShowScore() {
     GameState.roundScores.push({
         round: GameState.currentRound,
         score: roundScore,
+        assisted: !!GameState.assistedRound,
         efficiency: efficiency,
         userDistance: userDistance,
         optimalDistance: optimalDistance
     });
-    window.PathfindrSharedGame?.capture({score:roundScore,userDistance,optimalDistance});
+    window.PathfindrSharedGame?.capture({score:roundScore,userDistance,optimalDistance,assisted:!!GameState.assistedRound});
 
     // Update the round legend in HUD
     updateRoundLegend();
@@ -11323,7 +11340,7 @@ function calculateAndShowScore() {
     );
 
     // Submit score to Supabase (if logged in)
-    if (!window.PathfindrSharedGame?.active() && typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn()) {
+    if (!GameState.assistedRound && !window.PathfindrSharedGame?.active() && typeof PathfindrAuth !== 'undefined' && PathfindrAuth.isLoggedIn()) {
         const mapCenter = GameState.map.getCenter();
         const locationName = document.getElementById('current-location')?.textContent || 'Unknown';
 
@@ -11443,6 +11460,10 @@ function calculateAndShowScore() {
     }
 
     showResults();
+    let assistance=document.getElementById('assisted-result');
+    if(!assistance){assistance=document.createElement('p');assistance.id='assisted-result';document.getElementById('results-panel').prepend(assistance);}
+    assistance.hidden=!GameState.assistedRound;
+    assistance.textContent='Assisted finish · unranked · 0 points';
 
     // Animate score count-up with ticks
     animateScoreCountUp(roundScore, efficiency);
@@ -11481,9 +11502,32 @@ async function animateScoreCountUp(targetScore, targetEfficiency) {
 // snapPathToRoads() removed - snapping now happens in real-time via addPointToUserPath()
 
 function getSnapRadiusMeters() {
-    const maxDistanceKm = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
-    const maxDistanceMeters = maxDistanceKm * 1000;
-    return Math.min(220, Math.max(85, maxDistanceMeters * 0.85));
+    const map=GameState.map,center=map.getCenter();
+    const pixel=map.project([center.lng,center.lat]);
+    const radius=PathfindrRouteInput.targetPixels(map.getZoom(),matchMedia('(pointer: coarse)').matches);
+    const edge=map.unproject([pixel.x+radius,pixel.y]);
+    return Math.min(1200,Math.max(12,haversineDistance(center.lat,center.lng,edge.lat,edge.lng)*1000));
+}
+
+function getRouteReachKm(){
+    const base=CONFIG.segmentDistance[GameState.difficulty]||CONFIG.segmentDistance.medium;
+    const map=GameState.map,anchor=GameState.nodes.get(getActivePathAnchorNode());
+    if(!map||!anchor)return base;
+    const p=map.project([anchor.lng,anchor.lat]),edge=map.unproject([p.x+64,p.y]);
+    return Math.min(base*4,Math.max(base,haversineDistance(anchor.lat,anchor.lng,edge.lat,edge.lng)));
+}
+
+async function finishRouteAssisted(){
+    if(!shouldHandlePathInput() || GameState.assistedRound)return false;
+    PathfindrTrace.cancel?.();
+    const anchor=getActivePathAnchorNode(),tail=findShortestPathBetween(anchor,GameState.endNode);
+    window.PathfindrRouteReports?.record({build:PathfindrConfig.app.buildId,city:GameState.currentCity?.name||'Unknown',mode:GameState.gameMode,zoom:GameState.map.getZoom(),input:PathfindrTrace.mode,anchor:GameState.nodes.get(anchor),end:GameState.nodes.get(GameState.endNode),reason:tail.length?'assisted_finish':'disconnected_graph'});
+    if(!tail.length)return false;
+    GameState.assistedRound=true;
+    if(!GameState.userPathNodes.length)GameState.userPathNodes=[anchor];
+    GameState.userPathNodes.push(...tail.slice(1));
+    recalculateUserDistance();updateAllDistanceDisplays();redrawUserPath();
+    await submitRoute();return true;
 }
 
 function getCanonicalEdgeKey(nodeA, nodeB) {
@@ -11602,7 +11646,7 @@ function getSnapEdgeMeta(snapTarget) {
 }
 
 function getMaxRoutedSegmentDistanceKm(clickDistanceKm, snapTarget, anchorContext) {
-    const maxDistanceKm = CONFIG.segmentDistance[GameState.difficulty] || CONFIG.segmentDistance.medium;
+    const maxDistanceKm = getRouteReachKm();
     let maxRouteDistanceKm = maxDistanceKm * 3;
 
     const snapEdge = getSnapEdgeMeta(snapTarget);
@@ -11828,7 +11872,7 @@ function findSnapTarget(lat, lng) {
             if(coords.length<2)continue;
             const end=coords.at(-1),direct=haversineDistance(anchorContext.anchorPos.lat,anchorContext.anchorPos.lng,end.lat,end.lng);
             if(direct<.001)continue;
-            if(GameState.gameMode!=='explorer'&&(direct>CONFIG.segmentDistance[GameState.difficulty]||calculateCoordPathDistance(coords)>getMaxRoutedSegmentDistanceKm(direct,candidate,anchorContext)))continue;
+            if(GameState.gameMode!=='explorer'&&(direct>getRouteReachKm()||calculateCoordPathDistance(coords)>getMaxRoutedSegmentDistanceKm(direct,candidate,anchorContext)))continue;
             if(PathfindrTrace.active&&!PathfindrRouteInput.followsGesture(coords,GameState.map,anchorContext.anchorPos,{lat,lng},22))continue;
             return candidate;
         }

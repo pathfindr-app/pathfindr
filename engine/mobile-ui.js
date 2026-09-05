@@ -30,8 +30,8 @@
         const recenterHome=document.createComment('recenter-home');recenter.before(recenterHome);
         const sync=()=>{
             sheet.close();
-            for(const {node,marker} of moved)if(media.matches)grid.append(node);else marker.after(node);
-            if(media.matches)document.querySelector('.route-tool-row').append(recenter);else recenterHome.after(recenter);
+            for(const {node} of moved)grid.append(node);
+            if(!recenter.closest('#route-wheel')){if(media.matches)document.querySelector('.route-tool-row').append(recenter);else recenterHome.after(recenter);}
         };
         media.addEventListener('change',sync);sync();
         // Close sheets on game/lobby transitions, preserving native focus restoration.
