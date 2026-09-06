@@ -183,6 +183,21 @@ test('assisted trace completion releases capture and ends once before pointer-up
     handlers.pointerup(event(25));assert.equal(ended,1);
 });
 
+test('stalled trace warns only after sustained travel and clears on route progress',()=>{
+ const handlers={};let key='start',warnings=0;
+ const env=environment('trace-input.js',{window:{addEventListener(){}},localStorage:{getItem:()=> 'trace'},
+ document:{addEventListener(){},querySelectorAll:()=>[],getElementById:()=>({textContent:''})}});
+ const t=env.api.PathfindrTrace;
+ t.init({surface:{style:{},addEventListener:(k,f)=>handlers[k]=f,setPointerCapture(){},hasPointerCapture:()=>false},canDraw:()=>true,nearTip:()=>true,
+ snapshot:()=>0,changed:()=>false,begin(){},end(){},commit:()=>false,progressKey:()=>key,tipGap:p=>p.x,warn:()=>warnings++});
+ const e=x=>({clientX:x,clientY:0,button:0,pointerId:1,pointerType:'touch',preventDefault(){},stopImmediatePropagation(){}});
+ handlers.pointerdown(e(0));handlers.pointermove(e(80));env.tick(400);assert.equal(!!t.stalled,false);
+ env.tick(800);assert.equal(t.stalled,true);assert.equal(warnings,1);
+ env.tick(1400);assert.equal(warnings,1);
+ key='progress';env.tick(1500);assert.equal(t.stalled,false);
+ handlers.pointercancel();assert.equal(t.active,false);assert.equal(t.stalled,false);
+});
+
 test('soundtrack attaches once, responds to real bins, and decays when muted', () => {
     let connections = 0;
     const analyser = {frequencyBinCount:256,connect(){},getByteFrequencyData: bins => bins.fill(255)};

@@ -167,6 +167,17 @@ function initCityControls() {
                 if (GameState.gameMode === 'explorer') showExplorerComparison(); else submitRoute();
             }
         },
+        progressKey:()=>`${GameState.userPathNodes.length}:${getActivePathAnchorNode()}:${GameState.userDistance}`,
+        tipGap(p){
+            const node=GameState.nodes.get(getActivePathAnchorNode());if(!node)return 0;
+            const tip=map.project([node.lng,node.lat]),local=position(p);
+            return Math.hypot(tip.x-local.x,tip.y-local.y);
+        },
+        warn(){
+            if(traceReport)traceReport.stallWarnings=(traceReport.stallWarnings||0)+1;
+            if(GameHaptics.Haptics)GameHaptics.warning();
+            else if(typeof navigator.vibrate==='function')navigator.vibrate([35,45,35]);
+        },
         diagnose(p,accepted,resumed=false){
             if(!traceReport)return;traceReport.attempts++;traceReport[accepted?'accepted':'rejected']++;traceReport.resumed ||= resumed;
             const local=position(p),requested=map.unproject([local.x,local.y]),node=GameState.nodes.get(getActivePathAnchorNode());
@@ -194,7 +205,7 @@ function initCityControls() {
     map.on('pitchend', () => document.getElementById('city-depth-btn').setAttribute('aria-pressed', String(map.getPitch() > 1)));
     window.render_game_to_text = () => JSON.stringify({
         build: PathfindrConfig.app.buildId, phase: GameController.phase, mode: GameState.gameMode,
-        coordinates: 'Screen pixels, origin top left, x right, y down', input: PathfindrTrace.mode, tracing: PathfindrTrace.active,
+        coordinates: 'Screen pixels, origin top left, x right, y down', input: PathfindrTrace.mode, tracing: PathfindrTrace.active, traceStalled:!!PathfindrTrace.stalled,
         city: GameState.currentCity?.name, cityScene: PathfindrCity.state, world:PathfindrWorldRenderer.state, emission:PathfindrEmission.state, collections:PathfindrCollections.state(),audio: PathfindrAudio.state,
         musicalNetworkEdges:GameState.vizState.musicalTree?.segments.length||0,
         historyRounds:RoundHistory.rounds.length,historyAudioDrive:window.PathfindrMusicalRoutes?.historyEnergy(PathfindrAudio.state)||0,

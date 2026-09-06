@@ -36,7 +36,12 @@
     let saved={claimed:{},counts:{spark:0,burger:0,landmark:0,library:0}};
     try{const data=JSON.parse(localStorage.getItem(key));if(data?.claimed && data?.counts){saved.claimed=data.claimed;for(const type of Object.keys(saved.counts))saved.counts[type]=Math.max(0,Math.floor(Number(data.counts[type])||0));}}catch{}
     function persist(){try{localStorage.setItem(key,JSON.stringify(saved));return true;}catch{return false;}}
-    function svg(type){return `<svg viewBox="0 0 24 26" aria-hidden="true">${icons[type]}</svg>`;}
+    const emblems={
+        burger:'<ellipse cx="32" cy="54" rx="20" ry="4" fill="#070f19" opacity=".65"/><g class="pickup-food"><path d="M10 44h44v6q-2 7-22 7T10 50Z" fill="#b96d38"/><path d="M10 43h44v5H10" fill="#ffcd7d"/><path d="m11 37 8-4 8 4 9-4 8 4 9-3v8H11Z" fill="#74cfa8"/><path d="m12 32 40 1v5H12Z" fill="#663848"/><path d="m15 30 17 9 16-9" fill="#ffde89"/><g class="pickup-bun"><path d="M9 29C10 6 54 6 55 29Z" fill="#eea658"/><path d="M13 25C16 10 45 9 51 25" fill="none" stroke="#ffe1a2" stroke-width="2"/><path d="m23 17 2-2m8 0 2 2m7 1 2-1" stroke="#fff1c9" stroke-width="2" stroke-linecap="round"/></g></g>',
+        library:'<ellipse cx="32" cy="54" rx="21" ry="4" fill="#070f19" opacity=".65"/><path d="m7 20 25 9 25-9v28l-25 9-25-9Z" fill="#235365" stroke="#80dbde" stroke-width="1.5"/><path d="m32 29 25-9v24l-25 9Z" fill="#357780"/><g class="pickup-pages"><path d="M32 26Q21 14 10 18v25q12-3 22 8 10-11 22-8V18q-11-4-22 8Z" fill="#c1f1de"/><path d="M32 26v25q10-11 22-8V18q-11-4-22 8Z" fill="#74c9be"/><path d="m15 25 11 5m-11 2 11 5m12-7 11-5m-11 12 11-5" stroke="#327a80" stroke-width="1.5"/><path d="M32 26v25" stroke="#ebfff3" stroke-width="1.5"/></g><path d="M43 19v16l3-3 3 1V17" fill="#ffc97e"/>',
+        landmark:'<ellipse class="pickup-orbit" cx="32" cy="47" rx="26" ry="9" fill="none" stroke="#ca9cfa" stroke-width="1" stroke-dasharray="20 8 4 8"/><path d="m12 47 20-7 20 7v6l-20 7-20-7Z" fill="#684f87"/><path d="m12 47 20-7 20 7-20 7Z" fill="#b49bda"/><g class="pickup-monument"><path d="M24 45V19l8-14 8 14v26l-8 4Z" fill="#c5c3f5"/><path d="m32 5 8 14v26l-8 4Z" fill="#7979b8"/><path d="M32 5v44M24 19h16" stroke="#ece3ff" stroke-width="1.5"/><path d="M27 23v17" stroke="#f7eeff" stroke-width="2"/></g>'
+    };
+    function svg(type){return `<svg viewBox="${emblems[type]?'0 0 64 64':'0 0 24 26'}" aria-hidden="true">${emblems[type]||icons[type]||icons.landmark}</svg>`;}
     function renderPanel(){if(!panel)return;panel.replaceChildren();
         const title=document.createElement('strong');title.textContent='City discoveries';panel.append(title);
         const sub=document.createElement('p');sub.textContent='Tap pickups on the map. Routes and scores stay separate. Saved on this device.';panel.append(sub);
@@ -49,7 +54,17 @@
     }
     function sound(type){
         if(typeof SoundEngine==='undefined')return;SoundEngine.init();if(SoundEngine.muted||!SoundEngine.ctx)return;
-        const ctx=SoundEngine.ctx,now=ctx.currentTime;
+        const ctx=SoundEngine.ctx,now=ctx.currentTime;SoundEngine.duckMusic?.(.8);
+        // A brief tactile layer distinguishes paper, food and stone even under music.
+        if(SoundEngine.createNoiseBuffer){
+            const noise=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+            noise.buffer=SoundEngine.createNoiseBuffer(.12);filter.type='bandpass';
+            filter.frequency.value=type==='library'?3400:type==='burger'?480:1500;
+            filter.Q.value=type==='landmark'?8:.7;
+            gain.gain.setValueAtTime(type==='library'?.09:.055,now);gain.gain.exponentialRampToValueAtTime(.0001,now+.11);
+            noise.connect(filter);filter.connect(gain);gain.connect(SoundEngine.masterGain);noise.start(now);noise.stop(now+.12);
+            noise.onended=()=>{noise.disconnect();filter.disconnect();gain.disconnect();};
+        }
         // Burger: warm springy pop. Library: plucked glass dyad. Monument: bell fifths.
         // At most eight short voices, all routed through the existing mute/master bus.
         const notes=type==='library'?[783.99,1174.66]:type==='burger'?[196,293.66,392]:[392,587.33,783.99];
@@ -74,11 +89,12 @@
         const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const glyph=button.querySelector('svg');
         if(reduced||!glyph?.animate){button.remove();return;}
+        const tilt=item.type==='burger'?-12:item.type==='library'?14:0;
         const animation=glyph.animate([
             {transform:'scale(1)',opacity:1},
-            {transform:'scale(1.3) translateY(-3px)',opacity:1,offset:.25},
-            {transform:'scale(.45) translateY(-42px)',opacity:0}
-        ],{duration:420,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
+            {transform:`scale(1.35) translateY(-5px) rotate(${tilt}deg)`,opacity:1,offset:.3},
+            {transform:`scale(.3) translateY(-55px) rotate(${tilt*2}deg)`,opacity:0}
+        ],{duration:item.type==='landmark'?650:item.type==='library'?560:440,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
         button.classList.add('is-collected');
         animation.finished.then(()=>button.remove(),()=>button.remove());
     }

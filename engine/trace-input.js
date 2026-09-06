@@ -4,6 +4,24 @@
         mode: 'tap', active: false, undoStack: [],
         init(adapter) {
             this.adapter = adapter;
+            const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+            let progressKey=null,progressTime=0,travel=0,motionPoint=null,lastWarning=-Infinity;
+            const clearStall=()=>{this.stalled=false;this.stalledAt=0;this.syncButtons();};
+            const checkProgress=(point,now)=>{
+                const key=adapter.progressKey?.();
+                if(key!==progressKey){progressKey=key;progressTime=now;travel=0;clearStall();}
+                if(!point)return;
+                const gap=adapter.tipGap?.(point)||0;
+                if(gap<24){progressTime=now;travel=0;if(this.stalled)clearStall();return;}
+                if(!this.stalled&&travel>=28&&now-progressTime>=700){
+                    this.stalled=true;this.stalledAt=now;
+                    document.getElementById('trace-hint').textContent='Trail stopped — retrace to a junction to continue.';
+                    if(now-lastWarning>=3000){
+                        lastWarning=now;
+                        if(!reducedMotion.matches)adapter.warn?.();
+                    }
+                }
+            };
             try { this.mode = localStorage.getItem('pathfindr_input_mode') === 'trace' ? 'trace' : 'tap'; } catch {}
             const surface = adapter.surface;
             let pointer = null, pending = null, frame = null, last = null, checkpoint = null;
@@ -13,6 +31,7 @@
                 if(!this.active||!adapter.canDraw()){finish(true);return;}
                 const dt=Math.min(32,Math.max(0,now-edgeTime))/1000;edgeTime=now;
                 if(edgePoint&&adapter.pan?.(edgePoint,dt)){last=null;commit(edgePoint);}
+                if(this.active)checkProgress(this.focus,now);
                 if(this.active)edgeFrame=requestAnimationFrame(edgeTick);
             };
             const commit = point => {
@@ -20,6 +39,7 @@
                 if (last && Math.hypot(point.x - last.x, point.y - last.y) < 7 && !adapter.tryFinish?.(point)) return;
                 const accepted=adapter.commit(point);
                 adapter.diagnose?.(point,accepted);
+                checkProgress(point,performance.now());
                 if (accepted) last = point;
                 if(accepted&&adapter.isFinished?.())finish(false,true);
             };
@@ -34,6 +54,7 @@
                 pending = null;
                 this.active = false;
                 this.focus=null;
+                clearStall();
                 if (checkpoint !== null && adapter.changed(checkpoint)) this.undoStack.push(checkpoint);
                 if (pointer !== null && surface.hasPointerCapture(pointer)) surface.releasePointerCapture(pointer);
                 pointer = null;
@@ -54,6 +75,7 @@
                 pending = null;
                 checkpoint = adapter.snapshot();
                 adapter.begin();
+                progressKey=adapter.progressKey?.();progressTime=performance.now();travel=0;motionPoint=point;clearStall();
                 this.focus=point;
                 edgePoint=point;
                 if(resume){const accepted=adapter.commit(point);adapter.diagnose?.(point,accepted,true);}
@@ -65,6 +87,8 @@
                 if (!this.active || event.pointerId !== pointer) return;
                 event.preventDefault(); event.stopImmediatePropagation();
                 pending = { x: event.clientX, y: event.clientY };
+                if(motionPoint)travel+=Math.hypot(pending.x-motionPoint.x,pending.y-motionPoint.y);
+                motionPoint=pending;
                 edgePoint=pending;
                 this.focus=pending;
                 if (frame !== null) return;

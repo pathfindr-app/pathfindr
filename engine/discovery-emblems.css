@@ -1,0 +1,16 @@
+/* Tiny sculpted POIs, not identical app-icon tiles. Animation never moves hit targets. */
+.map-pickup { width:48px;height:52px;padding:0;border:0!important;border-radius:50%;background:radial-gradient(ellipse at 50% 65%,#172334cc,transparent 72%)!important;box-shadow:none!important; }
+.map-pickup>svg { width:100%;height:100%;filter:drop-shadow(0 2px 2px #07101dbb);overflow:visible;animation:none; }
+.map-pickup:hover,.map-pickup:focus-visible { outline:1px solid currentColor;outline-offset:4px; }
+.map-pickup g,.map-pickup .pickup-orbit { transform-box:fill-box;transform-origin:center; }
+@keyframes burger-lift { 0%,65%,100%{transform:translateY(0)} 80%{transform:translateY(-3px) rotate(-3deg)} }
+@keyframes book-turn { 0%,55%,100%{transform:scaleX(1)} 75%{transform:scaleX(.9) translateY(-1px)} }
+@keyframes monument-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
+@keyframes monument-orbit { to{transform:rotate(360deg)} }
+@media(prefers-reduced-motion:no-preference){
+ .map-pickup:not(.is-collected) .pickup-bun {animation:burger-lift 3.8s ease-in-out infinite}
+ .map-pickup:not(.is-collected) .pickup-pages {animation:book-turn 4.8s ease-in-out infinite}
+ .map-pickup:not(.is-collected) .pickup-monument {animation:monument-float 4s ease-in-out infinite}
+ .map-pickup:not(.is-collected) .pickup-orbit {animation:monument-orbit 18s linear infinite}
+}
+.round-discovery>svg { width:28px;height:28px;flex-shrink:0; }

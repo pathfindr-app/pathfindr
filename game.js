@@ -1524,13 +1524,15 @@ const WebGLRenderer = {
                 float plasmaGlow = 0.0;
 
                 if (frontierStrength > 0.05) {
-                    // Fast electric flicker
-                    electricNoise = pow(sin(edgePos*19.0-u_time*12.0)*0.5+0.5,5.0)*0.4;
-                    electricNoise += pow(sin(edgePos*11.3+u_time*9.0)*0.5+0.5,4.0)*0.3;
+                    // Smooth nested filaments: energy rolls through the core,
+                    // rather than rapidly flashing the whole street on/off.
+                    float warp = sin(edgePos*2.7-u_time*1.1)*0.65;
+                    electricNoise = pow(sin(edgePos*8.0-u_time*4.0+warp)*0.5+0.5,3.0)*0.35;
+                    electricNoise += pow(sin(edgePos*5.3-u_time*2.8-warp)*0.5+0.5,4.0)*0.22;
 
                     // Intense plasma pulse on frontier
-                    float plasma = sin(edgePos * 6.0 - u_time * 10.0) * 0.5 + 0.5;
-                    plasma *= sin(edgePos * 4.0 + u_time * 7.0) * 0.5 + 0.5;
+                    float plasma = sin(edgePos * 4.0 - u_time * 3.0 + warp) * 0.5 + 0.5;
+                    plasma *= sin(edgePos * 2.0 - u_time * 1.4) * 0.3 + 0.7;
                     plasmaGlow = plasma * frontierStrength;
                 }
 
@@ -2530,11 +2532,13 @@ const MUSIC_TRACKS = [
     { id: 'velvet-orbit', src: 'Music/Velvet Orbit.mp3', title: 'Velvet Orbit' },
 ];
 
-const SOUNDTRACK_VOLUME = 0.68;
+const SOUNDTRACK_VOLUME = 0.52;
 
 const SoundEngine = {
     ctx: null,
     masterGain: null,
+    musicGain: null,
+    mixLimiter: null,
     muted: false,
     initialized: false,
     ambientNodes: null,
@@ -2568,13 +2572,22 @@ const SoundEngine = {
 
     // Initialize AudioContext on first user interaction
     init() {
-        if (this.initialized) return;
+        if (this.initialized) { this.resumeContext(); return; }
 
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.masterGain = this.ctx.createGain();
-        this.masterGain.connect(this.ctx.destination);
+        this.musicGain = this.ctx.createGain();
+        this.mixLimiter = this.ctx.createDynamicsCompressor();
+        this.mixLimiter.threshold.value = -6;
+        this.mixLimiter.knee.value = 9;
+        this.mixLimiter.ratio.value = 8;
+        this.mixLimiter.attack.value = .004;
+        this.mixLimiter.release.value = .18;
+        this.masterGain.connect(this.mixLimiter);
+        this.musicGain.connect(this.mixLimiter);
+        this.mixLimiter.connect(this.ctx.destination);
         this.masterGain.gain.value = 1.0;  // Full volume
-        if (this.musicPlayer) PathfindrAudio.attach(this.musicPlayer, this.ctx);
+        if (this.musicPlayer) PathfindrAudio.attach(this.musicPlayer, this.ctx, this.musicGain);
 
         // Load mute preference
         this.muted = localStorage.getItem('pathfindr_muted') === 'true';
@@ -2582,12 +2595,30 @@ const SoundEngine = {
 
         // Load audio files
         this.loadAudioFiles();
+        this.loadUISounds();
+        this.loadSoundtrack();
 
         this.initialized = true;
+        const unlock=()=>this.resumeContext();
+        document.addEventListener('pointerdown',unlock,{capture:true,passive:true});
+        document.addEventListener('keydown',unlock,{capture:true});
+        this.resumeContext();
 
         if (this.pendingMusicStart && !this.muted) {
             setTimeout(() => this.playSoundtrack(), 0);
         }
+    },
+
+    resumeContext() {
+        if(this.ctx && !this.muted && ['suspended','interrupted'].includes(this.ctx.state))this.ctx.resume().catch(()=>{});
+    },
+
+    duckMusic(duration=.35) {
+        if(!this.musicGain||!this.ctx||this.muted)return;
+        const now=this.ctx.currentTime,p=this.musicGain.gain;
+        p.cancelScheduledValues(now);p.setValueAtTime(p.value,now);
+        p.linearRampToValueAtTime(.62,now+.035);
+        p.setTargetAtTime(1,now+Math.max(.08,duration),.16);
     },
 
     // Load external audio files
@@ -2609,11 +2640,7 @@ const SoundEngine = {
 
             console.log('[Sound] Gameplay effects loaded');
 
-            // Load UI sound effects (non-blocking)
-            this.loadUISounds();
-
-            // Load soundtrack separately (larger file)
-            this.loadSoundtrack();
+            // UI and music load independently; one missing effect cannot block them.
         } catch (e) {
             console.warn('Could not load audio files:', e);
         }
@@ -2700,7 +2727,7 @@ const SoundEngine = {
         });
 
         this.musicPlayer = audio;
-        if (this.ctx) PathfindrAudio.attach(audio, this.ctx);
+        if (this.ctx) PathfindrAudio.attach(audio, this.ctx, this.musicGain);
         return audio;
     },
 
@@ -2726,6 +2753,7 @@ const SoundEngine = {
     async playMusicPlayer() {
         this.syncMutePreference();
         if (this.muted) return false;
+        this.resumeContext();
 
         const audio = this.ensureMusicPlayer();
 
@@ -2860,6 +2888,7 @@ const SoundEngine = {
     // Play scanning sound (for A* exploration)
     scanning() {
         if (!this.initialized || this.muted || !this.buffers.scanning) return;
+        this.resumeContext();this.duckMusic(Math.min(3,this.buffers.scanning.duration||1));
 
         // Stop any existing scanning sound first
         this.stopScanning();
@@ -2881,7 +2910,8 @@ const SoundEngine = {
 
         // Auto-cleanup when done
         source.onended = () => {
-            this.activeSources.scanning = null;
+            if(this.activeSources.scanning?.source===source)this.activeSources.scanning = null;
+            source.disconnect();gainNode.disconnect();
         };
     },
 
@@ -2930,6 +2960,7 @@ const SoundEngine = {
     // Play path found sound
     pathFound() {
         if (!this.initialized || this.muted || !this.buffers.found) return;
+        this.resumeContext();this.duckMusic(.65);
 
         // Fade out scanning sound when path is found (quick fade)
         this.fadeOutScanning(200);
@@ -3154,6 +3185,7 @@ const SoundEngine = {
 
     // Helper: Play an audio buffer at specified volume
     playBuffer(buffer, volume = 1.0) {
+        this.resumeContext();
         if (!this.initialized || this.muted || !buffer) return;
 
         const source = this.ctx.createBufferSource();
@@ -9418,11 +9450,21 @@ function redrawUserPath() {
     renderSnapPreview(time);
     if(PathfindrTrace.active&&PathfindrTrace.focus){
         const rect=GameState.map.getCanvas().getBoundingClientRect(),p=PathfindrTrace.focus;
-        const x=p.x-rect.left,y=p.y-rect.top;
+        const stalled=PathfindrTrace.stalled,age=performance.now()-(PathfindrTrace.stalledAt||0);
+        const shake=stalled&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&age<360?Math.sin(age*.07)*3*(1-age/360):0;
+        const x=p.x-rect.left+shake,y=p.y-rect.top;
         ctx.save();ctx.globalCompositeOperation='source-over';ctx.setLineDash([]);
-        const aura=ctx.createRadialGradient(x,y,10,x,y,44);aura.addColorStop(0,'rgba(255,208,140,0)');aura.addColorStop(.65,'rgba(255,208,140,.11)');aura.addColorStop(1,'rgba(255,208,140,0)');
+        const rgb=stalled?'255,83,112':'255,208,140';
+        const aura=ctx.createRadialGradient(x,y,10,x,y,44);aura.addColorStop(0,`rgba(${rgb},0)`);aura.addColorStop(.65,`rgba(${rgb},${stalled?.24:.11})`);aura.addColorStop(1,`rgba(${rgb},0)`);
         ctx.fillStyle=aura;ctx.fillRect(x-44,y-44,88,88);
-        ctx.strokeStyle='rgba(255,224,166,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,23,0,Math.PI*2);ctx.stroke();ctx.restore();
+        ctx.strokeStyle=stalled?'#ff7790':'rgba(255,224,166,.7)';ctx.lineWidth=stalled?2:1.5;ctx.beginPath();ctx.arc(x,y,23,0,Math.PI*2);ctx.stroke();
+        if(stalled){
+            const labelX=Math.max(105,Math.min(rect.width-105,x)),labelY=Math.max(24,y-62);
+            ctx.fillStyle='#20151e';ctx.fillRect(labelX-103,labelY-16,206,34);
+            ctx.textAlign='center';ctx.font='600 12px sans-serif';ctx.fillStyle='#ffb1bd';
+            ctx.fillText('Trail stopped · retrace to a junction',labelX,labelY+5);
+        }
+        ctx.restore();
     }
     if (GameController.phase === GamePhase.PLAYING) {
         const tip=GameState.nodes.get(getActivePathAnchorNode());

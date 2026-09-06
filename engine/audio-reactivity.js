@@ -11,10 +11,11 @@
     document.addEventListener?.('visibilitychange',()=>{if(document.hidden)clearCharges();});
     window.PathfindrAudio = {
         state,
-        attach(audio, ctx) {
+        attach(audio, ctx, destination = ctx?.destination) {
             if (!audio || !ctx || sources.has(audio)) return;
             // Connect to the existing audio context exactly once. Music retains its
             // own element volume/mute controls and never passes through SFX gain.
+            // Optional music bus provides mix headroom without affecting analysis.
             try {
                 const source = ctx.createMediaElementSource(audio);
                 analyser = ctx.createAnalyser();
@@ -23,7 +24,7 @@
                 analyser.minDecibels = -85;
                 analyser.maxDecibels = -20;
                 source.connect(analyser);
-                analyser.connect(ctx.destination);
+                analyser.connect(destination);
                 sources.set(audio, source);
                 bins = new Uint8Array(analyser.frequencyBinCount);
                 previousBins = new Float32Array(analyser.frequencyBinCount);

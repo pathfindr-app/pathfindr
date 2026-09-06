@@ -41,8 +41,8 @@
             const {head,gain}=profile(age),strength=Math.min(1.2,packet.strength*gain*boost);
             // While drawing, charge the final portion leading into the user's tip.
             const shift=focusTip?.65:0,scale=focusTip?.35:1;
-            const widths=packet.kind===0?[18,8,2.5]:[12,5,1.5];
-            const spans=[.32,.14,.045],alphas=[.10,.28,.75];
+            const widths=packet.kind===0?[14,5,1.8]:[10,3.5,1.2];
+            const spans=[.32,.17,.07],alphas=[.08,.32,.85];
             for(let layer=0;layer<3;layer++)if(range(ctx,m,shift+(head-spans[layer])*scale,shift+head*scale)){
                 ctx.lineWidth=widths[layer];ctx.strokeStyle=`rgba(${layer===2?hot:rgb},${alphas[layer]*strength})`;ctx.stroke();
             }

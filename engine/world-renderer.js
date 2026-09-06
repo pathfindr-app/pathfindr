@@ -19,17 +19,19 @@
             vec2 p=world-current*uTime*1.8;
             float deep=fbm(world*0.006);
             // Coherent swell directions; small ripples ride the broad waves.
-            p+=vec2(deep*9.0,sin(world.y*0.009)*3.0);
+            // Broad, continuous domain warp: flowing sheets rather than glitter.
+            vec2 drift=vec2(sin(world.y*0.013+uTime*.11),cos(world.x*.011-uTime*.09));
+            p+=vec2(deep*12.0,sin(world.y*0.009)*4.0)+drift*6.0;
             vec2 slope=vec2(0.0);float swell=0.0;
             float footprint=max(length(fwidth(world)),0.05);
             for(int i=0;i<6;i++){
                 float fi=float(i),angle=0.35+sin(fi*2.399963)*0.65;
                 if(i>=4 && uQuality<0.5)break;
                 vec2 d=vec2(cos(angle),sin(angle));
-                float frequency=0.045*pow(2.05,fi);
+                float frequency=0.022*pow(1.85,fi);
                 float phase=dot(p,d)*frequency-uTime*(0.38+fi*0.19);
                 float aa=1.0-smoothstep(0.7,3.0,frequency*footprint);
-                slope+=d*cos(phase)*0.26*pow(0.60,fi)*aa;
+                slope+=d*cos(phase)*0.20*pow(0.48,fi)*aa;
                 swell+=sin(phase)*aa/(2.0+fi);
             }
             vec3 n=normalize(vec3(-slope,1.0));
@@ -37,24 +39,27 @@
             float nv=max(dot(n,v),0.01),nh=max(dot(n,h),0.0);
             float fresnel=0.025+0.975*pow(1.0-nv,5.0);
             // Broaden glints as pixels cover more water: avoid glittering aliasing.
-            float rough=0.20+0.13*smoothstep(1.0,12.0,footprint), a2=rough*rough*rough*rough;
+            float rough=0.24+0.13*smoothstep(1.0,12.0,footprint), a2=rough*rough*rough*rough;
             float denom=nh*nh*(a2-1.0)+1.0;
             float ggx=a2/(3.14159*denom*denom);
             vec3 reflected=reflect(-v,n);
             vec3 sky=mix(vec3(0.012,0.027,0.065),vec3(0.17,0.30,0.38),smoothstep(-0.3,0.9,reflected.z));
             // Analytic night environment, not a reflection of scene buildings.
             // Ripple normals break these broad light sources into watery ribbons.
-            float cyanLight=exp(-pow((reflected.x+0.28)/0.24,2.0));
-            float coralLight=exp(-pow((reflected.y-0.35)/0.18,2.0));
-            sky+=vec3(0.035,0.52,0.62)*cyanLight;
-            sky+=vec3(0.42,0.065,0.16)*coralLight*0.55;
-            vec3 body=mix(vec3(0.005,0.024,0.046),vec3(0.012,0.075,0.092),deep);
+            float cyanLight=exp(-pow((reflected.x+reflected.y*.25+0.18)/0.19,2.0));
+            float coralLight=exp(-pow((reflected.y-reflected.x*.3-0.35)/0.23,2.0));
+            sky+=vec3(0.055,0.64,0.73)*cyanLight;
+            sky+=vec3(0.36,0.075,0.18)*coralLight*0.48;
+            vec3 body=mix(vec3(0.004,0.018,0.043),vec3(0.008,0.085,0.105),deep);
             float filaments=sin(dot(p,vec2(0.072,0.028))+swell*1.4-uTime*0.2);
-            float caustic=pow(max(0.0,1.0-abs(filaments)),12.0)*(1.0-smoothstep(3.0,15.0,footprint));
+            float crossWave=sin(dot(p,vec2(-0.035,0.065))-swell*.8+uTime*.15);
+            float crease=abs(filaments+crossWave*.55);
+            float aaWidth=max(fwidth(crease)*1.5,.025);
+            float caustic=(1.0-smoothstep(.04,.13+aaWidth,crease))*(1.0-smoothstep(3.0,15.0,footprint));
             // Intentional artistic reflectance floor for a top-down game camera.
-            vec3 col=mix(body,sky,0.17+fresnel*0.66);
-            col+=vec3(0.02,0.11,0.14)*caustic*(0.07+deep*0.15+uAudio*0.10);
-            col+=vec3(0.56,0.79,0.88)*min(ggx*0.014,0.55)*(0.75+uAudio*0.25);
+            vec3 col=mix(body,sky,0.22+fresnel*0.60);
+            col+=vec3(0.045,0.30,0.34)*caustic*(0.10+deep*0.15+uAudio*0.10);
+            col+=vec3(0.40,0.74,0.82)*min(ggx*0.004,0.17)*(0.75+uAudio*0.25);
             col+=vec3(0.007,0.025,0.033)*swell;
             col=col/(1.0+col); col=pow(col,vec3(1.0/2.2));
             gl_FragColor=vec4(col,1.0);
@@ -63,16 +68,18 @@
         uniform float uForest;
         void main(){
             float footprint=max(length(fwidth(world)),0.1);
-            float soil=fbm(world*0.055),patchiness=fbm(world*0.012);
-            float wind=noise(world*0.018+vec2(uTime*0.08,0.0));
+            float soil=fbm(world*0.035),patchiness=fbm(world*0.009);
+            float wind=sin(dot(world,vec2(.023,.014))-uTime*.42+patchiness*3.0)*.5+.5;
             float detail=1.0-smoothstep(0.8,4.0,footprint);
-            vec2 cell=floor(world*1.4);float seed=hash(cell);
-            float blade=pow(max(0.0,1.0-abs(sin(world.x*4.4+wind*0.45+seed*2.0))),8.0)*detail;
+            // Continuous contour grain avoids per-cell flicker during camera motion.
+            float grainPhase=world.x*2.2+world.y*.7+soil*5.0+wind*.6;
+            float blade=pow(max(0.0,sin(grainPhase)),8.0)*detail;
             vec3 dark=mix(vec3(0.013,0.059,0.038),vec3(0.012,0.037,0.032),uForest);
             vec3 light=mix(vec3(0.065,0.18,0.087),vec3(0.027,0.11,0.077),uForest);
             vec3 col=mix(dark,light,soil*0.55+patchiness*0.35);
-            col+=vec3(0.04,0.065,0.025)*blade*(0.3+wind*0.3);
-            col+=vec3(0.005,0.014,0.008)*sin(world.x*0.04+world.y*0.017-uTime*0.65)*wind;
+            col+=vec3(0.025,0.045,0.022)*blade*(0.25+wind*.35)*(1.0-uForest*.7);
+            float sweep=smoothstep(.65,.95,wind);
+            col+=vec3(.009,.026,.017)*sweep*(.55+patchiness*.45);
             gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(1.0/2.2)),1.0);
         }`;
     // Opaque, elevated roof caps; one batch rather than a material per building.

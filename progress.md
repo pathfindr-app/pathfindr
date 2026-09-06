@@ -2,6 +2,19 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Instruments, collectible emblems and audio — September 6, .39
+- Production deployed: dpl_9e32FZKz5JKutS643PJsKVYWNdfD, https://pathfindralpha-msalj1p9k-pathfindr-apps-projects.vercel.app, www.pathfindr.world. Previous shared deployment: dpl_5WuowgbcgyvLvk98qg3bGt48SQu6. Stage /tmp/pathfindr-materials-M7baBd copies verified current source from /tmp/pathfindr-prints-accounts-release; no Printshop source changes, migrations or payment changes.
+- Desktop now shares mobile's opaque amber LCD/material treatment. Dedicated scalable burger/book/monument emblems with bun/page/orbit animations, reduced-motion support, distinct claim motion and tactile SFX layers. Keeps existing phase gates.
+- Music now passes through a dedicated gain bus into a shared compressor; analysis remains upstream of music ducking. SFX retain separate gain/mute. Gesture-based context recovery, independent UI/music loading, scanning source cleanup race fixed, music lowered modestly with temporary ducking for major cues.
+- Includes previous water/terrain/route material pass and trace-stall warning. 116 tests pass, including mix routing/recovery/load independence/scan race and trace-stall lifecycle. Stock client passed after transient local navigation timeout; screenshot inspected. Staged desktop gameplay/zoom/collection claim verified. Real phone mixing/frame rate still requires user testing.
+- Preview Printshop checks passed through authenticated Vercel curl. Public preview is protected (returns login page), not a shop regression. Production checker rerun required after deploy. Separate share-cloud changes and migration016 source remain outside this release.
+
+### September 6 materials pass — local, not deployed
+- Original shader refinements inspired by Orbkit; no external shader code copied. Water now uses broad warped swell, filtered caustic ribbons and softer highlights. Parks use coherent wind/continuous grain. Routes use smoother nested filaments and tighter musical cores.
+- 112 game tests pass; interactive Miami screenshots checked at gameplay and wide zoom. Initial stock browser test passed; final stock rerun blocked by ENOSPC. No device performance claim.
+- Production unchanged: disk full and newer Printshop deployment no longer matches cached source (missing prints/account-config.js). Scoped staging guard correctly stopped. Failed temporary /tmp/pathfindr-materials-jdoKdZ removed. Printshop source/production untouched.
+- Historical game-only rollback instructions below are obsolete for shared hosting. Trace-stall and share cold-start edits from earlier work remain separate/unverified/not deployed.
+
 ### Relaunch pass, 2026-09-06 (in progress, isolated worktree)
 - Published .37: dpl_3j8T1BxyZ8421M7qnAXAs7SWdASo, https://pathfindralpha-d0cdfu4q4-pathfindr-apps-projects.vercel.app; www.pathfindr.world alias.17publicfilebytes match artifact. Production mobile launch QA passes. All112game tests pass. Staged actual A*/recap screenshots inspected. Not full launch sign-off: hosted sharing schema/access and backend validation remain. `npm run rollback` in newworktree restores .36.
 - Worktree `/Users/bradleyarakaki/Desktop/Pathfindr-launch-20260906`, branch `codex/launch-readiness-20260906`. Original checkout untouched; full recovery archive gzip-verified, baseline snapshot f287c87, production .36 rollback in LAUNCH_READINESS.md.

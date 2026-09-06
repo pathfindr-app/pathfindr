@@ -1,5 +1,6 @@
 /* Stage only reviewed game changes over the verified .36 production artifact. */
 const fs=require('node:fs'),path=require('node:path');
+throw Error('Historical game-only staging is retired: pathfindralpha also serves /prints. Preserve the current shared deployment and its functions before preparing a game release.');
 const root=path.resolve(__dirname,'..');
 const baseline='/Users/bradleyarakaki/Desktop/Pathfindr/output/releases/hardware36';
 const target=path.join(root,'output/releases/launch37');
