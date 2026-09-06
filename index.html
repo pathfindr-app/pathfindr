@@ -9,20 +9,18 @@
     <meta name="theme-color" content="#0d0a14">
     <title>pathfindr</title>
     <!-- MapLibre GL JS for map rendering with rotation/pitch support -->
-    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" media="print" onload="this.media='all'" />
+    <!-- Neither map chrome nor web fonts may delay the lobby's first paint. -->
+    <link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Outfit:wght@400;500;600;700;800&amp;family=Righteous&amp;family=Space+Grotesk:wght@400;500;700&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="engine/city-ui.css" />
-    <link rel="stylesheet" href="engine/mobile-ui.css?v=13" />
-    <link rel="stylesheet" href="engine/route-wheel.css?v=13" />
-
-    <!-- Capacitor (when running as native app) -->
-    <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
-
-    <!-- Supabase (for auth and database) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- Stripe (for web payments) -->
-    <script src="https://js.stripe.com/v3/"></script>
+    <link rel="stylesheet" href="engine/city-ui.css?v=24" />
+    <link rel="stylesheet" href="engine/mobile-ui.css?v=30" />
+    <link rel="stylesheet" href="engine/route-wheel.css?v=25" />
+    <link rel="stylesheet" href="engine/map-frame.css?v=25" />
+    <link rel="stylesheet" href="engine/game-chrome.css?v=32" />
+    <link rel="stylesheet" href="engine/instrument-menu.css?v=36" />
+    <link rel="stylesheet" href="engine/hardware-hud.css?v=36" />
+    <link rel="stylesheet" href="engine/lobby.css?v=21" />
 
     <!-- Google AdSense (for web ads) -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9697527729469740" crossorigin="anonymous"></script>
@@ -258,6 +256,8 @@
                 <span id="discovery-status" class="sr-only" role="status" aria-live="polite"></span>
                 <details id="graphics-panel"><summary>Graphics</summary>
                     <label>Detail <select id="graphics-quality"><option value="high">High</option><option value="balanced">Balanced</option></select></label>
+                    <button id="export-trace-diagnostics" type="button">Export trace diagnostics</button>
+                    <small>Last 30 strokes stored on this device, including map positions for troubleshooting.</small>
                     <output id="graphics-readout"></output>
                 </details>
                 <button type="button" id="route-recenter-btn" aria-label="Recenter route">Recenter</button>
@@ -275,14 +275,13 @@
                 </div>
 
                 <!-- Splash Screen (Alpha Welcome) -->
-                <div id="splash-screen" class="overlay splash-video-active">
+                <div id="splash-screen" class="overlay splash-show-welcome" data-lobby-panel="overview">
                     <div class="splash-video-stage">
                         <video
                             id="splash-intro-video"
                             class="splash-intro-video"
-                            autoplay
                             playsinline
-                            preload="auto"
+                            preload="none"
                             poster="Visual Assets/logo.png"
                         >
                             <source src="Visual Assets/Simple_Looping_Animation_Request.mp4" type="video/mp4">
@@ -296,23 +295,39 @@
                     </div>
 
                     <div class="overlay-content splash-content">
-                        <div class="mobile-lobby-tabs" role="tablist" aria-label="Mobile lobby sections">
-                            <button class="mobile-lobby-tab is-active" type="button" data-mobile-panel="overview">Overview</button>
-                            <button class="mobile-lobby-tab" type="button" data-mobile-panel="atlas">Atlas</button>
-                            <button class="mobile-lobby-tab" type="button" data-mobile-panel="license">License</button>
+                        <header class="lobby-masthead"><a class="lobby-wordmark" href="#" aria-label="Pathfindr home">pathfindr<span aria-hidden="true">↗</span></a><a href="prints/" class="lobby-edition" aria-label="Open Pathfindr Print Studio">PRINT STUDIO ↗</a></header>
+                        <div class="mobile-lobby-tabs" role="tablist" aria-label="Lobby sections">
+                            <button id="lobby-tab-play" class="mobile-lobby-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="lobby-play-panel" data-mobile-panel="overview">Play</button>
+                            <button id="lobby-tab-atlas" class="mobile-lobby-tab" type="button" role="tab" aria-selected="false" aria-controls="lobby-atlas-panel" data-mobile-panel="atlas">Atlas</button>
+                            <button id="lobby-tab-profile" class="mobile-lobby-tab" type="button" role="tab" aria-selected="false" aria-controls="splash-player-panel" data-mobile-panel="license">Profile</button>
                         </div>
                         <div class="splash-welcome-shell">
-                            <div class="splash-copy-panel mobile-lobby-panel is-active" data-mobile-panel="overview">
+                            <div id="lobby-play-panel" role="tabpanel" aria-labelledby="lobby-tab-play" class="splash-copy-panel mobile-lobby-panel is-active" data-mobile-panel="overview">
                                 <div class="splash-hero-band">
                                     <div class="splash-hero-copy">
-                                        <h1 class="splash-title">Welcome, Pathfindr</h1>
+                                        <p class="lobby-eyebrow">THE CITY IS YOUR PUZZLE.</p>
+                                        <h1 class="splash-title">You know<br> a <em>shortcut.</em></h1>
+                                        <p id="lobby-boot-status" class="splash-support-copy" role="status">Getting ready…</p>
                                         <p class="splash-lead">
-                                            Visit a real city, trust your navigation instinct, and trace the route you believe gets from point A to point B most efficiently.
+                                            Prove it. Draw your way through real streets.<br>See how it stacks up against A*.
                                         </p>
                                         <p class="splash-support-copy">
-                                            Read the streets, commit to a line, and see how your spatial judgment compares to the cleanest algorithmic path through the city.
+                                            Find the shortest route. Build your personal atlas.
                                         </p>
                                     </div>
+                                    <figure class="lobby-city-art">
+                                        <div class="lobby-map-window"><img src="engine/lobby-map.svg" alt="Two luminous routes through Miami's real street grid" width="720" height="800" fetchpriority="high"><canvas id="lobby-route-motion" aria-hidden="true"></canvas><span class="lobby-map-coordinate">25.77° N<br>80.19° W</span><span class="lobby-map-city">MIAMI<span>DOWNTOWN / BRICKELL</span></span></div>
+                                        <figcaption><span><i class="lobby-key-you"></i>Your route</span><span><i class="lobby-key-algo"></i>The algorithm</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a></figcaption>
+                                        <div class="lobby-city-launches"><button type="button" data-lobby-city="miami"><span>01 / CITY PACK</span><strong>Miami ↗</strong></button><button type="button" data-lobby-city="washington"><span>02 / LANDMARK TOUR · LIVE MAP</span><strong>Washington, DC ↗</strong></button></div>
+                                        <section id="mapping-progress" aria-labelledby="mapping-goal">
+                                            <p class="lobby-eyebrow">YOUR MISSION</p>
+                                            <h2 id="mapping-goal">Map the world,<br>one smart route at a time.</h2>
+                                            <div class="mapping-stats"><div><strong id="mapped-miles">—</strong><span>unique route miles</span></div><div><strong id="mapped-cities">—</strong><span>cities explored</span></div><div><strong id="mapped-rounds">—</strong><span>rounds completed</span></div></div>
+                                            <label for="mapping-meter">Next mileage milestone <span id="mapping-milestone">Loading…</span></label>
+                                            <progress id="mapping-meter" max="10" value="0">Mapping progress</progress>
+                                            <p id="mapping-note">Reading your saved routes…</p>
+                                        </section>
+                                    </figure>
                                 </div>
 
                                 <div class="splash-pill-row">
@@ -330,7 +345,7 @@
                                     <div class="splash-mode-panel splash-command-deck">
                                         <div class="mode-options">
                                             <button id="daily-challenge-btn" class="mode-btn mode-challenge" data-mode="challenge">
-                                                <span id="challenge-badge" class="challenge-badge">LIVE</span>
+                                                <span id="challenge-badge" class="challenge-badge">CHECKING</span>
                                                 <div class="mode-bg"></div>
                                                 <div class="mode-content">
                                                     <div class="mode-icon">
@@ -341,7 +356,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="mode-title">Daily Challenge</span>
-                                                    <span id="challenge-desc" class="mode-desc">One featured city. One shared benchmark. See how your instinct stacks up.</span>
+                                                    <span id="challenge-desc" class="mode-desc">Checking today's challenge…</span>
                                                 </div>
                                             </button>
                                             <button class="mode-btn mode-classic" data-mode="competitive">
@@ -356,8 +371,8 @@
                                                             <path d="M8 22v-5.5a2.5 2.5 0 0 1 5 0V22"/>
                                                         </svg>
                                                     </div>
-                                                    <span class="mode-title">Pathfindr Classic</span>
-                                                    <span class="mode-desc">Study the grid, commit to your line, and chase the highest efficiency score.</span>
+                                                    <span class="mode-title">Play a round <span aria-hidden="true">↗</span></span>
+                                                    <span class="mode-desc">Classic · Pick a city and find your way</span>
                                                 </div>
                                             </button>
                                             <button class="mode-btn mode-explorer premium-mode" data-mode="explorer">
@@ -371,7 +386,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="mode-title">Explorer</span>
-                                                    <span class="mode-desc">Choose your own start and finish points to test custom route reads.</span>
+                                                    <span class="mode-desc">Roam at your own pace</span>
                                                 </div>
                                             </button>
                                             <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
@@ -385,7 +400,7 @@
                                                         </svg>
                                                     </div>
                                                     <span class="mode-title">Visualizer</span>
-                                                    <span class="mode-desc">Watch endless city routes resolve and learn the structure behind cleaner lines.</span>
+                                                    <span class="mode-desc">Let the city light up</span>
                                                 </div>
                                             </button>
                                         </div>
@@ -393,9 +408,9 @@
                                     </div>
 
                                     <div class="lobby-route-sharing">
-                                        <div><strong>Your city. Their challenge.</strong><p>Create a route, or share one you just played.</p></div>
+                                        <div><strong>Got a better way?</strong><p>Send a route. Settle it with a friend.</p></div>
                                         <button id="create-route-btn" type="button">Create a challenge</button>
-                                        <button id="saved-routes-btn" type="button">Saved routes / Open share</button>
+                                        <button id="saved-routes-btn" type="button">Saved / shared routes</button>
                                     </div>
                                     <div class="splash-ops-footer">
                                         <div class="difficulty-selector splash-difficulty-card">
@@ -419,7 +434,8 @@
                                     </div>
                                 </div>
 
-                                <div class="splash-dashboard-panel mobile-lobby-panel" data-mobile-panel="atlas">
+                            </div>
+                                <div id="lobby-atlas-panel" role="tabpanel" aria-labelledby="lobby-tab-atlas" class="splash-dashboard-panel mobile-lobby-panel" data-mobile-panel="atlas">
                                     <div class="dashboard-viewport-card">
                                         <div class="dashboard-viewport-header">
                                             <div class="dashboard-viewport-heading">
@@ -440,13 +456,13 @@
                                             <div class="dashboard-viewport-overlay">
                                                 <span class="dashboard-status-pill">
                                                     <span class="dashboard-status-dot"></span>
-                                                    Community pins online
+                                                    Featured city coordinates
                                                 </span>
                                                 <span id="dashboard-active-city" class="dashboard-active-city">Lobby overview</span>
                                             </div>
                                         </div>
                                         <div class="dashboard-viewport-footer">
-                                            <p id="dashboard-viewport-copy">Cities pulse across the globe so the lobby feels alive before you even launch a run.</p>
+                                            <p id="dashboard-viewport-copy">A world of streets to figure out. Switch to Current Map to revisit your last city.</p>
                                             <button id="dashboard-resume-btn" class="dashboard-resume-btn hidden" type="button">
                                                 <span class="resume-btn-core">
                                                     <span class="resume-btn-rings" aria-hidden="true"></span>
@@ -460,19 +476,17 @@
                                         <p>A route-guessing game where city awareness, spatial awareness, and competitive precision all meet to compete for the highest score.</p>
                                     </div>
                                 </div>
-                            </div>
-
                             <aside class="splash-side-stack">
-                                <section class="splash-player-panel mobile-lobby-panel" id="splash-player-panel" data-mobile-panel="license">
+                                <section role="tabpanel" aria-labelledby="lobby-tab-profile" class="splash-player-panel mobile-lobby-panel" id="splash-player-panel" data-mobile-panel="license">
                                     <div id="splash-player-guest" class="splash-guest-card">
                                         <div class="player-card-header">
                                             <div>
-                                                <span class="player-card-eyebrow">Player Card</span>
-                                                <h2 id="splash-player-heading" class="player-card-title">Sign in to build your navigator license.</h2>
+                                                    <span class="player-card-eyebrow">YOUR NAVIGATOR PROFILE</span>
+                                                <h2 id="splash-player-heading" class="player-card-title">Put a name<br>to your routes.</h2>
                                             </div>
                                             <span id="splash-player-tier" class="player-card-tier">Guest</span>
                                         </div>
-                                        <p class="player-card-copy">Save your callsign, compare runs globally, and turn the lobby into a living dashboard of your cities, route stats, and latest movement.</p>
+                                        <p class="player-card-copy">Keep your callsign, route history, and scores together. Or stay a guest and keep exploring.</p>
                                         <div class="player-card-actions">
                                             <button id="splash-auth-login-btn" class="splash-auth-btn splash-auth-btn-primary" type="button">Sign In</button>
                                             <button id="splash-auth-signup-btn" class="splash-auth-btn" type="button">Create Account</button>
@@ -586,6 +600,19 @@
                                         </div>
                                     </div>
                                 </section>
+
+                                <section id="splash-community-panel" class="splash-community-panel" aria-label="Community channels">
+                                    <h3 class="splash-community-title">Join the Social Hub</h3>
+                                    <p class="splash-community-copy">Want to shape what drops next? Share feature ideas and fixes directly from here.</p>
+                                    <div class="splash-community-actions">
+                                        <a id="social-channel-x" class="btn-holo-secondary social-channel-link" target="_blank" rel="noopener" href="#">Follow on X</a>
+                                        <a id="social-channel-instagram" class="btn-holo-secondary social-channel-link" target="_blank" rel="noopener" href="#">Follow on Instagram</a>
+                                        <button id="lobby-feedback-btn" class="btn-holo-upgrade" type="button">
+                                            <span class="btn-holo-bg"></span>
+                                            <span class="btn-holo-text">Send Feature Feedback</span>
+                                        </button>
+                                    </div>
+                                </section>
                             </aside>
                         </div>
                     </div>
@@ -598,6 +625,43 @@
                     <div class="overlay-content globe-overlay-content">
                         <p id="loading-text">Loading road network...</p>
                         <p id="loading-city" class="loading-city-name"></p>
+                    </div>
+                </div>
+
+                <div id="feedback-modal" class="overlay hidden">
+                    <div class="overlay-content feedback-modal">
+                        <button id="feedback-close-btn" class="modal-close">&times;</button>
+                        <h2>Pathfindr Feedback</h2>
+                        <p class="feedback-subtitle">Help us ship features faster. Clear, focused feedback gets priority.</p>
+
+                        <form id="feedback-form" class="feedback-form">
+                            <div class="form-group">
+                                <label for="feedback-type">Type</label>
+                                <select id="feedback-type" class="feedback-select" required>
+                                    <option value="feature">Feature request</option>
+                                    <option value="bug">Bug report</option>
+                                    <option value="balance">Game balance / tuning</option>
+                                    <option value="social">Community + social</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="feedback-message">What should we improve?</label>
+                                <textarea id="feedback-message" rows="4" maxlength="2500" required placeholder="What should Pathfindr ship next?"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="feedback-contact">Email (optional)</label>
+                                <input id="feedback-contact" type="email" placeholder="you@domain.com" autocomplete="email">
+                            </div>
+
+                            <p id="feedback-status" class="feedback-status" role="status"></p>
+
+                            <button id="feedback-submit-btn" type="submit" class="btn-holo-upgrade">
+                                <span class="btn-holo-bg"></span>
+                                <span class="btn-holo-text">Submit Feedback</span>
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -650,7 +714,7 @@
                 </div>
 
                 <!-- Fullscreen Button (Visualizer/Explorer) -->
-                <button id="fullscreen-btn" class="fullscreen-btn hidden" title="Enter Fullscreen (moves exit)">
+                <button id="fullscreen-btn" class="fullscreen-btn hidden" title="Toggle fullscreen" aria-label="Toggle fullscreen" aria-pressed="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
                     </svg>
@@ -725,7 +789,7 @@
                             </button>
                             <button class="location-option" data-mode="washington">
                                 <span class="option-label">Washington, DC</span>
-                                <span class="option-desc">Living city showcase · parks, water, monuments</span>
+                                <span class="option-desc">Test city · 10 collectible 3D landmarks · live map</span>
                             </button>
                             <button class="location-option" data-mode="local">
                                 <div class="option-icon">
@@ -826,12 +890,6 @@
                                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                                     </svg>
                                     Facebook
-                                </button>
-                                <button type="button" class="social-btn discord" data-provider="discord">
-                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-                                    </svg>
-                                    Discord
                                 </button>
                             </div>
                         </div>
@@ -1084,12 +1142,12 @@
                         </div>
                         <p id="rank-message" class="gameover-rank">Great pathfinding!</p>
                         <button id="play-again-btn" class="btn btn-glow">Play Again</button>
-                        <button id="share-run-btn" class="btn" type="button">Save / share this run</button>
+                        <button id="share-run-btn" class="btn" type="button">Share this run</button>
                     </div>
                 </div>
 
                 <!-- Results Panel - Bottom Slide-Up -->
-                <div id="route-identity-legend" aria-label="Route key"><span class="route-key-yours">Your route · solid</span><span class="route-key-algo">A* shortest · dashed</span></div>
+                <div id="route-identity-legend" aria-label="Route key"><span class="route-key-yours">You · dash–dot</span><span class="route-key-algo">A* · short dashes</span></div>
                 <div id="results-panel">
                     <div class="results-content">
                         <!-- Hero Score Section -->
@@ -1146,7 +1204,7 @@
 
                         <!-- Next Round Button with attention glow -->
                         <section id="round-discoveries" aria-label="Collected this round"></section>
-                        <div class="round-share-actions"><button id="save-round-btn" type="button">Save</button><button id="share-round-btn" type="button">Share / challenge</button></div>
+                        <div class="round-share-actions"><button id="save-round-btn" type="button">Save</button><button id="share-round-btn" type="button">Share</button></div>
                         <div class="next-round-wrapper">
                             <div class="glow-border"></div>
                             <button id="next-round-btn" class="btn btn-next">
@@ -1179,8 +1237,31 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Parse and paint the lobby before downloading runtime dependencies.
+         Keep dependency execution order for native platform/auth/payment setup. -->
+    <script>
+        // A tap during a slow download should be acknowledged, not lost.
+        (() => {
+            let ready = false, pending = null;
+            document.addEventListener('click', event => {
+                const button = event.target.closest?.('#splash-screen button');
+                if (ready || !button) return;
+                event.preventDefault(); event.stopImmediatePropagation();
+                pending = button;
+                document.getElementById('lobby-boot-status').textContent = 'Getting ready — your selection will open shortly.';
+            }, true);
+            document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+                ready = true;
+                document.getElementById('lobby-boot-status').hidden = true;
+                if (pending?.isConnected) pending.click();
+            }, 0), { once: true });
+        })();
+    </script>
+    <script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="config.js?v=13"></script>
+    <script src="config.js?v=36"></script>
     <script src="ads.js"></script>
     <script src="auth.js"></script>
     <script src="analytics.js"></script>
@@ -1188,34 +1269,46 @@
     <script src="vendor/d3-geo.min.js"></script>
     <script src="vendor/topojson-client.min.js"></script>
     <script src="payments.js"></script>
-    <script src="engine/audio-reactivity.js"></script>
+    <script src="data/soundtrack-analysis.js?v=14"></script>
+    <script src="engine/audio-reactivity.js?v=14"></script>
+    <script src="engine/musical-routes.js?v=14"></script>
     <script src="vendor/three.min.js"></script>
     <script src="vendor/earcut.min.js"></script>
     <script src="engine/motion.js"></script>
     <script src="engine/road-motion.js"></script>
-    <script src="data/cities/miami.js"></script>
+    <script src="data/cities/miami.js?v=24"></script>
     <script src="engine/map-labels.js"></script>
     <script src="engine/place-data.js"></script>
-    <script src="engine/route-cinema.js"></script>
-    <script src="engine/world-data.js"></script>
-    <script src="engine/world-renderer.js"></script>
+    <script src="engine/route-cinema.js?v=22"></script>
+    <script src="engine/world-data.js?v=24"></script>
+    <script src="engine/landmarks.js"></script>
+    <script src="engine/world-renderer.js?v=27"></script>
     <script src="engine/emission.js"></script>
-    <script src="engine/city-scene.js?v=11"></script>
-    <script src="engine/route-input.js?v=13"></script>
-    <script src="engine/trace-input.js?v=13"></script>
-    <script src="engine/collections.js"></script>
-    <script src="engine/share-data.js?v=13"></script>
-    <script src="engine/route-archive.js"></script>
-    <script src="engine/lobby-preload.js?v=11"></script>
+    <script src="engine/city-scene.js?v=27"></script>
+    <script src="engine/route-input.js?v=14"></script>
+    <script src="engine/edge-pan.js?v=27"></script>
+    <script src="engine/trace-guide.js?v=29"></script>
+    <script src="engine/trace-input.js?v=30"></script>
+    <script src="engine/collections.js?v=35"></script>
+    <script src="engine/share-data.js?v=24"></script>
+    <script src="engine/route-archive.js?v=21"></script>
+    <script src="engine/lobby-preload.js?v=24"></script>
     <script src="engine/search-afterglow.js"></script>
-    <script src="game.js?v=13"></script>
-    <script src="engine/game-adapter.js?v=13"></script>
-    <script src="engine/share-game.js"></script>
+    <script src="engine/map-frame.js?v=25"></script>
+    <script src="game.js?v=34"></script>
+    <script src="engine/reveal-camera.js?v=30"></script>
+    <script src="engine/visualizer-camera.js?v=35"></script>
+    <script src="engine/game-adapter.js?v=31"></script>
+    <script src="engine/share-game.js?v=15"></script>
     <script src="engine/share-cloud.js"></script>
     <script src="engine/share-ui.js"></script>
-    <script src="engine/mobile-ui.js?v=13"></script>
-    <script src="engine/route-reports.js?v=13"></script>
-    <script src="engine/route-wheel.js?v=13"></script>
+    <script src="engine/mobile-ui.js?v=36"></script>
+    <script src="engine/hardware-hud.js?v=36"></script>
+    <script src="engine/route-reports.js?v=22"></script>
+    <script src="engine/route-wheel.js?v=25"></script>
+    <script src="engine/lobby-map-data.js?v=20"></script>
+    <script src="engine/lobby.js?v=20"></script>
+    <script src="engine/mapping-progress.js?v=21"></script>
 
     <!-- Initialize monetization modules after DOM ready -->
     <script>
@@ -1246,6 +1339,17 @@
             const splashSignoutBtn = document.getElementById('splash-auth-signout-btn');
             const splashEditCallsignBtn = document.getElementById('splash-edit-callsign-btn');
             const splashRemoveAdsBtn = document.getElementById('splash-remove-ads-btn');
+            const socialXLink = document.getElementById('social-channel-x');
+            const socialInstagramLink = document.getElementById('social-channel-instagram');
+            const feedbackOpenBtn = document.getElementById('lobby-feedback-btn');
+            const feedbackModal = document.getElementById('feedback-modal');
+            const feedbackCloseBtn = document.getElementById('feedback-close-btn');
+            const feedbackForm = document.getElementById('feedback-form');
+            const feedbackType = document.getElementById('feedback-type');
+            const feedbackMessage = document.getElementById('feedback-message');
+            const feedbackContact = document.getElementById('feedback-contact');
+            const feedbackStatus = document.getElementById('feedback-status');
+            const feedbackSubmitBtn = document.getElementById('feedback-submit-btn');
             const splashScreen = document.getElementById('splash-screen');
             const dashboardGlobeCanvas = document.getElementById('dashboard-globe-canvas');
             const dashboardMapPreview = document.getElementById('dashboard-map-preview');
@@ -1270,6 +1374,11 @@
                 { lat: -33.869, lng: 151.209, name: 'Sydney, Australia' },
                 { lat: -23.550, lng: -46.633, name: 'Sao Paulo, Brazil' }
             ];
+
+            const socialChannels = PathfindrConfig?.social?.channels || {};
+            const feedbackWebhook = (PathfindrConfig?.social?.feedbackWebhook || '').trim();
+            const supportEmail = PathfindrConfig?.social?.supportEmail || 'hello@pathfindr.world';
+            const feedbackTag = PathfindrConfig?.social?.feedbackTag || 'soft-launch-feedback';
 
             const dashboardState = {
                 view: 'globe',
@@ -1313,10 +1422,12 @@
             };
 
             const setMobileLobbyPanel = (panel = 'overview') => {
+                splashScreen.dataset.lobbyPanel = panel;
                 mobileLobbyTabs.forEach((tab) => {
                     const active = tab.dataset.mobilePanel === panel;
                     tab.classList.toggle('is-active', active);
                     tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                    tab.tabIndex = active ? 0 : -1;
                 });
 
                 mobileLobbyPanels.forEach((section) => {
@@ -1451,6 +1562,10 @@
 
             const drawDashboardGlobe = (now = 0) => {
                 if (!dashboardGlobeCanvas) return;
+                if (splashScreen.dataset.lobbyPanel !== 'atlas' || splashScreen.classList.contains('hidden') || document.hidden) {
+                    dashboardState.animationFrame = null;
+                    return;
+                }
                 resizeDashboardGlobe();
 
                 const ctx = dashboardGlobeCanvas.getContext('2d');
@@ -1623,7 +1738,7 @@
                 ctx.lineWidth = Math.max(1, radius * 0.006);
                 ctx.stroke();
 
-                dashboardState.animationFrame = requestAnimationFrame(drawDashboardGlobe);
+                dashboardState.animationFrame = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? null : requestAnimationFrame(drawDashboardGlobe);
             };
 
             const ensureDashboardGlobe = () => {
@@ -1824,7 +1939,7 @@
                 if (!PathfindrAuth.isLoggedIn()) {
                     guestState.classList.remove('hidden');
                     memberState.classList.add('hidden');
-                    headingEl.textContent = 'Sign in to build your navigator license.';
+                    headingEl.textContent = 'Put a name to your routes.';
                     tierEl.textContent = 'Guest';
                     setDashboardPins(DASHBOARD_FALLBACK_PINS);
                     return;
@@ -1836,7 +1951,7 @@
                 const username = PathfindrAuth.getUsername() || 'Path Pilot';
                 const isPremium = PathfindrAuth.hasPurchased();
 
-                headingEl.textContent = 'Sign in to build your navigator license.';
+                headingEl.textContent = 'Put a name to your routes.';
                 tierEl.textContent = isPremium ? 'Pro' : 'Member';
 
                 const nameEl = document.getElementById('splash-profile-username');

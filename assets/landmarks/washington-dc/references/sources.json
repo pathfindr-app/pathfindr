@@ -1,0 +1,103 @@
+[
+  {
+    "landmarks": [
+      "washington-monument",
+      "white-house"
+    ],
+    "page": "https://www.loc.gov/item/2011631828/",
+    "image": "https://tile.loc.gov/storage-services/service/pnp/highsm/13600/13634v.jpg",
+    "file": "dc-aerial.jpg",
+    "observedFeatures": "Obelisk proportions and visible stone-color break; White House symmetrical north facade and portico.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "us-capitol"
+    ],
+    "page": "https://commons.wikimedia.org/wiki/File:United_States_Capitol_west_front_edit2.jpg",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/a/a3/United_States_Capitol_west_front_edit2.jpg",
+    "file": "capitol.jpg",
+    "observedFeatures": "Broad wings, columned central drum, tiered dome and small crowning statue.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "lincoln-memorial"
+    ],
+    "page": "https://commons.wikimedia.org/wiki/File:National_Mall,_Lincoln_Memorial_04448v.jpg",
+    "image": "https://tile.loc.gov/storage-services/service/pnp/highsm/04400/04448v.jpg",
+    "file": "lincoln.jpg",
+    "observedFeatures": "Rectangular flat-roofed temple, perimeter columns, broad raised steps and reflecting pool.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "jefferson-memorial"
+    ],
+    "page": "https://en.wikipedia.org/wiki/Jefferson_Memorial",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/f/f6/Thomas-jefferson-memorial-front-view.jpg",
+    "file": "jefferson.jpg",
+    "observedFeatures": "Shallow hemispherical dome, circular colonnade, projecting pediment and broad stair.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "smithsonian-castle"
+    ],
+    "page": "https://www.sifacilities.si.edu/portfolio-facilities",
+    "image": "https://www.sifacilities.si.edu/sites/default/files/styles/social_media/public/slideshow/castle-capitol-hp.jpg?itok=I-AWbyVL",
+    "file": "castle.jpg",
+    "observedFeatures": "Red sandstone, uneven tower heights, crenellated flat tower tops and pointed slate roofs.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "national-cathedral"
+    ],
+    "page": "https://www.historic-structures.com/washington_dc/dc/national-cathedral/",
+    "image": "https://www.historic-structures.com/washington_dc/dc/images/nctlthr001-1x1.jpg",
+    "file": "cathedral.jpg",
+    "observedFeatures": "Gothic tower massing, rose window, lancets, pinnacles and buttresses; west facade informed by additional image search.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "wwii-memorial"
+    ],
+    "page": "https://www.tclf.org/landscapes/national-world-war-ii-memorial",
+    "image": "https://www.tclf.org/sites/default/files/styles/full_width/public/thumbnails/image/DC-NationalWWIIMemorial_feature_Barrett%20Doherty_2016-01.jpg?itok=uQ1mltWH",
+    "file": "wwii.jpg",
+    "observedFeatures": "Oval pool, wreath-bearing pillars and paired entrance pavilions.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "vietnam-veterans-memorial"
+    ],
+    "page": "https://www.theclio.com/entry/1471",
+    "image": "https://storage.googleapis.com/clio-images/UID_107_vietnam-memorial1.jpg",
+    "file": "vietnam.jpg",
+    "observedFeatures": "Polished dark wall, panel seams and tapering arms; text abstracted to fine strokes.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "mlk-memorial"
+    ],
+    "page": "https://www.nps.gov/mlkm/",
+    "image": "https://www.nps.gov/common/uploads/structured_data/F7239CD9-0FBF-5187-651FF23965AC1120.jpg?height=742&mode=crop&quality=90&width=990",
+    "file": "mlk.jpg",
+    "observedFeatures": "Figure emerging from pale rough stone, folded arms and separate mountain stones.",
+    "downloaded": true
+  },
+  {
+    "landmarks": [
+      "white-house"
+    ],
+    "page": "https://gwtoday.gwu.edu/true-ish-stories-behind-dcs-famous-ghosts",
+    "image": "https://gwtoday.gwu.edu/sites/g/files/zaxdzs5401/files/2022-10/whita_house_up_2014_wla_1694_1500.jpg",
+    "file": "white-house.jpg",
+    "observedFeatures": "North portico columns and recessed rectangular windows.",
+    "downloaded": true
+  }
+]

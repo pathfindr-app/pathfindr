@@ -58,7 +58,8 @@
             if(tags.natural==='tree') trees.push({pos,tags,id:e.id});
             const burger=(tags.cuisine||'').split(';').map(s=>s.trim()).includes('burger') && ['fast_food','restaurant'].includes(tags.amenity);
             const landmark=tags.historic==='monument' || tags.tourism==='attraction' && /tower|monument/i.test(tags.name||'');
-            if(burger || landmark) pois.push({id:`${e.type}/${e.id}`,pos,type:burger?'burger':'landmark',name:String(tags.name|| (burger?'Burger stop':'Monument')).slice(0,100),tags});
+            const library=tags.amenity==='library';
+            if(burger || landmark || library) pois.push({id:`${e.type}/${e.id}`,pos,type:library?'library':burger?'burger':'landmark',name:String(tags.name|| (library?'Library':burger?'Burger stop':'Monument')).slice(0,100),tags});
         }
         return {surfaces:surfaces.slice(0,450),flows:flows.slice(0,200),pois:pois.slice(0,120),trees:trees.slice(0,600)};
     }

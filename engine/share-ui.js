@@ -1,13 +1,15 @@
 /* Local-first route library and explicit, user-initiated sharing. */
 (() => {
-    let dialog,content,status,activePayload=null,preparedCode='',preparedURL='',busy=false;
+    let dialog,content,status,activePayload=null,busy=false;
     const el=(tag,text,className)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(className)n.className=className;return n;};
     const button=(label,fn)=>{const b=el('button',label);b.type='button';b.addEventListener('click',()=>Promise.resolve().then(fn).catch(report));return b;};
     function report(e){status.textContent=e.message||'Something went wrong. Please try again.';}
     function shell(title){if(!dialog){dialog=el('dialog',null,'route-share-dialog');dialog.setAttribute('aria-labelledby','route-share-title');document.body.append(dialog);}
         dialog.replaceChildren();const header=el('header'),h=el('h2',title);h.id='route-share-title';header.append(h,button('Close',()=>dialog.close()));content=el('div',null,'route-share-body');status=el('p',null,'route-share-status');status.setAttribute('role','status');dialog.append(header,content,status);if(!dialog.open)dialog.showModal();return content;}
-    function download(text,name,type='text/plain'){const url=URL.createObjectURL(new Blob([text],{type})),a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-    function publicURL(code,key='pf'){const url=new URL(location.href);if(url.protocol!=='https:'||/^(localhost|127\.|192\.168\.|10\.)/.test(url.hostname))return '';url.search='';url.hash=`${key}=${code}`;return url.href.length<=12000?url.href:'';}
+    function publicURL(code,key='pf'){
+        const url=new URL(location.protocol==='https:'?location.href:'https://www.pathfindr.world/');
+        url.search='';url.hash=`${key}=${code}`;return url.href.length<=12000?url.href:'';
+    }
     function preview(round){
         const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 600 230');svg.setAttribute('role','img');svg.setAttribute('aria-label','Your route in amber; shortest route in dashed cyan');
         const points=[...round.userPath,...round.optimalPath];if(!points.length)return svg;
@@ -27,17 +29,31 @@
         root.append(actions);
     }
     async function prepare(payload){
-        const root=shell('Ready to share');root.append(el('h3',payload.title),el('p','This includes precise game locations. Share only locations you are comfortable making public. No account or player identity is included.'));
-        status.textContent='Preparing portable share…';const code=await PathfindrShareData.encode(payload);if(!root.isConnected)return;
-        preparedCode=code;preparedURL=publicURL(code);
-        const field=el('textarea');field.readOnly=true;field.value=preparedURL||code;field.setAttribute('aria-label','Share link or portable code');root.append(field);
-        const actions=el('div',null,'share-actions');
-        const requestId=crypto.randomUUID();
-        actions.append(button('Publish hosted share',async()=>{status.textContent='Publishing…';const id=await PathfindrShareCloud.publish(payload,requestId);preparedURL=publicURL(id,'share');field.value=preparedURL||`share:${id}`;status.textContent=preparedURL?'Hosted share ready. Anyone with this link can open it.':'Published. Copy this share ID; a public link needs this build deployed on HTTPS.';}));
-        actions.append(button(preparedURL?'Copy link':'Copy code',async()=>{try{await navigator.clipboard.writeText(field.value);status.textContent='Copied. Your friend can open it from Saved routes → Open share.';}catch{field.focus();field.select();status.textContent='Select and copy the code above.';}}),button('Download share file',()=>download(code,'pathfindr-route.pathfindr')));
-        if(preparedURL&&navigator.share)actions.append(button('Share…',async()=>{try{await navigator.share({title:payload.title,text:'Try this route in Pathfindr',url:preparedURL});}catch(e){if(e.name!=='AbortError')throw e;}}));
-        root.append(actions,el('p','© OpenStreetMap contributors · ODbL 1.0'));
-        status.textContent=preparedURL?'A self-contained link; no account required.':'Local preview or large map: use the portable code/file. Public HTTPS builds generate links for smaller shares.';
+        const root=shell(payload.kind==='challenge'?'Share challenge':payload.rounds.length===1?'Share round':'Share run'),message=status;
+        root.append(el('h3',payload.title),el('p',payload.kind==='challenge'?'Send this link to a friend to play the same challenge.':'Send this link to share your route and results.'));
+        message.textContent='Creating link…';
+        try{
+            const code=await PathfindrShareData.encode(payload);
+            if(!root.isConnected||!dialog.open)return;
+            let url=publicURL(code);
+            if(!url){
+                if(!PathfindrShareCloud.userId())throw Error('This share needs a shorter link. Sign in and try Share again, or share a single round.');
+                const id=await PathfindrShareCloud.publish(payload,crypto.randomUUID()).catch(()=>{throw Error('Could not create this link. Please try again later.');});
+                url=publicURL(id,'share');
+            }
+            if(!root.isConnected||!dialog.open)return;
+            const field=el('input');field.type='url';field.readOnly=true;field.value=url;field.setAttribute('aria-label','Share link');field.addEventListener('click',()=>field.select());root.append(field);
+            const actions=el('div',null,'share-actions');
+            actions.append(button('Copy link',async()=>{
+                try{await navigator.clipboard.writeText(url);message.textContent='Link copied! Send it to a friend.';}
+                catch{field.focus();field.select();message.textContent='Copy the selected link to send it to a friend.';}
+            }));
+            if(navigator.share)actions.append(button('Share…',async()=>{
+                try{await navigator.share({title:payload.title,text:payload.kind==='challenge'?'Try this challenge in Pathfindr':'My route in Pathfindr',url});message.textContent='';}
+                catch(e){if(e.name!=='AbortError')message.textContent='Sharing is unavailable. Use Copy link instead.';}
+            }));
+            root.append(actions);message.textContent='Anyone with the link can open it. No account needed.';
+        }catch(e){if(root.isConnected&&dialog.open)message.textContent=e.message||'Could not create a link. Please try Share again.';}
     }
     async function library(){const root=shell('Saved routes');const actions=el('div',null,'share-actions');actions.append(button('Create a challenge',creator),button('Open share',importer));root.append(actions,el('p','Signed-in runs sync privately to your account. Guests keep a device copy. Save marks a run as a favorite; publishing is always a separate action.'));
         status.textContent='Loading routes…';const records=await PathfindrArchive.list();if(!root.isConnected)return;status.textContent=PathfindrArchive.state().error;
@@ -63,9 +79,9 @@
     function init(){
         document.getElementById('saved-routes-btn').addEventListener('click',()=>library().catch(report));
         document.getElementById('create-route-btn').addEventListener('click',creator);
-        document.getElementById('share-round-btn').addEventListener('click',()=>{try{show(PathfindrArchive.selected(GameState.currentRound-1)).catch(report);}catch(e){shell('Share route');report(e);}});
+        document.getElementById('share-round-btn').addEventListener('click',()=>{try{prepare(PathfindrArchive.selected(GameState.currentRound-1)).catch(report);}catch(e){shell('Share route');report(e);}});
         document.getElementById('save-round-btn').addEventListener('click',async e=>{const b=e.currentTarget;try{const run=PathfindrArchive.current();if(!run)throw Error('Finish a round first.');await PathfindrArchive.pin(run.id);b.textContent='Saved';}catch(err){shell('Save route');report(err);}});
-        document.getElementById('share-run-btn').addEventListener('click',()=>{try{show(PathfindrArchive.selected()).catch(report);}catch(e){shell('Share run');report(e);}});
+        document.getElementById('share-run-btn').addEventListener('click',()=>{try{prepare(PathfindrArchive.selected()).catch(report);}catch(e){shell('Share run');report(e);}});
         const openHash=()=>{if(location.hash.startsWith('#pf=')||location.hash.startsWith('#share=')){importer();openInput(location.hash).then(show).catch(report);}};
         openHash();window.addEventListener('hashchange',openHash);
     }

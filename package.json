@@ -4,6 +4,7 @@
   "description": "Race against AI to find the shortest path through real city streets",
   "main": "game.js",
   "scripts": {
+    "analyze:music": "python3 scripts/analyze-soundtrack.py",
     "test": "node --test tests/*.test.cjs",
     "rollback": "sh /Users/bradleyarakaki/Desktop/Pathfindr-recovery/restore-baseline.sh",
     "start": "npx serve .",
@@ -21,7 +22,8 @@
     "ios": "npm run build:mobile && npx cap open ios",
     "android": "npm run build:mobile && npx cap open android",
     "add:ios": "npx cap add ios",
-    "add:android": "npx cap add android"
+    "add:android": "npx cap add android",
+    "start:prints": "node scripts/print-studio-server.cjs"
   },
   "keywords": [
     "game",
@@ -43,6 +45,8 @@
     "@revenuecat/purchases-capacitor": "^12.0.3",
     "@supabase/supabase-js": "^2.89.0",
     "earcut": "2.2.4",
+    "sharp": "^0.35.4",
+    "stripe": "^22.6.1",
     "three": "0.160.1"
   }
 }

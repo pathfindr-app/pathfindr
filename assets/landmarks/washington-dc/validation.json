@@ -1,0 +1,165 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "jefferson-memorial-diorama.glb",
+      "triangles": 5498,
+      "bytes": 507828,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "jefferson-memorial.glb",
+      "triangles": 5046,
+      "bytes": 459096,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "lincoln-memorial-diorama.glb",
+      "triangles": 5660,
+      "bytes": 441052,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "lincoln-memorial.glb",
+      "triangles": 5208,
+      "bytes": 401520,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "mlk-memorial-diorama.glb",
+      "triangles": 1172,
+      "bytes": 116888,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "mlk-memorial.glb",
+      "triangles": 720,
+      "bytes": 77380,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "national-cathedral-diorama.glb",
+      "triangles": 2720,
+      "bytes": 279316,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "national-cathedral.glb",
+      "triangles": 2268,
+      "bytes": 230560,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "smithsonian-castle-diorama.glb",
+      "triangles": 2624,
+      "bytes": 266576,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "smithsonian-castle.glb",
+      "triangles": 2172,
+      "bytes": 217816,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "us-capitol-diorama.glb",
+      "triangles": 8700,
+      "bytes": 806068,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "us-capitol.glb",
+      "triangles": 8248,
+      "bytes": 757324,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "vietnam-veterans-memorial-diorama.glb",
+      "triangles": 3604,
+      "bytes": 293548,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "vietnam-veterans-memorial.glb",
+      "triangles": 3152,
+      "bytes": 254088,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "washington-monument-diorama.glb",
+      "triangles": 1894,
+      "bytes": 160524,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "washington-monument.glb",
+      "triangles": 1442,
+      "bytes": 121012,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "white-house-diorama.glb",
+      "triangles": 6000,
+      "bytes": 577872,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "white-house.glb",
+      "triangles": 5548,
+      "bytes": 529140,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "wwii-memorial-diorama.glb",
+      "triangles": 6416,
+      "bytes": 488208,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    },
+    {
+      "file": "wwii-memorial.glb",
+      "triangles": 5964,
+      "bytes": 448696,
+      "meshCount": 1,
+      "materialCount": 1,
+      "embeddedTexture": true
+    }
+  ]
+}

@@ -11,6 +11,14 @@
             attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>' });
     }
     function layer(spec) { if (!map.getLayer(spec.id)) map.addLayer(spec); }
+    function buildingColors(outline=false){
+        // Stable OSM identity, not random per frame. Decorative tints don't imply building use.
+        return ['match',['%',['to-number',['id'],0],4],0,outline?'#6baab7':'#244954',1,outline?'#a28caf':'#44324f',2,outline?'#b68b99':'#4d3442',outline?'#7199bb':'#293f58'];
+    }
+    function updateBuildingEdges(){
+        if(ready)map.setPaintProperty('city-building-edges','line-opacity',0.62*Math.max(0,1-map.getPitch()/18));
+        if(ready){const t=Math.max(0,Math.min(1,(map.getPitch()-3)/22));map.setPaintProperty('city-streets','line-opacity',0.58*(1-t*t*(3-2*t)));}
+    }
     function setup() {
         baseRasters = map.getStyle().layers.filter(layer => layer.type === 'raster').map(layer => ({
             id: layer.id, visibility: layer.layout?.visibility || 'visible'
@@ -19,12 +27,19 @@
         source('city-roads', empty());
         layer({ id: 'city-ground', type: 'background', paint: { 'background-color': '#111522' } });
         layer({ id: 'city-blocks', type: 'fill-extrusion', source: 'city-buildings', paint: {
-            'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'height'], 0, '#263349', 35, '#3d425d', 90, '#65576e'],
+            'fill-extrusion-color': buildingColors(),
             'fill-extrusion-height': ['get', 'height'],
             'fill-extrusion-base': 0,
-            'fill-extrusion-opacity': 0.94,
+            'fill-extrusion-opacity': 1,
             'fill-extrusion-vertical-gradient': true
         } });
+        // Footprint outlines are accurate in top-down view; fade when tilted rather
+        // than drawing ground-level lines pretending to be elevated roof edges.
+        layer({id:'city-building-edges',type:'line',source:'city-buildings',paint:{
+            'line-color':buildingColors(true),
+            'line-width':['interpolate',['linear'],['zoom'],12,0.35,15,0.7,18,1.15],
+            'line-opacity':0.62
+        }});
         layer({ id: 'city-streets', type: 'line', source: 'city-roads', paint: {
             'line-color': '#50677a', 'line-opacity': 0.58,
             'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 17, 2.4]
@@ -33,10 +48,12 @@
         PathfindrWorldRenderer.init(map);
         ready = true;
         applyVisibility();
+        updateBuildingEdges();map.on('pitch',updateBuildingEdges);
     }
     function applyVisibility() {
         if (!ready) return;
         for (const id of ['city-ground', 'city-blocks', 'city-streets']) map.setLayoutProperty(id, 'visibility', state.enabled ? 'visible' : 'none');
+        map.setLayoutProperty('city-building-edges','visibility',state.enabled?'visible':'none');
         // Do not keep fetching/rasterizing a tile layer hidden beneath opaque ground.
         for (const layer of baseRasters) map.setLayoutProperty(layer.id, 'visibility', state.enabled ? 'none' : layer.visibility);
         document.getElementById('map-container').classList.toggle('city-scene', state.enabled);
@@ -60,7 +77,7 @@
         if(pending.has(key))return pending.get(key);
         const request=(async()=>{
             const area=`(around:1600,${location.lat},${location.lng})`;
-            const q = `[out:json][timeout:18];(way["building"]${area};nwr["natural"~"^(water|bay|strait|wood)$"]${area};nwr["landuse"~"^(forest|grass|meadow|reservoir)$"]${area};nwr["leisure"~"^(park|garden|golf_course)$"]${area};way["waterway"~"^(river|stream|canal|riverbank)$"]${area};nwr["amenity"~"^(fast_food|restaurant)$"]["cuisine"~"burger"]${area};nwr["historic"="monument"]${area};nwr["tourism"="attraction"]["name"~"Eiffel|Tower|Monument",i]${area};node["natural"="tree"]${area};node["place"~"^(suburb|neighbourhood|quarter|city_district)$"]${area};way["highway"]["name"]${area};);out geom;`;
+            const q = `[out:json][timeout:18];(way["building"]${area};nwr["natural"~"^(water|bay|strait|wood)$"]${area};nwr["landuse"~"^(forest|grass|meadow|reservoir)$"]${area};nwr["leisure"~"^(park|garden|golf_course)$"]${area};way["waterway"~"^(river|stream|canal|riverbank)$"]${area};nwr["amenity"~"^(fast_food|restaurant)$"]["cuisine"~"burger"]${area};nwr["amenity"="library"]${area};nwr["historic"="monument"]${area};nwr["tourism"="attraction"]["name"~"Eiffel|Tower|Monument",i]${area};node["natural"="tree"]${area};node["place"~"^(suburb|neighbourhood|quarter|city_district)$"]${area};way["highway"]["name"]${area};);out geom;`;
             let raw,lastError;
             for(const server of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
                 const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),22000);
@@ -101,21 +118,30 @@
                 geometry: { type: 'LineString', coordinates: [[e.fromPos.lng, e.fromPos.lat], [e.toPos.lng, e.toPos.lat]] } })) });
             source('city-buildings', empty());
             state.buildings = 0;
+            const curated=window.PathfindrLandmarks?.forCity(location)||[];
+            if(curated.length){
+                PathfindrWorldRenderer.build({surfaces:[],flows:[],trees:[],pois:curated},location,edges);
+                PathfindrCollections.addPOIs(curated);
+            }
             const pack = window.PathfindrCityPacks?.[location.packId];
             const roadLabels=roads?PathfindrPlaceData.labels(roads):[];
             PathfindrMapLabels.set(map,pack?.labels||roadLabels);
             state.labels=(pack?.labels||roadLabels).length;
-            if(pack){source('city-buildings',pack.buildings);state.buildings=pack.buildings.features.length;
-                PathfindrWorldRenderer.build(pack.world,location,edges);PathfindrCollections.addPOIs(pack.world.pois);return;}
+            if(pack){const buildings=window.PathfindrLandmarks?.buildings(pack.buildings,location)||pack.buildings;
+                const world=window.PathfindrLandmarks?.enrich(pack.world,location)||pack.world;
+                source('city-buildings',buildings);state.buildings=buildings.features.length;
+                PathfindrWorldRenderer.build(world,location,edges,buildings);PathfindrCollections.addPOIs(world.pois);return;}
             state.loading=true;
             try {
                 const data=await prepare(location);
                 if(token!==generation)return;
-                source('city-buildings',data.buildings);state.buildings=data.buildings.features.length;
+                const buildings=window.PathfindrLandmarks?.buildings(data.buildings,location)||data.buildings;
+                const world=window.PathfindrLandmarks?.enrich(data.world,location)||data.world;
+                source('city-buildings',buildings);state.buildings=buildings.features.length;
                 PathfindrMapLabels.set(map,data.labels);
                 state.labels=data.labels.length;
-                PathfindrWorldRenderer.build(data.world,location,edges);
-                PathfindrCollections.addPOIs(data.world.pois);
+                PathfindrWorldRenderer.build(world,location,edges,buildings);
+                PathfindrCollections.addPOIs(world.pois);
             }catch(error){if(token===generation)state.error=error.message;}
             finally{if(token===generation)state.loading=false;}
         },
@@ -139,6 +165,7 @@
             state.quality = quality;
             if (ready) map.setPaintProperty('city-blocks', 'fill-extrusion-height', quality === 'low'
                 ? ['min', 12, ['get', 'height']] : ['get', 'height']);
+            if(ready)applyVisibility();
         }
     };
 })();

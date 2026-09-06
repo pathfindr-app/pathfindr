@@ -1,0 +1,170 @@
+{
+  "city": "rome",
+  "style": "Pathfindr painted miniature",
+  "units": "artistic miniature units; not meters",
+  "front": "Blender -Y / glTF +Z",
+  "up": "Blender Z / glTF Y",
+  "texture": "textures/painted-palette.png",
+  "assets": [
+    {
+      "id": "colosseum",
+      "name": "Colosseum",
+      "file": "models/colosseum.glb",
+      "diorama": "models/colosseum-diorama.glb",
+      "preview": "previews/colosseum.png",
+      "dioramaTriangles": 8196,
+      "dimensionsBlender": [
+        16.0,
+        13.0,
+        5.46999979019165
+      ],
+      "triangles": 7888,
+      "bytes": 621220,
+      "referenceFeatures": "Elliptical arena, true arcade openings, concentric seating and partially surviving upper wall."
+    },
+    {
+      "id": "pantheon-rome",
+      "name": "Pantheon",
+      "file": "models/pantheon-rome.glb",
+      "diorama": "models/pantheon-rome-diorama.glb",
+      "preview": "previews/pantheon-rome.png",
+      "dioramaTriangles": 2280,
+      "dimensionsBlender": [
+        14.0,
+        13.0,
+        6.464999675750732
+      ],
+      "triangles": 1972,
+      "bytes": 178244,
+      "referenceFeatures": "Brick rotunda, shallow concrete dome with open oculus and columned portico."
+    },
+    {
+      "id": "trevi-fountain",
+      "name": "Trevi Fountain",
+      "file": "models/trevi-fountain.glb",
+      "diorama": "models/trevi-fountain-diorama.glb",
+      "preview": "previews/trevi-fountain.png",
+      "dioramaTriangles": 3667,
+      "dimensionsBlender": [
+        15.0,
+        12.0,
+        7.759999752044678
+      ],
+      "triangles": 3359,
+      "bytes": 322212,
+      "referenceFeatures": "Palazzo facade, central grotto sculpture and broad mint fountain basin."
+    },
+    {
+      "id": "spanish-steps",
+      "name": "Spanish Steps",
+      "file": "models/spanish-steps.glb",
+      "diorama": "models/spanish-steps-diorama.glb",
+      "preview": "previews/spanish-steps.png",
+      "dioramaTriangles": 1985,
+      "dimensionsBlender": [
+        13.0,
+        16.0,
+        9.34999942779541
+      ],
+      "triangles": 1677,
+      "bytes": 175804,
+      "referenceFeatures": "Sweeping lower flight, divided central flights, twin church towers and obelisk; archival reference."
+    },
+    {
+      "id": "castel-sant-angelo",
+      "name": "Castel Sant’Angelo",
+      "file": "models/castel-sant-angelo.glb",
+      "diorama": "models/castel-sant-angelo-diorama.glb",
+      "preview": "previews/castel-sant-angelo.png",
+      "dioramaTriangles": 2032,
+      "dimensionsBlender": [
+        14.0,
+        14.0,
+        8.190000534057617
+      ],
+      "triangles": 1724,
+      "bytes": 164440,
+      "referenceFeatures": "Cylindrical mausoleum, battlements, papal apartments, angel and short bridge approach."
+    },
+    {
+      "id": "st-peters",
+      "name": "St Peter’s · Vatican City",
+      "file": "models/st-peters.glb",
+      "diorama": "models/st-peters-diorama.glb",
+      "preview": "previews/st-peters.png",
+      "dioramaTriangles": 9531,
+      "dimensionsBlender": [
+        18.0,
+        18.0,
+        10.470000267028809
+      ],
+      "triangles": 9223,
+      "bytes": 834252,
+      "referenceFeatures": "Broad facade, dome, saints, obelisk and two open colonnade arms. This landmark is in Vatican City."
+    },
+    {
+      "id": "roman-forum",
+      "name": "Roman Forum · Saturn",
+      "file": "models/roman-forum.glb",
+      "diorama": "models/roman-forum-diorama.glb",
+      "preview": "previews/roman-forum.png",
+      "dioramaTriangles": 2072,
+      "dimensionsBlender": [
+        15.0,
+        12.0,
+        6.029999732971191
+      ],
+      "triangles": 1764,
+      "bytes": 156224,
+      "referenceFeatures": "The Temple of Saturn represents the Roman Forum: surviving columns, entablature, podium and fallen masonry."
+    },
+    {
+      "id": "vittoriano",
+      "name": "Vittoriano",
+      "file": "models/vittoriano.glb",
+      "diorama": "models/vittoriano-diorama.glb",
+      "preview": "previews/vittoriano.png",
+      "dioramaTriangles": 4620,
+      "dimensionsBlender": [
+        18.0,
+        14.0,
+        7.183800220489502
+      ],
+      "triangles": 4312,
+      "bytes": 341228,
+      "referenceFeatures": "White stepped monument, curved colonnade, equestrian figure and abbreviated rooftop quadriga pavilions."
+    },
+    {
+      "id": "piazza-navona",
+      "name": "Piazza Navona · Four Rivers",
+      "file": "models/piazza-navona.glb",
+      "diorama": "models/piazza-navona-diorama.glb",
+      "preview": "previews/piazza-navona.png",
+      "dioramaTriangles": 978,
+      "dimensionsBlender": [
+        12.0,
+        12.0,
+        8.109999656677246
+      ],
+      "triangles": 670,
+      "bytes": 73020,
+      "referenceFeatures": "Fountain of the Four Rivers represents Piazza Navona: rock, four abstract figures, obelisk and basin."
+    },
+    {
+      "id": "pyramid-cestius",
+      "name": "Pyramid of Cestius",
+      "file": "models/pyramid-cestius.glb",
+      "diorama": "models/pyramid-cestius-diorama.glb",
+      "preview": "previews/pyramid-cestius.png",
+      "dioramaTriangles": 666,
+      "dimensionsBlender": [
+        12.0,
+        11.0,
+        8.40000057220459
+      ],
+      "triangles": 358,
+      "bytes": 52948,
+      "referenceFeatures": "Steep marble pyramid, sparse masonry courses and abbreviated adjoining Aurelian wall."
+    }
+  ]
+}

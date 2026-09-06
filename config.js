@@ -80,7 +80,7 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.1.0-dev',
-    buildId: 'pathfindr-route-wheel-20260904.13',
+    buildId: 'pathfindr-amber-instrument-20260905.36',
   },
 
   // ===========================================
@@ -126,6 +126,23 @@ const PathfindrConfig = {
       'pathfindr.game@gmail.com',
       'pathfinder.game@gmail.com',
     ],
+  },
+
+  // ===========================================
+  // SOCIAL CHANNELS / COMMUNITY SETTINGS
+  // ===========================================
+  social: {
+    supportEmail: 'hello@pathfindr.world',
+    channels: {
+      x: 'https://x.com/Pathfindr',
+      instagram: 'https://www.instagram.com/pathfindr/',
+    },
+
+    // Optional webhook used for in-app feedback. For safety, this defaults to empty.
+    feedbackWebhook: '',
+
+    // If no webhook is configured, feedback goes to email above via mailto.
+    feedbackTag: 'soft-launch-feedback',
   },
 };
 

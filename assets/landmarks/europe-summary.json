@@ -1,0 +1,23 @@
+[
+  {
+    "city": "london",
+    "landmarks": 10,
+    "standaloneTriangles": 36578,
+    "standaloneGLBMiB": 3.25,
+    "zipMiB": 12.89
+  },
+  {
+    "city": "paris",
+    "landmarks": 10,
+    "standaloneTriangles": 32242,
+    "standaloneGLBMiB": 2.79,
+    "zipMiB": 12.53
+  },
+  {
+    "city": "rome",
+    "landmarks": 10,
+    "standaloneTriangles": 32947,
+    "standaloneGLBMiB": 2.78,
+    "zipMiB": 11.36
+  }
+]

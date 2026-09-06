@@ -1,0 +1,180 @@
+{
+  "city": "new-cairo",
+  "style": "Pathfindr painted miniature",
+  "units": "artistic miniature units; not meters",
+  "front": "Blender -Y / glTF +Z",
+  "up": "Blender Z / glTF Y",
+  "texture": "textures/painted-palette.png",
+  "assets": [
+    {
+      "id": "hassan-sharbatly-mosque",
+      "name": "Hassan Sharbatly Mosque",
+      "file": "models/hassan-sharbatly-mosque.glb",
+      "diorama": "models/hassan-sharbatly-mosque-diorama.glb",
+      "preview": "previews/hassan-sharbatly-mosque.png",
+      "dioramaTriangles": 4406,
+      "dimensionsBlender": [
+        15.0,
+        12.0,
+        9.099780082702637
+      ],
+      "triangles": 3334,
+      "bytes": 279868,
+      "referenceFeatures": "Four slender octagonal minarets, gold segmented dome, windowed drum and deep rectangular front colonnade.",
+      "photoReference": "references/mosque.jpg"
+    },
+    {
+      "id": "mosheer-tantawy-mosque",
+      "name": "Mosheer Tantawy Mosque",
+      "file": "models/mosheer-tantawy-mosque.glb",
+      "diorama": "models/mosheer-tantawy-mosque-diorama.glb",
+      "preview": "previews/mosheer-tantawy-mosque.png",
+      "dioramaTriangles": 3699,
+      "dimensionsBlender": [
+        14.0,
+        12.0,
+        9.48979663848877
+      ],
+      "triangles": 2627,
+      "bytes": 234368,
+      "referenceFeatures": "Two flared minaret crowns, mint ribbed dome and monumental entry portal; simplified prayer hall.",
+      "photoReference": "references/tantawy.jpg"
+    },
+    {
+      "id": "auc-new-cairo",
+      "name": "AUC · New Cairo Campus",
+      "file": "models/auc-new-cairo.glb",
+      "diorama": "models/auc-new-cairo-diorama.glb",
+      "preview": "previews/auc-new-cairo.png",
+      "dioramaTriangles": 2906,
+      "dimensionsBlender": [
+        16.0,
+        14.0,
+        5.53000020980835
+      ],
+      "triangles": 1834,
+      "bytes": 180760,
+      "referenceFeatures": "Abbreviated ceremonial courtyard: striped stone wings, central arched gateway, raised tower and linear reflecting pools.",
+      "photoReference": "references/auc.jpg"
+    },
+    {
+      "id": "german-university",
+      "name": "German University in Cairo",
+      "file": "models/german-university.glb",
+      "diorama": "models/german-university-diorama.glb",
+      "preview": "previews/german-university.png",
+      "dioramaTriangles": 2500,
+      "dimensionsBlender": [
+        16.0,
+        13.0,
+        5.650000095367432
+      ],
+      "triangles": 1428,
+      "bytes": 119636,
+      "referenceFeatures": "Abbreviated academic campus: warm rectangular blocks, horizontal glass strips and circular garden with small gazebos.",
+      "photoReference": "references/guc.jpg"
+    },
+    {
+      "id": "petrosport-stadium",
+      "name": "Petrosport Stadium",
+      "file": "models/petrosport-stadium.glb",
+      "diorama": "models/petrosport-stadium-diorama.glb",
+      "preview": "previews/petrosport-stadium.png",
+      "dioramaTriangles": 2756,
+      "dimensionsBlender": [
+        16.0,
+        12.0,
+        6.59499979019165
+      ],
+      "triangles": 1684,
+      "bytes": 139608,
+      "referenceFeatures": "Rectangular football pitch, red seating tiers, a covered main stand and four floodlight masts.",
+      "photoReference": "references/petrosport.jpg"
+    },
+    {
+      "id": "cairo-festival-city",
+      "name": "Cairo Festival City",
+      "file": "models/cairo-festival-city.glb",
+      "diorama": "models/cairo-festival-city-diorama.glb",
+      "preview": "previews/cairo-festival-city.png",
+      "dioramaTriangles": 3532,
+      "dimensionsBlender": [
+        17.0,
+        13.0,
+        5.619999885559082
+      ],
+      "triangles": 2460,
+      "bytes": 191368,
+      "referenceFeatures": "Fountain plaza with a repeated line of arcing jets and abbreviated cream retail facades.",
+      "photoReference": "references/festival.jpg"
+    },
+    {
+      "id": "dusit-thani",
+      "name": "Dusit Thani LakeView",
+      "file": "models/dusit-thani.glb",
+      "diorama": "models/dusit-thani-diorama.glb",
+      "preview": "previews/dusit-thani.png",
+      "dioramaTriangles": 2148,
+      "dimensionsBlender": [
+        15.0,
+        12.0,
+        6.190000057220459
+      ],
+      "triangles": 1076,
+      "bytes": 112756,
+      "referenceFeatures": "Arrival facade with twin squat towers, terracotta roof canopies and three sculptural urn fountains.",
+      "photoReference": "references/dusit.jpg"
+    },
+    {
+      "id": "white-waterway",
+      "name": "WHITE · The Waterway",
+      "file": "models/white-waterway.glb",
+      "diorama": "models/white-waterway-diorama.glb",
+      "preview": "previews/white-waterway.png",
+      "dioramaTriangles": 2100,
+      "dimensionsBlender": [
+        14.0,
+        12.0,
+        5.21999979019165
+      ],
+      "triangles": 1028,
+      "bytes": 94960,
+      "referenceFeatures": "Representative WHITE retail frontage: tall glass bays, vertical fins, cafe canopy and parasol terrace.",
+      "photoReference": "references/waterway2.jpg"
+    },
+    {
+      "id": "katameya-heights",
+      "name": "Katameya Heights Clubhouse",
+      "file": "models/katameya-heights.glb",
+      "diorama": "models/katameya-heights-diorama.glb",
+      "preview": "previews/katameya-heights.png",
+      "dioramaTriangles": 2359,
+      "dimensionsBlender": [
+        16.0,
+        12.0,
+        5.424942970275879
+      ],
+      "triangles": 1287,
+      "bytes": 122576,
+      "referenceFeatures": "Clubhouse front: cream pavilions, tiled roofs, arched windows, central glazed skylight and putting green.",
+      "photoReference": "references/katameya.jpg"
+    },
+    {
+      "id": "point-90",
+      "name": "Point 90 Mall",
+      "file": "models/point-90.glb",
+      "diorama": "models/point-90-diorama.glb",
+      "preview": "previews/point-90.png",
+      "dioramaTriangles": 2380,
+      "dimensionsBlender": [
+        15.0,
+        12.0,
+        5.440000057220459
+      ],
+      "triangles": 1308,
+      "bytes": 132096,
+      "referenceFeatures": "Sweeping faceted blue-glass frontage, concrete end piers, overhanging curved roof and arrival canopy.",
+      "photoReference": "references/point90.jpg"
+    }
+  ]
+}

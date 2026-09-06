@@ -9,6 +9,7 @@ body[data-game-phase="playing"] .map-label-text { pointer-events:none; }
 #mobile-options-sheet h2 { margin:4px 0 0; font:600 23px var(--font-sans-premium); letter-spacing:-.03em; }
 #mobile-options-sheet .sheet-help { font-size:13px; line-height:1.6; color:#becbc8; margin:20px 0; }
 .mobile-settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#mobile-options-sheet #fullscreen-btn:not(.hidden) { position:static; width:auto; height:auto; display:flex; gap:10px; }
 #mobile-options-sheet button { min-height:46px; border:1px solid #61716e; border-radius:10px; background:#303b39; color:#edf4f1; font:500 14px var(--font-sans-premium); cursor:pointer; box-shadow:none; }
 #mobile-options-sheet .hud-btn { width:auto; height:auto; display:flex; gap:10px; align-items:center; justify-content:center; }
 #mobile-options-sheet svg { width:20px; height:20px; }

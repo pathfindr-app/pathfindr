@@ -10,6 +10,7 @@ const ROOT = path.join(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 require('./sync-render-vendor.cjs');
 require('./build-miami.cjs');
+require('./build-lobby-art.cjs');
 
 // Files to copy to dist
 const FILES = [
@@ -30,6 +31,7 @@ const FILES = [
 
 // Directories to copy
 const DIRS = [
+    'prints',
     'public',
     'Visual Assets',
     'Music',
@@ -72,6 +74,7 @@ function copyDir(src, dest) {
     const entries = fs.readdirSync(srcPath, { withFileTypes: true });
     for (const entry of entries) {
         if (entry.name.startsWith('.')) continue;
+        if (src === 'prints' && entry.name === 'server') continue;
         const srcEntry = path.join(src, entry.name);
         if (entry.isDirectory()) {
             copyDir(srcEntry);
@@ -95,5 +98,10 @@ FILES.forEach(file => copyFile(file));
 
 console.log('\nCopying directories:');
 DIRS.forEach(dir => copyDir(dir));
+
+// Ship only playable standalone meshes, never Blender sources, photo references,
+// dioramas, previews, or the source ZIP.
+const landmarks = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets/landmarks/washington-dc/manifest.json'), 'utf8'));
+for (const item of landmarks.assets) copyFile(`assets/landmarks/washington-dc/${item.file}`);
 
 console.log('\nBuild complete! Output in dist/');

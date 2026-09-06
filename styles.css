@@ -3,8 +3,7 @@
    Inspired by: VHS warmth, sunset horizons, analog glow, 80s nostalgia
    ============================================================================= */
 
-/* Google Fonts - Warm Retro Display */
-@import url('https://fonts.googleapis.com/css2?family=Doto:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Righteous&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+/* Web fonts load non-blockingly from index.html; system fallbacks paint first. */
 
 /* =============================================================================
    MOBILE BROWSER COMPATIBILITY

@@ -24,8 +24,8 @@
         current.payload.rounds[lastRound-1]={...record,map};persist();
     }
     function discoveries(items){const round=current?.payload.rounds[lastRound-1];if(!round)return;round.collected=items;persist();}
-    async function list(){await queue;try{const db=await open();const saved=await new Promise((resolve,reject)=>{const r=db.transaction('runs').objectStore('runs').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});for(const r of saved)if(!memory.has(r.id))memory.set(r.id,r);}catch{}
-        try{for(const r of await window.PathfindrShareCloud?.list()||[])if(!memory.has(r.id))memory.set(r.id,r);}catch(e){error=e.message;}
+    async function list({localOnly=false}={}){await queue;try{const db=await open();const saved=await new Promise((resolve,reject)=>{const r=db.transaction('runs').objectStore('runs').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});for(const r of saved)if(!memory.has(r.id))memory.set(r.id,r);}catch{}
+        if(!localOnly)try{for(const r of await window.PathfindrShareCloud?.list()||[])if(!memory.has(r.id))memory.set(r.id,r);}catch(e){error=e.message;}
         return [...memory.values()].filter(r=>!r.ownerId||r.ownerId===window.PathfindrShareCloud?.userId()).sort((a,b)=>b.createdAt-a.createdAt);}
     async function pin(id){const records=await list(),record=records.find(r=>r.id===id);if(!record)throw Error('Run not found.');record.pinned=true;record.ownerId=record.ownerId||window.PathfindrShareCloud?.userId()||null;await write(record);if(current?.id===id){current.pinned=true;current.ownerId=record.ownerId;}if(error)throw Error(error);}
     function selected(index=null){if(!current?.payload.rounds.length)throw Error('Finish a round first.');return select(current.payload,index);}

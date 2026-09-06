@@ -1,0 +1,245 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "castel-sant-angelo-diorama.glb",
+      "triangles": 2032,
+      "bytes": 190224,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "castel-sant-angelo.glb",
+      "triangles": 1724,
+      "bytes": 164440,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "colosseum-diorama.glb",
+      "triangles": 8196,
+      "bytes": 646976,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "colosseum.glb",
+      "triangles": 7888,
+      "bytes": 621220,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pantheon-rome-diorama.glb",
+      "triangles": 2280,
+      "bytes": 204032,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pantheon-rome.glb",
+      "triangles": 1972,
+      "bytes": 178244,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "piazza-navona-diorama.glb",
+      "triangles": 978,
+      "bytes": 93968,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "piazza-navona.glb",
+      "triangles": 670,
+      "bytes": 73020,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pyramid-cestius-diorama.glb",
+      "triangles": 666,
+      "bytes": 78744,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pyramid-cestius.glb",
+      "triangles": 358,
+      "bytes": 52948,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "roman-forum-diorama.glb",
+      "triangles": 2072,
+      "bytes": 177212,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "roman-forum.glb",
+      "triangles": 1764,
+      "bytes": 156224,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "spanish-steps-diorama.glb",
+      "triangles": 1985,
+      "bytes": 201584,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "spanish-steps.glb",
+      "triangles": 1677,
+      "bytes": 175804,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "st-peters-diorama.glb",
+      "triangles": 9531,
+      "bytes": 860064,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "st-peters.glb",
+      "triangles": 9223,
+      "bytes": 834252,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "trevi-fountain-diorama.glb",
+      "triangles": 3667,
+      "bytes": 348000,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "trevi-fountain.glb",
+      "triangles": 3359,
+      "bytes": 322212,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "vittoriano-diorama.glb",
+      "triangles": 4620,
+      "bytes": 362228,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "vittoriano.glb",
+      "triangles": 4312,
+      "bytes": 341228,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    }
+  ]
+}

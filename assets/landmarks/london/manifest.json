@@ -1,0 +1,170 @@
+{
+  "city": "london",
+  "style": "Pathfindr painted miniature",
+  "units": "artistic miniature units; not meters",
+  "front": "Blender -Y / glTF +Z",
+  "up": "Blender Z / glTF Y",
+  "texture": "textures/painted-palette.png",
+  "assets": [
+    {
+      "id": "big-ben",
+      "name": "Big Ben & Parliament",
+      "file": "models/big-ben.glb",
+      "diorama": "models/big-ben-diorama.glb",
+      "preview": "previews/big-ben.png",
+      "dioramaTriangles": 2684,
+      "dimensionsBlender": [
+        12.0,
+        10.0,
+        12.014999389648438
+      ],
+      "triangles": 2392,
+      "bytes": 226028,
+      "referenceFeatures": "Four clock faces, ribbed sandstone shaft, tiered slate spire and abbreviated Parliament wing."
+    },
+    {
+      "id": "tower-bridge",
+      "name": "Tower Bridge",
+      "file": "models/tower-bridge.glb",
+      "diorama": "models/tower-bridge-diorama.glb",
+      "preview": "previews/tower-bridge.png",
+      "dioramaTriangles": 2058,
+      "dimensionsBlender": [
+        20.0,
+        9.0,
+        7.5199995040893555
+      ],
+      "triangles": 1970,
+      "bytes": 193080,
+      "referenceFeatures": "Twin Gothic towers, true roadway passages, high walkways and blue suspension chains."
+    },
+    {
+      "id": "london-eye",
+      "name": "London Eye",
+      "file": "models/london-eye.glb",
+      "diorama": "models/london-eye-diorama.glb",
+      "preview": "previews/london-eye.png",
+      "dioramaTriangles": 5116,
+      "dimensionsBlender": [
+        12.0,
+        9.0,
+        11.334000587463379
+      ],
+      "triangles": 5028,
+      "bytes": 464080,
+      "referenceFeatures": "Open wheel, 32 simplified passenger capsules and A-frame supports."
+    },
+    {
+      "id": "st-pauls",
+      "name": "St Paul’s Cathedral",
+      "file": "models/st-pauls.glb",
+      "diorama": "models/st-pauls-diorama.glb",
+      "preview": "previews/st-pauls.png",
+      "dioramaTriangles": 6038,
+      "dimensionsBlender": [
+        14.0,
+        15.0,
+        10.050000190734863
+      ],
+      "triangles": 5746,
+      "bytes": 522716,
+      "referenceFeatures": "Lead dome on a colonnaded drum, twin west towers and two-level portico."
+    },
+    {
+      "id": "buckingham-palace",
+      "name": "Buckingham Palace",
+      "file": "models/buckingham-palace.glb",
+      "diorama": "models/buckingham-palace-diorama.glb",
+      "preview": "previews/buckingham-palace.png",
+      "dioramaTriangles": 3208,
+      "dimensionsBlender": [
+        18.0,
+        12.0,
+        5.319999694824219
+      ],
+      "triangles": 2916,
+      "bytes": 278604,
+      "referenceFeatures": "Long symmetric palace facade, projecting pavilions, balcony and Victoria Memorial."
+    },
+    {
+      "id": "tower-of-london",
+      "name": "Tower of London",
+      "file": "models/tower-of-london.glb",
+      "diorama": "models/tower-of-london-diorama.glb",
+      "preview": "previews/tower-of-london.png",
+      "dioramaTriangles": 4164,
+      "dimensionsBlender": [
+        14.0,
+        12.0,
+        7.539999961853027
+      ],
+      "triangles": 3872,
+      "bytes": 349328,
+      "referenceFeatures": "White Tower keep with four capped corner turrets inside a curtain wall."
+    },
+    {
+      "id": "westminster-abbey",
+      "name": "Westminster Abbey",
+      "file": "models/westminster-abbey.glb",
+      "diorama": "models/westminster-abbey-diorama.glb",
+      "preview": "previews/westminster-abbey.png",
+      "dioramaTriangles": 2444,
+      "dimensionsBlender": [
+        12.0,
+        16.0,
+        9.020000457763672
+      ],
+      "triangles": 2152,
+      "bytes": 211560,
+      "referenceFeatures": "Twin west towers, lancets, clocks, long nave and flying buttresses."
+    },
+    {
+      "id": "the-shard",
+      "name": "The Shard",
+      "file": "models/the-shard.glb",
+      "diorama": "models/the-shard-diorama.glb",
+      "preview": "previews/the-shard.png",
+      "dioramaTriangles": 2656,
+      "dimensionsBlender": [
+        10.0,
+        10.0,
+        13.422659873962402
+      ],
+      "triangles": 2364,
+      "bytes": 225012,
+      "referenceFeatures": "Tapering glass shards with uneven tips and horizontal floor lines."
+    },
+    {
+      "id": "the-gherkin",
+      "name": "The Gherkin",
+      "file": "models/the-gherkin.glb",
+      "diorama": "models/the-gherkin-diorama.glb",
+      "preview": "previews/the-gherkin.png",
+      "dioramaTriangles": 7648,
+      "dimensionsBlender": [
+        10.0,
+        10.0,
+        9.931724548339844
+      ],
+      "triangles": 7356,
+      "bytes": 675136,
+      "referenceFeatures": "Rounded tower silhouette with diagonal grid and spiral dark glass bands."
+    },
+    {
+      "id": "british-museum",
+      "name": "British Museum",
+      "file": "models/british-museum.glb",
+      "diorama": "models/british-museum-diorama.glb",
+      "preview": "previews/british-museum.png",
+      "dioramaTriangles": 3074,
+      "dimensionsBlender": [
+        18.0,
+        14.0,
+        5.480000019073486
+      ],
+      "triangles": 2782,
+      "bytes": 266932,
+      "referenceFeatures": "Columned classical entrance, triangular pediment and abbreviated Great Court canopy."
+    }
+  ]
+}

@@ -1,0 +1,245 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "arc-de-triomphe-diorama.glb",
+      "triangles": 1404,
+      "bytes": 168452,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "arc-de-triomphe.glb",
+      "triangles": 1112,
+      "bytes": 139888,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "centre-pompidou-diorama.glb",
+      "triangles": 2708,
+      "bytes": 212260,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "centre-pompidou.glb",
+      "triangles": 2416,
+      "bytes": 189044,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "eiffel-tower-diorama.glb",
+      "triangles": 3298,
+      "bytes": 305100,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "eiffel-tower.glb",
+      "triangles": 3006,
+      "bytes": 276532,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "les-invalides-diorama.glb",
+      "triangles": 4688,
+      "bytes": 433520,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "les-invalides.glb",
+      "triangles": 4396,
+      "bytes": 404912,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "louvre-diorama.glb",
+      "triangles": 4856,
+      "bytes": 445888,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "louvre.glb",
+      "triangles": 4564,
+      "bytes": 417316,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "moulin-rouge-diorama.glb",
+      "triangles": 3575,
+      "bytes": 252120,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "moulin-rouge.glb",
+      "triangles": 3283,
+      "bytes": 223536,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "notre-dame-diorama.glb",
+      "triangles": 2618,
+      "bytes": 265336,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "notre-dame.glb",
+      "triangles": 2326,
+      "bytes": 236756,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "palais-garnier-diorama.glb",
+      "triangles": 4813,
+      "bytes": 448400,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "palais-garnier.glb",
+      "triangles": 4521,
+      "bytes": 419828,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pantheon-paris-diorama.glb",
+      "triangles": 4326,
+      "bytes": 409832,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "pantheon-paris.glb",
+      "triangles": 4034,
+      "bytes": 381264,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "sacre-coeur-diorama.glb",
+      "triangles": 2876,
+      "bytes": 268560,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "sacre-coeur.glb",
+      "triangles": 2584,
+      "bytes": 239936,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+[
+  {
+    "id": "eiffel-tower",
+    "name": "Eiffel Tower",
+    "page": "https://ecywang.com/pic/%E5%B7%B4%E9%BB%8E%E9%93%81%E5%A1%94%E9%AB%98%E6%B8%85%E5%9B%BE%E7%89%87/",
+    "image": "https://img.cc0.cn/pixabay/2019103117534242173.jpg%21860.jpg",
+    "file": "eiffel-tower-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Open four-legged iron silhouette, lower arches, latticework and two viewing platforms.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "arc-de-triomphe",
+    "name": "Arc de Triomphe",
+    "page": "https://stocksnap.io/photo/arcdetriomphe-paris-LF1VEWSTTZ",
+    "image": "https://cdn.stocksnap.io/img-thumbs/960w/Arc%20De%20Triomphe-paris_LF1VEWSTTZ.jpg",
+    "file": "arc-de-triomphe-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Grand open passage, broad masonry piers, relief panels and attic cornice.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "louvre",
+    "name": "Louvre & Pyramid",
+    "page": "https://blogs.oglobo.globo.com/lauro-jardim/post/louvre-e-o-museu-favorito-dos-brasileiros-no-exterior.html",
+    "image": "https://s2.glbimg.com/R4A5go6fDBO5cjHLE7NacjJ5nJ8%3D/640x424/i.glbimg.com/og/ig/infoglobo1/f/original/2018/09/28/62067226_inter_exclusivo_rio_de_janeiro_rj_10-10-2016_museu_do_louvre._foto_-_fernando_eichenberg.jpg",
+    "file": "louvre-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Opaque mint pyramid with geometric framing and abbreviated palace courtyard.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "notre-dame",
+    "name": "Notre-Dame",
+    "page": "https://commons.wikimedia.org/wiki/File%3ANotre-Dame_de_Paris_2013-07-24.jpg",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Notre-Dame_de_Paris_2013-07-24.jpg/1920px-Notre-Dame_de_Paris_2013-07-24.jpg",
+    "file": "notre-dame-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Twin flat-topped towers, rose window, three portals, gallery and flying buttresses.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "sacre-coeur",
+    "name": "Sacré-Cœur",
+    "page": "https://unsplash.com/s/photos/montmartre",
+    "image": "https://images.unsplash.com/photo-1603489243594-05229b860653?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8bW9udG1hcnRyZXxlbnwwfHwwfHx8MA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+    "file": "sacre-coeur-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Central tall white dome, flanking domes, rear campanile and entrance arcade.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "les-invalides",
+    "name": "Les Invalides",
+    "page": "https://www.carolsimonshuddleston.com/black-and-white",
+    "image": "https://images.squarespace-cdn.com/content/v1/575d843cf8baf38dc65285db/1466257895639-T435INKFP1MMDODQHA4R/Dome%2BDes%2BInvalides.jpg?format=2500w",
+    "file": "les-invalides-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Gilded ribbed dome, lantern and columned church front.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "pantheon-paris",
+    "name": "Panthéon",
+    "page": "https://www.pinterest.com/pin/neoclassicism-jacquesgermain-soufflot-panthon-saintegenevive-paris-france-17551792--519391769498029194/",
+    "image": "https://i.pinimg.com/originals/98/dd/ed/98ddede84171aeb77d01c66d409d9345.jpg",
+    "file": "pantheon-paris-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Classical portico, pediment, colonnaded drum and slate dome.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "palais-garnier",
+    "name": "Palais Garnier",
+    "page": "https://www.meisterdrucke.us/fine-art-prints/Charles-Garnier/1022565/View-of-the-facade-of-the-opera-theatre-realized-by-Charles-Garnier-in-1875-in-Paris.html",
+    "image": "https://www.meisterdrucke.us/kunstwerke/1000px/Charles_Garnier_-_View_of_the_facade_of_the_opera_theatre_realized_by_Charles_Garnier_%281825-1898%29_-_%28MeisterDrucke-1022565%29.jpg",
+    "file": "palais-garnier-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Columned opera facade, gilded rooftop figures and mint auditorium dome.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "centre-pompidou",
+    "name": "Centre Pompidou",
+    "page": "https://living.corriere.it/architettura/gallery/ove-arup-luomo-nellombra-dellarchitettura-foto/",
+    "image": "https://living.corriere.it/wp-content/uploads/2018/10/Exterior-view-of-Centre-Pompidou_France_Copyright-Ian-Dagnall_Alamy-Stock-Photo.jpg",
+    "file": "centre-pompidou-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Exposed structural grid, colored service pipes and diagonal escalator.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "moulin-rouge",
+    "name": "Moulin Rouge",
+    "page": "https://mymodernmet.com/moulin-rouge-history/",
+    "image": "https://mymodernmet.com/wp/wp-content/uploads/2020/02/moulin-rouge-history-2-741x1024.jpg",
+    "file": "moulin-rouge-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Red windmill, open lattice sails and named cabaret facade; an archival photograph informs the composition.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  }
+]

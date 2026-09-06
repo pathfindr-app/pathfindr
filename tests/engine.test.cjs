@@ -137,11 +137,11 @@ test('trace owns only tip-started strokes, batches movement, and undoes whole st
     };
     const env = environment('trace-input.js', {
         window: { addEventListener() {} }, localStorage: {getItem: () => 'trace', setItem() {}},
-        document: {querySelectorAll: () => buttons, getElementById: () => ({textContent:''})}
+        document: {addEventListener(){},querySelectorAll: () => buttons, getElementById: () => ({textContent:''})}
     });
     let nodes = 0, ends = [], starts = 0;
     const trace = env.api.PathfindrTrace;
-    trace.init({surface, canDraw: () => true, nearTip: p => p.x === 10,
+    trace.init({surface, canDraw: () => true, nearTip: p => p.x === 10,canResume:p=>p.x===60,
         snapshot: () => nodes, changed: saved => nodes !== saved,
         restore: saved => nodes = saved, begin: () => starts++, commit: () => { nodes++; return true; }, end: ok => ends.push(ok)});
     const event = (x, pointerId = 1) => ({clientX:x,clientY:10,button:0,pointerId,pointerType:'touch',preventDefault(){},stopImmediatePropagation(){}});
@@ -165,6 +165,22 @@ test('trace owns only tip-started strokes, batches movement, and undoes whole st
     handlers.pointerdown(event(10, 2));
     assert.equal(trace.active, false);
     assert.deepEqual(ends, [true,false]);
+    handlers.pointerdown(event(60));assert.equal(trace.active,true);assert.equal(nodes,1);
+    handlers.pointerup(event(60));assert.equal(trace.undo(),true);assert.equal(nodes,0);
+});
+
+test('assisted trace completion releases capture and ends once before pointer-up',()=>{
+    const handlers={},captures=new Set();let ended=0,done=false;
+    const env=environment('trace-input.js',{window:{addEventListener(){}},localStorage:{getItem:()=> 'trace'},
+        document:{addEventListener(){},querySelectorAll:()=>[],getElementById:()=>({textContent:''})}});
+    const surface={style:{},addEventListener:(k,f)=>handlers[k]=f,setPointerCapture:id=>captures.add(id),hasPointerCapture:id=>captures.has(id),releasePointerCapture:id=>captures.delete(id)};
+    const trace=env.api.PathfindrTrace;
+    trace.init({surface,canDraw:()=>true,nearTip:()=>true,snapshot:()=>0,changed:()=>true,begin(){},
+        commit(){done=true;return true;},tryFinish(){done=true;return true;},isFinished:()=>done,end(){ended++;}});
+    const event=x=>({clientX:x,clientY:0,button:0,pointerId:1,pointerType:'touch',preventDefault(){},stopImmediatePropagation(){}});
+    handlers.pointerdown(event(0));handlers.pointermove(event(2));env.tick(16);
+    assert.equal(trace.active,false);assert.equal(captures.size,0);assert.equal(ended,1);
+    handlers.pointerup(event(25));assert.equal(ended,1);
 });
 
 test('soundtrack attaches once, responds to real bins, and decays when muted', () => {
@@ -211,6 +227,14 @@ test('trace backtracking removes only a nearby contiguous tail', () => {
     assert.equal(api.PathfindrTrace.backtrack({x:34,y:0},path,project),false);
 });
 
+test('touch retracing erases a wider contiguous tail and can retain a partial road',()=>{
+    const {api}=environment('trace-input.js');const trace=api.PathfindrTrace;trace.pointerType='touch';
+    const path=[0,1,2,3,4],project=id=>({x:id*50,y:0});let fraction;
+    assert.equal(trace.backtrack({x:75,y:14},path,project,(a,b,t)=>{fraction=t;return 'partial';}),true);
+    assert.deepEqual(path,[0,1,'partial']);assert.equal(fraction,.5);
+    const remote=[0,1,2,3,4,5,6,7,8];assert.equal(trace.backtrack({x:0,y:0},remote,project),false);
+});
+
 test('OSM multipolygons join reversed segments and preserve islands as holes', () => {
     const {api}=environment('world-data.js');
     const geom=coords=>coords.map(([lon,lat])=>({lon,lat}));
@@ -255,6 +279,41 @@ test('collection is unique, persists locally, and never requires route mutation'
     assert.equal(written.counts.burger,1);
     assert.match(status.textContent,/collected/);
     assert.equal(api.PathfindrCollections.state().round.items.length,1);
+});
+
+test('library discovery uses real OSM features; sparks no longer spawn',()=>{
+    const {api}=environment('world-data.js');
+    const world=api.PathfindrWorldData.convert({elements:[{type:'node',id:42,lat:25,lon:-80,tags:{amenity:'library',name:'Main Library'}}]});
+    assert.equal(world.pois[0].type,'library');assert.equal(world.pois[0].name,'Main Library');
+    const {api:c}=environment('collections.js',{localStorage:{getItem:()=>null,setItem(){}},document:{body:{dataset:{gamePhase:'visualizing'}},getElementById:id=>id==='discovery-status'?{}:null}});
+    c.PathfindrCollections.setCity({lat:25,lng:-80},[{from:1,fromPos:{lat:25,lng:-80}}]);
+    assert.equal(c.PathfindrCollections.state().available.length,0);
+    c.PathfindrCollections.addPOIs(world.pois);
+    assert.equal(c.PathfindrCollections.state().available[0].type,'library');
+    c.PathfindrCollections.claim({...world.pois[0],key:'library:node/42'});
+    assert.equal(c.PathfindrCollections.state().counts.library,1);
+    assert.equal(c.PathfindrCollections.state().round.items[0].name,'Main Library');
+    c.PathfindrCollections.setChallenge([{key:'spark:old',type:'spark',pos:[-80,25]}]);
+    assert.equal(c.PathfindrCollections.state().available.length,0);
+});
+
+test('Visualizer blocks claims while Classic A* and Explorer retain pickups',()=>{
+    const GameState={gameMode:'visualizer'};
+    const {api}=environment('collections.js',{GameState,localStorage:{getItem:()=>null,setItem(){}},document:{body:{dataset:{gamePhase:'visualizing'}},getElementById:id=>id==='discovery-status'?{}:null}});
+    const c=api.PathfindrCollections,item={key:'library:mode',type:'library',name:'Library'};
+    assert.equal(c.claim(item),false);assert.equal(c.state().counts.library,0);
+    GameState.gameMode='competitive';assert.equal(c.claim(item),true);
+    GameState.gameMode='explorer';assert.equal(c.claim({...item,key:'library:explorer'}),true);
+});
+
+test('A* pickups survive into results, remain unique, and loading cannot collect',()=>{
+    const body={dataset:{gamePhase:'visualizing'}};
+    const {api}=environment('collections.js',{localStorage:{getItem:()=>null,setItem(){}},document:{body,getElementById:id=>id==='discovery-status'?{}:null}});
+    const c=api.PathfindrCollections,item={key:'spark:astar',type:'spark',name:'A* Spark'};c.beginRound(1);
+    assert.equal(c.claim(item),true);assert.equal(c.claim(item),false);
+    body.dataset.gamePhase='results';assert.equal(c.state().round.items.length,1);
+    body.dataset.gamePhase='loading';assert.equal(c.claim({...item,key:'spark:loading'}),false);
+    assert.equal(c.state().counts.spark,1);
 });
 
 test('round discoveries reset without changing lifetime totals; results pickups belong to current round',()=>{

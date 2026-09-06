@@ -7,7 +7,7 @@
     const number=(n,min,max)=>Number.isFinite(n)&&n>=min&&n<=max?n:fail();
     const point=p=>Array.isArray(p)&&p.length===2?[number(p[0],-180,180),number(p[1],-90,90)]:fail();
     const array=(a,max)=>Array.isArray(a)&&a.length<=max?a:fail();
-    function pickup(p){return {key:string(p.key),type:['spark','burger','landmark'].includes(p.type)?p.type:fail(),name:string(p.name),pos:point(p.pos),collectedAt:p.collectedAt?number(p.collectedAt,0,1e14):null};}
+    function pickup(p){return {key:string(p.key),type:['spark','burger','landmark','library'].includes(p.type)?p.type:fail(),name:string(p.name),pos:point(p.pos),collectedAt:p.collectedAt?number(p.collectedAt,0,1e14):null};}
     function validate(value){
         if(!value||value.v!==1||!['result','challenge'].includes(value.kind))fail();
         const maps=array(value.maps,5).map(m=>{

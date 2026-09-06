@@ -1,29 +1,45 @@
-/* A thumb-reachable instrument, not a second HUD. All movement is compositor-only. */
+/* Pathfindr route instrument: fixed muscle-memory positions, no idle animation loop. */
 #route-tools { display:none!important; }
-#mobile-options { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:44px; padding:8px 12px; border:1px solid #879d97; border-radius:12px; background:#22312f; color:#ecf3ef; cursor:pointer; }
+#mobile-options { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:44px; padding:8px 12px; border:1px solid #526278; border-radius:12px; background:#131d2c; color:#edf8ff; cursor:pointer; }
 #route-wheel { position:fixed; z-index:890; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:76px; height:76px; display:none; font-family:var(--font-sans-premium); }
 body[data-game-phase="playing"] #route-wheel { display:block; }
-#route-wheel button { cursor:pointer; font:600 12px var(--font-sans-premium); border:1px solid #879d97; color:#ecf3ef; background:#22312f; box-shadow:inset 0 1px 0 #ffffff26,0 5px 14px #10191870; }
-#route-wheel-toggle { width:76px; height:76px; border-radius:50%; display:grid; place-content:center; justify-items:center; gap:2px; position:relative; background:radial-gradient(circle at 35% 25%,#467066,#203c36 65%,#162b27)!important; border:2px solid #b9d8cb!important; }
-#route-wheel-toggle:before { content:''; position:absolute; inset:-6px; border:1px solid #8ccab970; border-radius:50%; pointer-events:none; }
-#route-wheel-toggle svg { width:30px; height:30px; transition:transform .28s ease; }
-#route-wheel.open #route-wheel-toggle svg { transform:rotate(90deg); }
+#route-wheel button { cursor:pointer; font:600 12px var(--font-sans-premium); border:1px solid #577089; color:#e4f6ff; background:#111a2bf5; box-shadow:inset 0 1px 0 #ffffff16,0 5px 16px #03071190; -webkit-tap-highlight-color:transparent; }
+#route-wheel-toggle { width:76px; height:76px; border-radius:26px; display:grid; place-content:center; justify-items:center; gap:3px; position:relative; background:radial-gradient(ellipse at top,#253956,#0d1525 75%)!important; border:1px solid #83e0ed!important; box-shadow:inset 0 -3px 0 #56d9e57a,0 0 24px #37dce42a,0 6px 20px #000b!important; }
+#route-wheel-toggle:before { content:''; position:absolute; inset:-5px; border:1px solid #8bdfe480; border-right:2px solid #fb8197; border-left:2px solid #79e7f3; border-radius:31px; transition:opacity .3s ease; pointer-events:none; }
+#route-wheel-toggle:after { content:''; position:absolute; top:-3px; width:20px; height:3px; border-radius:2px; background:#ff8d9e; box-shadow:0 0 9px #ff7694; }
+#route-wheel-toggle span { font:600 9px var(--font-mono,monospace); text-transform:uppercase; letter-spacing:2px; padding-left:2px; }
+#route-wheel-toggle svg { width:31px; height:31px; color:#99f1f5; transition:transform .6s cubic-bezier(.18,.9,.22,1.22); }
+#route-wheel.open #route-wheel-toggle svg { transform:rotate(180deg); color:#ff9aae; }
+#route-wheel.open #route-wheel-toggle:before { animation:route-lock-on .65s ease-out both; }
+#route-wheel-toggle:active { transform:scale(.96); }
+@keyframes route-lock-on { 0% { opacity:.35; transform:scale(.96); } 45% { opacity:1; transform:scale(1.08); } 100% { opacity:1; transform:scale(1); } }
+@keyframes route-grid-energize { 0% { opacity:0; } 35% { opacity:1; } 100% { opacity:.42; } }
 #route-wheel svg { fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+#route-wheel .route-orbit-grid { position:absolute; width:300px; height:260px; left:-112px; bottom:8px; color:#70d7e5; opacity:0; transform:translateY(20px) scale(.88); transform-origin:50% 100%; transition:opacity .2s,transform .32s; pointer-events:none; background:radial-gradient(ellipse at 50% 85%,#081120c9,transparent 72%); }
+#route-wheel.open .route-orbit-grid { opacity:1; transform:translateY(0) scale(1); }
+.orbit-track { stroke-width:1; opacity:.42; }
+#route-wheel.open .orbit-track { animation:route-grid-energize .65s ease-out both; }
+.orbit-ticks { stroke-width:2; opacity:.65; }
+.orbit-link { stroke:#ff8da7; stroke-width:1; stroke-dasharray:2 7; opacity:.3; }
 .route-orbit { position:absolute; inset:0; pointer-events:none; }
-#route-wheel .orbit-action { position:absolute!important; left:0; top:0; width:76px!important; height:64px; min-height:64px; margin:0!important; padding:7px 3px!important; border-radius:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; opacity:0; visibility:hidden; transform:translate(0,0) scale(.45); transition:transform .3s cubic-bezier(.2,.85,.25,1.15),opacity .18s,visibility .3s; pointer-events:none; }
-#route-wheel .orbit-action svg { width:22px; height:22px; }
-#route-wheel.open .orbit-action { opacity:1; visibility:visible; transform:translate(var(--x),var(--y)) scale(1); pointer-events:auto; transition-delay:calc(var(--slot)*20ms); }
+#route-wheel .orbit-action { position:absolute!important; left:0; top:0; width:76px!important; height:64px; min-height:64px; margin:0!important; padding:7px 3px!important; border-radius:10px 20px 10px 20px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; opacity:0; visibility:hidden; transform:translate(0,0) scale(.45); transition:transform .3s cubic-bezier(.2,.85,.25,1.1),opacity .18s,visibility .3s; pointer-events:none; }
+#route-wheel .orbit-action:after { content:''; position:absolute; bottom:0; height:2px; width:20px; background:#5e91a5; border-radius:2px; }
+#route-wheel .orbit-action svg { width:22px; height:22px; color:#99cadc; }
+#route-wheel.open .orbit-action { opacity:1; visibility:visible; transform:translate(var(--x),var(--y)) scale(1); pointer-events:auto; transition-duration:.42s,.2s,.42s; transition-delay:calc(var(--pair)*38ms); }
 .orbit-action:nth-child(1) { --x:-106px; --y:-16px; }
 .orbit-action:nth-child(2) { --x:-104px; --y:-96px; }
 .orbit-action:nth-child(3) { --x:-44px; --y:-171px; }
 .orbit-action:nth-child(4) { --x:44px; --y:-171px; }
 .orbit-action:nth-child(5) { --x:104px; --y:-96px; }
 .orbit-action:nth-child(6) { --x:106px; --y:-16px; }
-#route-wheel .orbit-action[aria-pressed=true] { color:#152e25; background:#b5d9cc; border:2px solid #e1f6ed; }
-#route-wheel .confirm { background:#edce98; color:#332613; }
-#route-wheel button:focus-visible { outline:3px solid #f4ca89; outline-offset:4px; }
+#route-wheel .orbit-action[aria-pressed=true] { color:#fff2f5; background:linear-gradient(140deg,#543041,#231d34); border-color:#ff96ac; box-shadow:inset 0 0 18px #fa6b9122,0 0 15px #f3779c33; }
+#route-wheel .orbit-action[aria-pressed=true] svg { color:#ffb8c6; }
+#route-wheel .orbit-action[aria-pressed=true]:after { background:#ff9cb3; box-shadow:0 0 8px #f8759d; }
+#route-wheel .confirm { background:#563b22; border-color:#ffd38e; color:#ffdda7; }
+#route-wheel button:focus-visible { outline:3px solid #b5f7ff; outline-offset:4px; }
 #route-wheel button:disabled { opacity:.6; cursor:wait; }
-#route-wheel-status { position:absolute; bottom:260px; left:50%; transform:translateX(-50%); width:min(310px,90vw); padding:12px 16px; background:#233430; color:#f1f5f3; border:1px solid #9bb8ac; border-radius:12px; font-size:13px; line-height:1.5; text-align:center; }
+@media(hover:hover){#route-wheel .orbit-action:hover { border-color:#a7edf6; background:#26394c; } }
+#route-wheel-status { position:absolute; bottom:260px; left:50%; transform:translateX(-50%); width:min(310px,90vw); box-sizing:border-box; padding:12px 16px; background:#111b2af7; color:#f1f5ff; border:1px solid #a07a87; border-left:3px solid #ff98ae; border-radius:10px; font-size:13px; line-height:1.5; text-align:center; }
 #route-wheel-status:empty { display:none; }
 #assisted-result { color:#f4ca89; font:600 13px var(--font-sans-premium); margin:0 0 10px; }
-@media(prefers-reduced-motion:reduce){#route-wheel * { transition:none!important; }}
+@media(prefers-reduced-motion:reduce){#route-wheel *,#route-wheel *:before,#route-wheel *:after { transition:none!important; animation:none!important; }}

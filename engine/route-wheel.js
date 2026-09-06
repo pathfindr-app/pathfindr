@@ -2,7 +2,7 @@
 (() => {
     function init(){
         const wheel=document.createElement('section');wheel.id='route-wheel';wheel.setAttribute('aria-label','Route actions');
-        wheel.innerHTML='<div class="route-orbit" id="route-orbit" inert></div><button type="button" id="route-wheel-toggle" aria-expanded="false" aria-controls="route-orbit"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 24V10h16v14H8m0-7h16M16 10v14"/><circle cx="8" cy="10" r="3"/><circle cx="24" cy="24" r="3"/></svg><span>Route</span></button><p id="route-wheel-status" role="status"></p>';
+        wheel.innerHTML='<svg class="route-orbit-grid" viewBox="0 0 300 260" aria-hidden="true"><path class="orbit-track" d="M31 212V128L108 48h84l77 80v84"/><path class="orbit-ticks" d="M26 190h10m-10-40h10m40-68 8 8m36-46v10m60-10v10m44 28-8 8m48 60h10m-10 40h10"/><path class="orbit-link" d="m42 220 108 22 108-22M150 242V66"/></svg><div class="route-orbit" id="route-orbit" inert></div><button type="button" id="route-wheel-toggle" aria-label="Route actions" aria-expanded="false" aria-controls="route-orbit"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 4 10 23-10-6-10 6Z"/><path d="M16 10v11"/><circle cx="16" cy="16" r="14" stroke-dasharray="2 9"/></svg><span>Route</span></button><p id="route-wheel-status" role="status"></p>';
         document.body.append(wheel);
         const orbit=wheel.querySelector('.route-orbit'),toggle=wheel.querySelector('#route-wheel-toggle'),status=wheel.querySelector('[role=status]');
         const skip=document.createElement('button');skip.id='route-finish-btn';skip.type='button';skip.textContent='Finish';
@@ -16,7 +16,7 @@
             const label=button.textContent.trim();button.replaceChildren();
             button.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icons[i]}"/></svg><span></span>`;
             button.querySelector('span').textContent=label;
-            button.classList.add('orbit-action');button.style.setProperty('--slot',i);orbit.append(button);
+            button.classList.add('orbit-action');button.style.setProperty('--pair',[2,1,0,0,1,2][i]);orbit.append(button);
             if(button!==skip)button.addEventListener('click',()=>{setOpen(false,true);});
         });
         toggle.onclick=()=>setOpen(!wheel.classList.contains('open'));

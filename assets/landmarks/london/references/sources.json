@@ -1,0 +1,102 @@
+[
+  {
+    "id": "big-ben",
+    "name": "Big Ben",
+    "page": "https://en.wikipedia.org/wiki/Big_Ben",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Elizabeth_Tower_and_the_north_front_of_the_Palace_of_Westminster%2C_London.jpg/960px-Elizabeth_Tower_and_the_north_front_of_the_Palace_of_Westminster%2C_London.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "big-ben.jpg",
+    "downloaded": true,
+    "observedFeatures": "Four clock faces, ribbed sandstone shaft, tiered slate spire and abbreviated Parliament wing.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "tower-bridge",
+    "name": "Tower Bridge",
+    "page": "https://en.wikipedia.org/wiki/Tower_Bridge",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Tower_Bridge_at_Dawn.jpg/960px-Tower_Bridge_at_Dawn.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "tower-bridge.jpg",
+    "downloaded": true,
+    "observedFeatures": "Twin Gothic towers, true roadway passages, high walkways and blue suspension chains.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "london-eye",
+    "name": "London Eye",
+    "page": "https://en.wikipedia.org/wiki/London_Eye",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/London-Eye-2009.JPG/960px-London-Eye-2009.JPG?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "london-eye.JPG",
+    "downloaded": true,
+    "observedFeatures": "Open wheel, 32 simplified passenger capsules and A-frame supports.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "st-pauls",
+    "name": "St Paul’s Cathedral",
+    "page": "https://en.wikipedia.org/wiki/St_Paul%27s_Cathedral",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/St_Pauls_aerial_%28cropped%29.jpg/960px-St_Pauls_aerial_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "st-pauls.jpg",
+    "downloaded": true,
+    "observedFeatures": "Lead dome on a colonnaded drum, twin west towers and two-level portico.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "buckingham-palace",
+    "name": "Buckingham Palace",
+    "page": "https://www.futura-sciences.com/sciences/questions-reponses/histoire-buckingham-palace-pieces-contient-palais-famille-royale-5270/",
+    "image": "https://cdn.futura-sciences.com/buildsv6/images/largeoriginal/e/5/7/e57433c75a_118393_buckingham-palace-londres.jpg",
+    "file": "buckingham-palace-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Long symmetric palace facade, projecting pavilions, balcony and Victoria Memorial.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "tower-of-london",
+    "name": "Tower of London",
+    "page": "https://www.londontopsightstours.com/a-quick-visit-london-must-dos-when-time-is-limited/",
+    "image": "https://media.timeout.com/images/104085808/image.jpg",
+    "file": "tower-of-london-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "White Tower keep with four capped corner turrets inside a curtain wall.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "westminster-abbey",
+    "name": "Westminster Abbey",
+    "page": "https://en.wikipedia.org/wiki/Westminster_Abbey",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Westminster_Abbey%2C_Westminster.jpg/960px-Westminster_Abbey%2C_Westminster.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "westminster-abbey.jpg",
+    "downloaded": true,
+    "observedFeatures": "Twin west towers, lancets, clocks, long nave and flying buttresses.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "the-shard",
+    "name": "The Shard",
+    "page": "https://www.mrsmithworldphotography.com/photograph-of-Shard-6-London-England/WOF_M038_0034",
+    "image": "https://www.mrsmithworldphotography.com/photos/Shard-6.jpg",
+    "file": "the-shard-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Tapering glass shards with uneven tips and horizontal floor lines.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "the-gherkin",
+    "name": "The Gherkin",
+    "page": "https://www.timeout.com/london/attractions/the-gherkin",
+    "image": "https://media.timeout.com/images/101664149/image.jpg",
+    "file": "the-gherkin-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Rounded tower silhouette with diagonal grid and spiral dark glass bands.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "british-museum",
+    "name": "British Museum",
+    "page": "https://en.wikipedia.org/wiki/British_Museum",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/British_Museum_%28aerial%29.jpg/960px-British_Museum_%28aerial%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "british-museum.jpg",
+    "downloaded": true,
+    "observedFeatures": "Columned classical entrance, triangular pediment and abbreviated Great Court canopy.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  }
+]

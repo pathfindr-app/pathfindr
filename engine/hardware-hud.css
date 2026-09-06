@@ -1,0 +1,51 @@
+/* Slim opaque housing. The depth is static CSS, not another rendering loop. */
+.lcd-numerals { display:none; }
+@media(max-width:700px){
+ #gameplay-hud {
+  --lcd:#ffd082; top:0; left:0; right:0; min-height:96px; padding:calc(10px + env(safe-area-inset-top)) 12px 12px 17px;
+  grid-template-columns:minmax(0,1fr) 54px; grid-template-rows:32px 40px; gap:0 20px;
+  background:linear-gradient(130deg,#364351 0%,#172230 14%,#131e2b 85%,#32414e); border:1px solid #657a89; border-top:0; border-radius:0 0 17px 17px;
+  box-shadow:inset 0 -3px #0b1420,inset 0 -4px #556d7d,0 3px 0 #07121c,0 5px 14px #07101d66;
+  isolation:isolate; backdrop-filter:none; -webkit-backdrop-filter:none;
+ }
+ #gameplay-hud::before {
+  content:''; display:block!important; inset:calc(8px + env(safe-area-inset-top)) 76px 11px 8px; height:auto; z-index:-1;
+  border:1px solid #9c6f35; border-radius:10px;
+  background:linear-gradient(115deg,#b2833420,transparent 42%),linear-gradient(#31261a,#191e1c 55%,#2d251a);
+  box-shadow:inset 0 2px 5px #090e15,inset 0 0 0 2px #171b1b,inset 0 -1px #b5833b88,0 0 0 3px #0e1822,0 0 0 4px #56606a66;
+ }
+ #gameplay-hud::after { content:''; display:block!important; left:18px; right:18px; bottom:2px; height:3px; background:repeating-linear-gradient(90deg,#b88b4a99 0 1px,transparent 1px 13px); }
+ #gameplay-hud .hud-location { align-self:stretch; display:flex; align-items:center; min-width:0; padding-right:4px; }
+ #gameplay-hud .location-display { min-height:32px; width:100%; gap:6px; }
+ #gameplay-hud .location-icon { display:block; width:14px; height:17px; flex-shrink:0; color:#ffc572; }
+ #gameplay-hud #current-location { color:var(--lcd); font:500 13px 'IBM Plex Mono',monospace; letter-spacing:.01em; text-transform:uppercase; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; text-shadow:0 0 5px #eeb65b44; }
+ #gameplay-hud .search-icon { width:12px; height:12px; color:#dba962; flex-shrink:0; }
+ #gameplay-hud .hud-stats { display:flex!important; align-self:stretch; align-items:center; gap:0; justify-content:space-between; padding:0 5px 0 0; border-top:1px solid #b9905433; }
+ #gameplay-hud .hud-stat { position:relative; display:flex!important; flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; padding:0 6px; border-left:1px solid #b9905433; }
+ #gameplay-hud .hud-stat:first-child { padding-left:0; border-left:0; }
+ #gameplay-hud #stat-distance { display:flex!important; }
+ #gameplay-hud .hud-label { color:#e0b674; font:400 7px 'IBM Plex Mono',monospace; letter-spacing:.12em; text-transform:uppercase; }
+ #gameplay-hud .lcd-source { position:absolute!important; width:1px!important; height:1px!important; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+ #gameplay-hud .lcd-numerals { display:flex; align-items:baseline; height:20px; color:var(--lcd); gap:1px; }
+ .lcd-digit { width:11px; height:20px; overflow:visible; }
+ .lcd-digit .lit { fill:currentColor; }
+ .lcd-digit .unlit { fill:#cfa158; opacity:.09; }
+ .lcd-dot { width:3px; height:20px; }
+ .lcd-slash { width:6px; height:20px; opacity:.65; }
+ .lcd-unit { font:8px 'IBM Plex Mono',monospace; color:#d4ac6e; }
+ #gameplay-hud #mobile-options { position:relative; width:54px; min-width:54px; height:64px; min-height:64px; padding:7px 4px; gap:6px; border:1px solid #81909d; border-radius:10px; background:linear-gradient(#37414e,#192331 65%,#111d2b); color:#ffd38d; box-shadow:inset 0 1px #d1d9d955,inset 0 -3px #0a1520,0 0 0 3px #0d1722; font:9px 'IBM Plex Mono',monospace; letter-spacing:.03em; }
+ #gameplay-hud #mobile-options::before { content:''; position:absolute; right:5px; top:5px; width:3px; height:3px; border-radius:50%; background:#8bedf3; box-shadow:0 0 4px #63dbe988; }
+ #gameplay-hud #mobile-options svg { width:24px; height:24px; }
+ #gameplay-hud #mobile-options:active { transform:translateY(2px); }
+ #route-identity-legend { top:calc(104px + env(safe-area-inset-top)); }
+ #gameplay-hud .location-search-inline { width:100%; }
+ #gameplay-hud .inline-search-input { min-width:0; width:100%; font-size:14px; color:#ffd083; background:#1b211f; }
+ body.mode-visualizer #gameplay-hud #stat-distance,body.mode-visualizer #gameplay-hud #stat-score { display:none!important; }
+}
+@media(max-width:360px){
+ #gameplay-hud { padding-left:14px; gap:0 16px; }
+ #gameplay-hud #current-location { font-size:11px; }
+ #gameplay-hud .hud-stat { padding-right:3px; padding-left:4px; }
+ .lcd-digit { width:9px; }
+ #gameplay-hud .hud-label { font-size:6.5px; }
+}

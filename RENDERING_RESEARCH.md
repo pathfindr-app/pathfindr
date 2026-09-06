@@ -1,5 +1,15 @@
 # Living-city rendering research and implementation
 
+## Quiet building surfaces (.27)
+
+Follow the existing [MapLibre custom-layer depth contract](https://maplibre.org/maplibre-gl-js/docs/API/interfaces/CustomLayerInterface/) and [Three ShaderMaterial uniforms](https://threejs.org/docs/pages/ShaderMaterial.html). Roof caps are triangulated once and batched; elevated surfaces share the existing context/depth buffer. A second batched wall material is skipped top-down. Both use broad bounded sine sheen rather than dense textures, window grids, particles or extra reflection passes. Initial anti-aliased panel/window prototypes were removed after user feedback about noise. No external texture requests or per-building draw calls. Rooftop colors are decorative, not semantic OSM classification. Ambient road overlays fade out by 25° pitch; active gameplay routes remain deliberate screen overlays, not depth-occluded geometry.
+
+## Reflective neon water (.23)
+
+GPU Gems chapter 1 informed the six analytical wave derivatives and Fresnel response. New broad, low-frequency swells distort an analytic night environment with cyan/coral area-light lobes. An artistic reflectance floor keeps the effect visible at top-down gameplay angles. These are NOT scene/building reflections, SSR, a fluid simulation, or measured bathymetry. Glints broaden with pixel footprint; fine emissive filaments attenuate at distant zoom. Balanced quality uses four waves instead of six. One previous four-octave noise evaluation was removed; no extra render target, texture download, geometry displacement or reflection scene pass was added. Real-device GPU performance remains to be measured.
+
+Miami's original dataset lacked coastline ways, leaving Biscayne Bay unshaded. Pinned `miami-coastline-source.json` was retrieved from Overpass Kumi using `way[natural=coastline](25.74,-80.22,25.81,-80.15);out geom`. `scripts/build-miami-coast.py` (Shapely 2.x, offline regeneration only) polygonizes the clipped coastline and classifies faces using OSM's land-left/water-right convention: https://wiki.openstreetmap.org/wiki/Tag:natural%3Dcoastline . Output `miami-coastal-water.json` preserves island holes and is included by the ordinary Node build, which needs neither Shapely nor network access. Source timestamp/ODbL attribution retained. Tidal coast is not assigned a fictitious downstream river flow. This coverage fix is Miami-specific; the material upgrade is shared by all modes/cities with water polygons.
+
 ## References consulted before implementation
 
 - [Blender Eevee 4.2 migration](https://developer.blender.org/docs/release_notes/4.2/eevee_migration/): emission and bloom are distinct; bloom moved to the compositor. Target a sharp core plus broad optical halo, not uniformly blurred geometry.
@@ -38,3 +48,8 @@ Real-device GPU/battery profiling is still required before a fidelity/performanc
 - River direction is currently one nearest-centerline direction per polygon, not a curved flow field. Tidal areas use wind ripples only.
 - Search expands over 2.3–5.2 seconds at normal speed; the final distance-weighted route draws in 1.15 seconds, followed by 2.2 seconds of settling. Atmospheric rings are decorative, while street ignition follows actual A* relaxation events.
 - Recap uses source-over colored filaments, soft halos and traveling charge, avoiding additive white clipping. Park shader reserved-word compilation failure found in browser testing and corrected (`patchiness`).
+# City instrument .24: building façades
+
+Superseded in .26 after user feedback: removed the window atlas and extra roof-cap extrusion. Top-down readability takes priority: stable OSM-ID decorative tints, a thin footprint line batch that fades at tilted camera angles, and the existing plain extrusion when viewed in 3D. No texture sampling or roof-cap duplication. Palette does not encode real building uses.
+
+MapLibre's [fill-extrusion pattern specification](https://maplibre.org/maplibre-style-spec/layers/#fill-extrusion-pattern) supports power-of-two sprite images and disables the plain extrusion color while a pattern is set. We use one immutable 64×32 RGBA window tile, shared by all footprints, plus a shallow plain roof-cap batch to avoid windows on roofs. Low quality disables the pattern and extra roof layer. This is stylized window lighting, not physically emissive windows or a new reflection pass. Both layers are opaque to avoid the previous translucent building compositing path. Real-device frame-time profiling is still required.

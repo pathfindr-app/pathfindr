@@ -1,0 +1,102 @@
+[
+  {
+    "id": "colosseum",
+    "name": "Colosseum",
+    "page": "https://pt.thechurchnews.com/fe-viva/2023/10/23/23925494/vem-segue-me-23-29-outubro-1-2-timoteo-tito-filemom/",
+    "image": "https://pt.thechurchnews.com/resizer/v2/GU2XBHLB5GHTKSIV24SDOTQDEQ.jpg?auth=e8d961a88c2a77a072c54f4a48da180bbdae4647855a6848ef4bb13ad548efa7&focal=1020%2C711&height=557&width=800",
+    "file": "colosseum-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Elliptical arena, true arcade openings, concentric seating and partially surviving upper wall.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "pantheon-rome",
+    "name": "Pantheon",
+    "page": "https://seuso.mnm.hu/hu/a-seuso-kincs/kronologia/pantheon",
+    "image": "https://seuso.mnm.hu/sites/default/files/image/2019-11/profimedia-0171478062.jpg",
+    "file": "pantheon-rome-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Brick rotunda, shallow concrete dome with open oculus and columned portico.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "trevi-fountain",
+    "name": "Trevi Fountain",
+    "page": "https://en.wikipedia.org/wiki/Trevi_Fountain",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Trevi_Fountain_-_Roma.jpg/960px-Trevi_Fountain_-_Roma.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+    "file": "trevi-fountain.jpg",
+    "downloaded": true,
+    "observedFeatures": "Palazzo facade, central grotto sculpture and broad mint fountain basin.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "spanish-steps",
+    "name": "Spanish Steps",
+    "page": "https://ebrary.net/143976/sociology/space_light_allegiance_piazza_spagna_seventeenth_century",
+    "image": "https://ebrary.net/htm/img/23/1253/1.png",
+    "file": "spanish-steps-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Sweeping lower flight, divided central flights, twin church towers and obelisk; archival reference.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "castel-sant-angelo",
+    "name": "Castel Sant’Angelo",
+    "page": "https://imperioromanodexaviervalderas.blogspot.com/2015/05/mausoleo-de-adriano.html",
+    "image": "https://1.bp.blogspot.com/-ZRquqeEOd_I/U-PnowKS3XI/AAAAAAAAYXg/JxTKYCMJAAs/s1600/MAUSOLEO%2BDE%2BADRIANO%2B%2BEN%2BEL%2BBLOG%2BIMPERIO%2BROMANO%2BDE%2BXAVIER%2BVALDERAS%2C%2BMINUSV%C3%81LIDOS%2BEN%2BLIBERTAD.jpg",
+    "file": "castel-sant-angelo-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Cylindrical mausoleum, battlements, papal apartments, angel and short bridge approach.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "st-peters",
+    "name": "St Peter’s · Vatican City",
+    "page": "https://entertainment.howstuffworks.com/arts/artwork/st-peters-basilica.htm",
+    "image": "https://cdn.hswstatic.com/gif/st-peters-basilica-7.jpg",
+    "file": "st-peters-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Broad facade, dome, saints, obelisk and two open colonnade arms. This landmark is in Vatican City.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "roman-forum",
+    "name": "Roman Forum",
+    "page": "https://www.stilus.nl/oudheid/wdo/ROME/FORUM/SATURN.html",
+    "image": "https://www.stilus.nl/oudheid/wdo/ROME/FORUM/PLAATJES/SATURN.jpg",
+    "file": "roman-forum-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "The Temple of Saturn represents the Roman Forum: surviving columns, entablature, podium and fallen masonry.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "vittoriano",
+    "name": "Vittoriano",
+    "page": "https://www.italia.it/es/lacio/roma/plaza-venecia",
+    "image": "https://www.italia.it/content/dam/tdh/es/destinations/lazio/roma/piazza-venezia/media/20220426095201-piazza-venezia-roma-lazio-shutterstock-340381193.jpg",
+    "file": "vittoriano-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "White stepped monument, curved colonnade, equestrian figure and abbreviated rooftop quadriga pavilions.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "piazza-navona",
+    "name": "Piazza Navona",
+    "page": "https://www.pictorem.com/2583125/fountain-of-the-four-rivers-in-piazza-navona-rome-italy/",
+    "image": "https://www.pictorem.com/uploads/collection/I/IL10ENF8UHN/900_Marco-Brivio_606232_ROMA_00563.jpg",
+    "file": "piazza-navona-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Fountain of the Four Rivers represents Piazza Navona: rock, four abstract figures, obelisk and basin.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  },
+  {
+    "id": "pyramid-cestius",
+    "name": "Pyramid of Cestius",
+    "page": "https://www.porconocer.com/italia/la-tumba-de-caio-cestio-una-piramide-en-roma.html",
+    "image": "https://i.bssl.es/porconocer/2013/04/PiramideCestia.jpg",
+    "file": "pyramid-cestius-photo.jpg",
+    "downloaded": true,
+    "observedFeatures": "Steep marble pyramid, sparse masonry courses and abbreviated adjoining Aurelian wall.",
+    "use": "Visual modeling reference; photo pixels are not used in asset textures."
+  }
+]

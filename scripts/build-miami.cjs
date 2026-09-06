@@ -4,6 +4,9 @@ const root=path.join(__dirname,'..'),source=fs.readFileSync(path.join(root,'data
 const raw=JSON.parse(source);if(raw.remark||!raw.elements?.length)throw Error('Incomplete Miami source');
 const sandbox={window:{}};vm.runInNewContext(fs.readFileSync(path.join(root,'engine/world-data.js'),'utf8'),sandbox);
 const world=sandbox.window.PathfindrWorldData.convert(raw);
+const coast=JSON.parse(fs.readFileSync(path.join(root,'data/cities/miami-coastal-water.json'),'utf8'));
+const polygons=coast.geometry.type==='Polygon'?[coast.geometry.coordinates]:coast.geometry.coordinates;
+polygons.forEach((rings,i)=>world.surfaces.push({id:`miami-coast/${i}`,kind:'water',tags:{natural:'water',water:'sea',tidal:'yes'},rings}));
 vm.runInNewContext(fs.readFileSync(path.join(root,'engine/place-data.js'),'utf8'),sandbox);
 const bounds=[-80.210,25.755,-80.175,25.797];
 const inside=p=>p&&p[0]>=bounds[0]&&p[0]<=bounds[2]&&p[1]>=bounds[1]&&p[1]<=bounds[3];

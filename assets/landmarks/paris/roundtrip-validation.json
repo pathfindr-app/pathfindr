@@ -1,0 +1,102 @@
+[
+  {
+    "file": "arc-de-triomphe-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "arc-de-triomphe.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "centre-pompidou-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "centre-pompidou.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "eiffel-tower-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "eiffel-tower.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "les-invalides-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "les-invalides.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "louvre-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "louvre.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "moulin-rouge-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "moulin-rouge.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "notre-dame-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "notre-dame.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "palais-garnier-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "palais-garnier.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pantheon-paris-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pantheon-paris.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "sacre-coeur-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "sacre-coeur.glb",
+    "imported": true,
+    "embeddedTexture": true
+  }
+]

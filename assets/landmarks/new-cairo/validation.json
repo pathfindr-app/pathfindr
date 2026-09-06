@@ -1,0 +1,245 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "auc-new-cairo-diorama.glb",
+      "triangles": 2906,
+      "bytes": 280904,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "auc-new-cairo.glb",
+      "triangles": 1834,
+      "bytes": 180760,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "cairo-festival-city-diorama.glb",
+      "triangles": 3532,
+      "bytes": 330500,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "cairo-festival-city.glb",
+      "triangles": 2460,
+      "bytes": 191368,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "dusit-thani-diorama.glb",
+      "triangles": 2148,
+      "bytes": 212920,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "dusit-thani.glb",
+      "triangles": 1076,
+      "bytes": 112756,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "german-university-diorama.glb",
+      "triangles": 2500,
+      "bytes": 242396,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "german-university.glb",
+      "triangles": 1428,
+      "bytes": 119636,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "hassan-sharbatly-mosque-diorama.glb",
+      "triangles": 4406,
+      "bytes": 380080,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "hassan-sharbatly-mosque.glb",
+      "triangles": 3334,
+      "bytes": 279868,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "katameya-heights-diorama.glb",
+      "triangles": 2359,
+      "bytes": 222708,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "katameya-heights.glb",
+      "triangles": 1287,
+      "bytes": 122576,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "mosheer-tantawy-mosque-diorama.glb",
+      "triangles": 3699,
+      "bytes": 334516,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "mosheer-tantawy-mosque.glb",
+      "triangles": 2627,
+      "bytes": 234368,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "petrosport-stadium-diorama.glb",
+      "triangles": 2756,
+      "bytes": 266972,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "petrosport-stadium.glb",
+      "triangles": 1684,
+      "bytes": 139608,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "point-90-diorama.glb",
+      "triangles": 2380,
+      "bytes": 232228,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "point-90.glb",
+      "triangles": 1308,
+      "bytes": 132096,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "white-waterway-diorama.glb",
+      "triangles": 2100,
+      "bytes": 212152,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "white-waterway.glb",
+      "triangles": 1028,
+      "bytes": 94960,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    }
+  ]
+}

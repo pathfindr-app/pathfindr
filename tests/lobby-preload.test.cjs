@@ -20,23 +20,35 @@ test('consumed city is replenished immediately without a lobby visit, unused cit
     let calls=0;const p=create({city:async mode=>({name:mode+(++calls)}),roads:async()=>data,details:async()=>{}});
     p.warm();const first=await p.take('us');assert.equal(calls,3);const second=await p.take('us');assert.notEqual(first.city.name,second.city.name);assert.equal(calls,4);
 });
-test('bundled reserve returns without waiting on a slow network; replacement remains in flight',async()=>{
-    let finish,calls=0;const p=create({seed:()=>({city:{name:'Miami'},data}),city:()=>{calls++;return new Promise(r=>finish=r);},roads:async()=>data,details:async()=>{}});
-    assert.equal((await p.take('us')).city.name,'Miami');assert.equal(calls,1);
-    finish({name:'Denver'});await new Promise(setImmediate);
-    assert.equal((await p.take('us')).city.name,'Denver');assert.equal(calls,2);
+test('restored random reserve is single-use while its fresh replacement loads',async()=>{
+    let finish,calls=0;const p=create({restore:()=>({city:{name:'Seattle'},data}),city:()=>{calls++;return new Promise(r=>finish=r);},roads:async()=>data,details:async()=>{}});
+    p.warm();await new Promise(setImmediate);
+    assert.equal((await p.take('global')).city.name,'Seattle');
+    let returned=false;const next=p.take('global').then(value=>{returned=true;return value;});
+    await new Promise(setImmediate);assert.equal(returned,false);
+    finish({name:'Paris'});assert.equal((await next).city.name,'Paris');
+    assert.equal(calls,3);
 });
 test('persisted reserve restores on reload and fresh preparation is saved',async()=>{
     const saved=[];let finish;
-    const p=create({seed:()=>({city:{name:'Miami'},data}),restore:async()=>({city:{name:'London'},data}),save:(mode,value)=>saved.push(value.city.name),city:()=>new Promise(r=>finish=r),roads:async()=>data,details:async()=>{}});
+    const p=create({restore:async()=>({city:{name:'London'},data}),save:(mode,value)=>saved.push(value.city.name),city:()=>new Promise(r=>finish=r),roads:async()=>data,details:async()=>{}});
     p.warm();await new Promise(setImmediate);assert.equal(p.state().global.city,'London');
     finish({name:'Paris'});await new Promise(setImmediate);assert.deepEqual(saved,['Paris']);
 });
-test('roads alone never replace the complete fallback while scenery is pending or fails',async()=>{
-    let rejectDetails;const p=create({seed:()=>({city:{name:'Miami'},data}),city:async()=>({name:'Incomplete'}),roads:async()=>data,details:()=>new Promise((resolve,reject)=>rejectDetails=reject)});
-    p.warm();await new Promise(setImmediate);assert.equal((await p.take('global')).city.name,'Miami');
-    rejectDetails(Error('details offline'));await new Promise(setImmediate);
-    assert.equal((await p.take('global')).city.name,'Miami');
+test('optional scenery failure keeps the chosen city, never substitutes Miami',async()=>{
+    const p=create({city:async()=>({name:'Denver'}),roads:async()=>data,details:async()=>{throw Error('offline');}});
+    const result=await p.take('us');assert.equal(result.city.name,'Denver');assert.equal(result.data,data);assert.equal(result.scene,null);
+});
+test('production random modes have no Miami seed or legacy pack reserve',()=>{
+    const src=fs.readFileSync('game.js','utf8').split('function getLobbyCityPreparation(){')[1].split('function scheduleLobbyCityPreparation')[0];
+    assert.doesNotMatch(src,/seed:|CityPacks/);assert.match(src,/lobby-reserve-v3/);assert.match(src,/saved.city\?\.packId/);
+});
+test('failed replacement cannot replay an already consumed restored city',async()=>{
+    let fail;const p=create({restore:async()=>({city:{name:'Seattle'},data}),city:async()=>({name:'Denver'}),roads:()=>new Promise((resolve,reject)=>fail=reject),details:async()=>{}});
+    p.warm();await new Promise(setImmediate);
+    assert.equal((await p.take('global')).city.name,'Seattle');
+    const replacement=p.take('global');fail(Error('offline'));
+    const next=await replacement;assert.equal(next.city.name,'Denver');assert.equal(next.data,null);
 });
 test('mode entry paths use the shared scene loader and visualizer consumes reserves',()=>{
     const src=fs.readFileSync('game.js','utf8');

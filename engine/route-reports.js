@@ -13,7 +13,15 @@
             if(!error){const ids=new Set(batch.map(r=>r.id));queue=queue.filter(r=>!ids.has(r.id));persist();}
         }catch{}finally{busy=false;}
     }
-    window.PathfindrRouteReports={record(data){
+    const traceKey='pathfindr-trace-diagnostics-v1';let traces=[];
+    try{const saved=JSON.parse(localStorage.getItem(traceKey)||'[]');if(Array.isArray(saved))traces=saved.slice(-30);}catch{}
+    window.PathfindrRouteReports={recordTrace(data){
+        traces.push({...data,createdAt:new Date().toISOString()});traces=traces.slice(-30);
+        try{localStorage.setItem(traceKey,JSON.stringify(traces));}catch{}
+    },exportTraces(){
+        const url=URL.createObjectURL(new Blob([JSON.stringify({v:1,scope:'device-local',traces},null,2)],{type:'application/json'}));
+        const a=document.createElement('a');a.href=url;a.download='pathfindr-trace-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    },record(data){
         const report={id:crypto.randomUUID(),build:String(data.build).slice(0,80),city:String(data.city).slice(0,120),mode:String(data.mode).slice(0,30),input:data.input==='trace'?'trace':'tap',zoom:+Number(data.zoom).toFixed(2),anchor:point(data.anchor),end:point(data.end),reason:data.reason,createdAt:new Date().toISOString()};
         queue.push(report);queue=queue.slice(-30);persist();void flush();
     },flush,pending:()=>queue.length};

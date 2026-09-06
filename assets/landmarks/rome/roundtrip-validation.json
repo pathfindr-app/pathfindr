@@ -1,0 +1,102 @@
+[
+  {
+    "file": "castel-sant-angelo-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "castel-sant-angelo.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "colosseum-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "colosseum.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pantheon-rome-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pantheon-rome.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "piazza-navona-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "piazza-navona.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pyramid-cestius-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "pyramid-cestius.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "roman-forum-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "roman-forum.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "spanish-steps-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "spanish-steps.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "st-peters-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "st-peters.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "trevi-fountain-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "trevi-fountain.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "vittoriano-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "vittoriano.glb",
+    "imported": true,
+    "embeddedTexture": true
+  }
+]

@@ -1,0 +1,159 @@
+{
+  "style": "Pathfindr twilight / painted miniature",
+  "units": "stylized miniature units; not survey scale",
+  "front": "Blender -Y / glTF +Z",
+  "up": "Blender Z / glTF Y",
+  "texture": "textures/painted-palette.png",
+  "assets": [
+    {
+      "id": "us-capitol",
+      "name": "U.S. Capitol",
+      "file": "models/us-capitol.glb",
+      "diorama": "models/us-capitol-diorama.glb",
+      "dioramaTriangles": 8700,
+      "bytes": 757324,
+      "dimensionsBlender": [
+        20.0,
+        12.0,
+        10.309999465942383
+      ],
+      "preview": "previews/us-capitol.png",
+      "triangles": 8248
+    },
+    {
+      "id": "white-house",
+      "name": "White House",
+      "file": "models/white-house.glb",
+      "diorama": "models/white-house-diorama.glb",
+      "dioramaTriangles": 6000,
+      "bytes": 529140,
+      "dimensionsBlender": [
+        15.0,
+        10.0,
+        6.019999980926514
+      ],
+      "preview": "previews/white-house.png",
+      "triangles": 5548
+    },
+    {
+      "id": "washington-monument",
+      "name": "Washington Monument",
+      "file": "models/washington-monument.glb",
+      "diorama": "models/washington-monument-diorama.glb",
+      "dioramaTriangles": 1894,
+      "bytes": 121012,
+      "dimensionsBlender": [
+        10.0,
+        10.0,
+        13.019999504089355
+      ],
+      "preview": "previews/washington-monument.png",
+      "triangles": 1442
+    },
+    {
+      "id": "lincoln-memorial",
+      "name": "Lincoln Memorial",
+      "file": "models/lincoln-memorial.glb",
+      "diorama": "models/lincoln-memorial-diorama.glb",
+      "dioramaTriangles": 5660,
+      "bytes": 401520,
+      "dimensionsBlender": [
+        15.0,
+        13.0,
+        6.029999732971191
+      ],
+      "preview": "previews/lincoln-memorial.png",
+      "triangles": 5208
+    },
+    {
+      "id": "jefferson-memorial",
+      "name": "Jefferson Memorial",
+      "file": "models/jefferson-memorial.glb",
+      "diorama": "models/jefferson-memorial-diorama.glb",
+      "dioramaTriangles": 5498,
+      "bytes": 459096,
+      "dimensionsBlender": [
+        13.0,
+        12.0,
+        6.429999828338623
+      ],
+      "preview": "previews/jefferson-memorial.png",
+      "triangles": 5046
+    },
+    {
+      "id": "smithsonian-castle",
+      "name": "Smithsonian Castle",
+      "file": "models/smithsonian-castle.glb",
+      "diorama": "models/smithsonian-castle-diorama.glb",
+      "dioramaTriangles": 2624,
+      "bytes": 217816,
+      "dimensionsBlender": [
+        18.0,
+        11.0,
+        7.954999923706055
+      ],
+      "preview": "previews/smithsonian-castle.png",
+      "triangles": 2172
+    },
+    {
+      "id": "national-cathedral",
+      "name": "National Cathedral",
+      "file": "models/national-cathedral.glb",
+      "diorama": "models/national-cathedral-diorama.glb",
+      "dioramaTriangles": 2720,
+      "bytes": 230560,
+      "dimensionsBlender": [
+        13.0,
+        17.0,
+        9.920000076293945
+      ],
+      "preview": "previews/national-cathedral.png",
+      "triangles": 2268
+    },
+    {
+      "id": "wwii-memorial",
+      "name": "World War II Memorial",
+      "file": "models/wwii-memorial.glb",
+      "diorama": "models/wwii-memorial-diorama.glb",
+      "dioramaTriangles": 6416,
+      "bytes": 448696,
+      "dimensionsBlender": [
+        16.0,
+        13.0,
+        4.150000095367432
+      ],
+      "preview": "previews/wwii-memorial.png",
+      "triangles": 5964
+    },
+    {
+      "id": "vietnam-veterans-memorial",
+      "name": "Vietnam Veterans Memorial",
+      "file": "models/vietnam-veterans-memorial.glb",
+      "diorama": "models/vietnam-veterans-memorial-diorama.glb",
+      "dioramaTriangles": 3604,
+      "bytes": 254088,
+      "dimensionsBlender": [
+        15.0,
+        10.0,
+        2.8500003814697266
+      ],
+      "preview": "previews/vietnam-veterans-memorial.png",
+      "triangles": 3152
+    },
+    {
+      "id": "mlk-memorial",
+      "name": "Martin Luther King Jr. Memorial",
+      "file": "models/mlk-memorial.glb",
+      "diorama": "models/mlk-memorial-diorama.glb",
+      "dioramaTriangles": 1172,
+      "bytes": 77380,
+      "dimensionsBlender": [
+        12.0,
+        10.0,
+        5.019999980926514
+      ],
+      "preview": "previews/mlk-memorial.png",
+      "triangles": 720
+    }
+  ]
+}

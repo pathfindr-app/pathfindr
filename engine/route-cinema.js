@@ -1,29 +1,24 @@
 /* Three deliberate layers: atmospheric halo, saturated filament, moving charge.
  * Shared game clock; no timers, no per-edge shadow blur, no route mutation. */
 (() => {
-    function route(ctx, points, color, time, optimal=false) {
+    function route(ctx, points, color, time, optimal=false, history=false) {
         if(points.length<2)return;
         const reduced=PathfindrMotion.reduced(), audio=PathfindrAudio.state;
         const charge=audio.enabled ? audio.bass : 0;
+        const drive=history?(window.PathfindrMusicalRoutes?.historyEnergy(audio)||0):0;
         const rgb=`${color.r},${color.g},${color.b}`;
         ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
         const stroke=(width,alpha)=>{ctx.lineWidth=width;ctx.strokeStyle=`rgba(${rgb},${alpha})`;drawSmoothPath(ctx,points);ctx.stroke();};
         // Source-over preserves hue at shared streets instead of adding to white.
         ctx.globalCompositeOperation='source-over';
-        ctx.strokeStyle='rgba(8,14,24,.85)';ctx.lineWidth=11;drawSmoothPath(ctx,points);ctx.stroke();
-        stroke(24+charge*6,.045);stroke(14,.11);
-        ctx.setLineDash(optimal?[11,7]:[]);stroke(optimal?5:7,.88);ctx.setLineDash([]);
-        ctx.setLineDash(optimal?[12,75]:[3,24]);
-        ctx.lineDashOffset=reduced?0:-time*(optimal?34:22);
-        stroke(1.5,.9);ctx.setLineDash([]);
-        if(!reduced) for(let i=0;i<2;i++){
-            const p=getPointAlongPolyline(points,(time*.055+i*.5)%1);
-            if(!p)continue;
-            const r=8+charge*5,g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r);
-            g.addColorStop(0,`rgba(${rgb},.65)`);g.addColorStop(1,`rgba(${rgb},0)`);
-            ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
-            ctx.fillStyle='rgba(230,255,252,.9)';ctx.beginPath();ctx.arc(p.x,p.y,1.4,0,Math.PI*2);ctx.fill();
-        }
+        ctx.strokeStyle='rgba(8,14,24,.85)';ctx.lineWidth=optimal?6:12;drawSmoothPath(ctx,points);ctx.stroke();
+        stroke(24+charge*6+drive*18,.045+drive*.075);stroke(14+drive*6,.11+drive*.10);
+        ctx.setLineDash(optimal?[8,10]:[20,9,2,9]);
+        ctx.lineDashOffset=reduced?0:-(time*(optimal?26:34))%(optimal?18:40);
+        stroke(optimal?4:9,.95);ctx.setLineDash([]);
+        // Reserve the brightest filament for real musical charges.
+        stroke(1,.22);ctx.setLineDash([]);
+        if(!reduced)window.PathfindrMusicalRoutes?.draw(ctx,points,color,`summary:${optimal}:${points.length}:${points[0].x}`,false,history?2:1);
         ctx.restore();
     }
     function shock(ctx,viz,map,color){

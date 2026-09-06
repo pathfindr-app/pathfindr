@@ -1,0 +1,170 @@
+{
+  "city": "paris",
+  "style": "Pathfindr painted miniature",
+  "units": "artistic miniature units; not meters",
+  "front": "Blender -Y / glTF +Z",
+  "up": "Blender Z / glTF Y",
+  "texture": "textures/painted-palette.png",
+  "assets": [
+    {
+      "id": "eiffel-tower",
+      "name": "Eiffel Tower",
+      "file": "models/eiffel-tower.glb",
+      "diorama": "models/eiffel-tower-diorama.glb",
+      "preview": "previews/eiffel-tower.png",
+      "dioramaTriangles": 3298,
+      "dimensionsBlender": [
+        13.0,
+        12.0,
+        13.22499942779541
+      ],
+      "triangles": 3006,
+      "bytes": 276532,
+      "referenceFeatures": "Open four-legged iron silhouette, lower arches, latticework and two viewing platforms."
+    },
+    {
+      "id": "arc-de-triomphe",
+      "name": "Arc de Triomphe",
+      "file": "models/arc-de-triomphe.glb",
+      "diorama": "models/arc-de-triomphe-diorama.glb",
+      "preview": "previews/arc-de-triomphe.png",
+      "dioramaTriangles": 1404,
+      "dimensionsBlender": [
+        12.0,
+        10.0,
+        7.505000114440918
+      ],
+      "triangles": 1112,
+      "bytes": 139888,
+      "referenceFeatures": "Grand open passage, broad masonry piers, relief panels and attic cornice."
+    },
+    {
+      "id": "louvre",
+      "name": "Louvre & Pyramid",
+      "file": "models/louvre.glb",
+      "diorama": "models/louvre-diorama.glb",
+      "preview": "previews/louvre.png",
+      "dioramaTriangles": 4856,
+      "dimensionsBlender": [
+        18.0,
+        15.0,
+        5.670000076293945
+      ],
+      "triangles": 4564,
+      "bytes": 417316,
+      "referenceFeatures": "Opaque mint pyramid with geometric framing and abbreviated palace courtyard."
+    },
+    {
+      "id": "notre-dame",
+      "name": "Notre-Dame",
+      "file": "models/notre-dame.glb",
+      "diorama": "models/notre-dame-diorama.glb",
+      "preview": "previews/notre-dame.png",
+      "dioramaTriangles": 2618,
+      "dimensionsBlender": [
+        13.0,
+        16.0,
+        10.170001029968262
+      ],
+      "triangles": 2326,
+      "bytes": 236756,
+      "referenceFeatures": "Twin flat-topped towers, rose window, three portals, gallery and flying buttresses."
+    },
+    {
+      "id": "sacre-coeur",
+      "name": "Sacré-Cœur",
+      "file": "models/sacre-coeur.glb",
+      "diorama": "models/sacre-coeur-diorama.glb",
+      "preview": "previews/sacre-coeur.png",
+      "dioramaTriangles": 2876,
+      "dimensionsBlender": [
+        13.0,
+        13.0,
+        9.869999885559082
+      ],
+      "triangles": 2584,
+      "bytes": 239936,
+      "referenceFeatures": "Central tall white dome, flanking domes, rear campanile and entrance arcade."
+    },
+    {
+      "id": "les-invalides",
+      "name": "Les Invalides",
+      "file": "models/les-invalides.glb",
+      "diorama": "models/les-invalides-diorama.glb",
+      "preview": "previews/les-invalides.png",
+      "dioramaTriangles": 4688,
+      "dimensionsBlender": [
+        14.0,
+        12.0,
+        10.470000267028809
+      ],
+      "triangles": 4396,
+      "bytes": 404912,
+      "referenceFeatures": "Gilded ribbed dome, lantern and columned church front."
+    },
+    {
+      "id": "pantheon-paris",
+      "name": "Panthéon",
+      "file": "models/pantheon-paris.glb",
+      "diorama": "models/pantheon-paris-diorama.glb",
+      "preview": "previews/pantheon-paris.png",
+      "dioramaTriangles": 4326,
+      "dimensionsBlender": [
+        14.0,
+        14.0,
+        8.910000801086426
+      ],
+      "triangles": 4034,
+      "bytes": 381264,
+      "referenceFeatures": "Classical portico, pediment, colonnaded drum and slate dome."
+    },
+    {
+      "id": "palais-garnier",
+      "name": "Palais Garnier",
+      "file": "models/palais-garnier.glb",
+      "diorama": "models/palais-garnier-diorama.glb",
+      "preview": "previews/palais-garnier.png",
+      "dioramaTriangles": 4813,
+      "dimensionsBlender": [
+        16.0,
+        13.0,
+        7.519999980926514
+      ],
+      "triangles": 4521,
+      "bytes": 419828,
+      "referenceFeatures": "Columned opera facade, gilded rooftop figures and mint auditorium dome."
+    },
+    {
+      "id": "centre-pompidou",
+      "name": "Centre Pompidou",
+      "file": "models/centre-pompidou.glb",
+      "diorama": "models/centre-pompidou-diorama.glb",
+      "preview": "previews/centre-pompidou.png",
+      "dioramaTriangles": 2708,
+      "dimensionsBlender": [
+        16.0,
+        12.0,
+        6.845000267028809
+      ],
+      "triangles": 2416,
+      "bytes": 189044,
+      "referenceFeatures": "Exposed structural grid, colored service pipes and diagonal escalator."
+    },
+    {
+      "id": "moulin-rouge",
+      "name": "Moulin Rouge",
+      "file": "models/moulin-rouge.glb",
+      "diorama": "models/moulin-rouge-diorama.glb",
+      "preview": "previews/moulin-rouge.png",
+      "dioramaTriangles": 3575,
+      "dimensionsBlender": [
+        12.0,
+        10.0,
+        8.216843605041504
+      ],
+      "triangles": 3283,
+      "bytes": 223536,
+      "referenceFeatures": "Red windmill, open lattice sails and named cabaret facade; an archival photograph informs the composition."
+    }
+  ]
+}

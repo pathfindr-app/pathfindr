@@ -1,0 +1,102 @@
+[
+  {
+    "file": "big-ben-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "big-ben.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "british-museum-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "british-museum.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "buckingham-palace-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "buckingham-palace.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "london-eye-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "london-eye.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "st-pauls-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "st-pauls.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "the-gherkin-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "the-gherkin.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "the-shard-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "the-shard.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "tower-bridge-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "tower-bridge.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "tower-of-london-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "tower-of-london.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "westminster-abbey-diorama.glb",
+    "imported": true,
+    "embeddedTexture": true
+  },
+  {
+    "file": "westminster-abbey.glb",
+    "imported": true,
+    "embeddedTexture": true
+  }
+]

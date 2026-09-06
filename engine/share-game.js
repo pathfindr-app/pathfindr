@@ -9,7 +9,8 @@
     async function load(){
         const r=active.payload.rounds[index],m=active.payload.maps[r.map],prepared=active.resolved[index];
         disableContinuousPlay();cancelEndpointPrecompute();hideModeSelector();hideInstructions();hideResults();hideGameOver();
-        GameController.enterPhase(GamePhase.IDLE);clearVisualization();clearUserPath();RoundHistory.clear();
+        GameController.enterPhase(GamePhase.IDLE);clearVisualization();clearUserPath();
+        if(index===0||active.payload.rounds[index-1].map!==r.map)RoundHistory.clear();
         if(index===0){GameState.totalScore=0;GameState.roundScores=[];}
         GameState.gameMode='competitive';GameState.currentRound=index+1;GameState.currentCity={...m.location};GameState.locationMode='shared';
         GameState.map.setMaxBounds(null);GameState.map.jumpTo({center:[m.location.lng,m.location.lat],zoom:15});

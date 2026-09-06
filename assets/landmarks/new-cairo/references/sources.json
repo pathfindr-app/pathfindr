@@ -1,0 +1,112 @@
+[
+  {
+    "id": "hassan-sharbatly-mosque",
+    "sourcePage": "https://www.prayer-now.com/mosque/%D9%85%D8%B3%D8%AC%D8%AF-%D8%AD%D8%B3%D9%86-%D8%A7%D9%84%D8%B4%D8%B1%D8%A8%D8%AA%D9%84%D9%8A/",
+    "imageUrl": "https://www.prayer-now.com/wp-content/uploads/2022/11/19_2020-637357588815795768-579-1.jpg",
+    "file": "mosque.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "mosque",
+    "name": "Hassan Sharbatly Mosque",
+    "observedFeatures": "Four slender octagonal minarets, gold segmented dome, windowed drum and deep rectangular front colonnade."
+  },
+  {
+    "id": "mosheer-tantawy-mosque",
+    "sourcePage": "https://welpstar.com/biz/el-mosheer-tantawy-mosque",
+    "imageUrl": "https://welp-prod.s3.amazonaws.com/media/businesss/13-03-2024/1710343112.jpeg",
+    "file": "tantawy.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "tantawy",
+    "name": "Mosheer Tantawy Mosque",
+    "observedFeatures": "Two flared minaret crowns, mint ribbed dome and monumental entry portal; simplified prayer hall."
+  },
+  {
+    "id": "auc-new-cairo",
+    "sourcePage": "https://www.archidatum.com/projects/the-american-university-in-new-cairo-sasaki-associates/",
+    "imageUrl": "https://www.archidatum.com/media/6285/the-international-american-university-in-new-cairo-sasaki-associates-03.jpg",
+    "file": "auc.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "auc",
+    "name": "AUC · New Cairo Campus",
+    "observedFeatures": "Abbreviated ceremonial courtyard: striped stone wings, central arched gateway, raised tower and linear reflecting pools."
+  },
+  {
+    "id": "german-university",
+    "sourcePage": "https://www.koleyat.com/listings/german-university-in-cairo-guc-%D8%A7%D9%84%D8%AC%D8%A7%D9%85%D8%B9%D8%A9-%D8%A7%D9%84%D8%A3%D9%84%D9%85%D8%A7%D9%86%D9%8A%D8%A9-%D8%A8%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9/",
+    "imageUrl": "https://www.koleyat.com/wp-content/uploads/2017/09/45227916-b105-4d1d-84ff-18da0f62900d.jpg",
+    "file": "guc.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "guc",
+    "name": "German University in Cairo",
+    "observedFeatures": "Abbreviated academic campus: warm rectangular blocks, horizontal glass strips and circular garden with small gazebos."
+  },
+  {
+    "id": "petrosport-stadium",
+    "sourcePage": "https://www.mecreeled.com/petrosport-stadium-led-sports-arena-lighting/",
+    "imageUrl": "https://www.mecreeled.com/wp-content/uploads/2022/04/Petrosport-Stadium-3.jpg",
+    "file": "petrosport.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "petrosport",
+    "name": "Petrosport Stadium",
+    "observedFeatures": "Rectangular football pitch, red seating tiers, a covered main stand and four floodlight masts."
+  },
+  {
+    "id": "cairo-festival-city",
+    "sourcePage": "https://sodecoeg.com/wp/cairo-festival-city/",
+    "imageUrl": "https://sodecoeg.com/wp/wp-content/uploads/2023/05/cairo-festival-city-crop-u3049-611x390.jpg",
+    "file": "festival.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "festival",
+    "name": "Cairo Festival City",
+    "observedFeatures": "Fountain plaza with a repeated line of arcing jets and abbreviated cream retail facades."
+  },
+  {
+    "id": "dusit-thani",
+    "sourcePage": "https://www.dusit-international.com/th/about-dusit/our-story",
+    "imageUrl": "https://www.dusit-international.com/storage/about-dusit/our-story/milestone-2/img-4.webp",
+    "file": "dusit.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "dusit",
+    "name": "Dusit Thani LakeView",
+    "observedFeatures": "Arrival facade with twin squat towers, terracotta roof canopies and three sculptural urn fountains."
+  },
+  {
+    "id": "white-waterway",
+    "sourcePage": "https://waterway.eg/white-2/",
+    "imageUrl": "https://waterway.eg/wp-content/uploads/2022/09/C-White-10.jpg",
+    "file": "waterway2.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "waterway2",
+    "name": "WHITE · The Waterway",
+    "observedFeatures": "Representative WHITE retail frontage: tall glass bays, vertical fins, cafe canopy and parasol terrace."
+  },
+  {
+    "id": "katameya-heights",
+    "sourcePage": "https://katameyaheights.com/en/Club-House",
+    "imageUrl": "https://katameyaheights.com/images/html/3-a.jpg",
+    "file": "katameya.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "katameya",
+    "name": "Katameya Heights Clubhouse",
+    "observedFeatures": "Clubhouse front: cream pavilions, tiled roofs, arched windows, central glazed skylight and putting green."
+  },
+  {
+    "id": "point-90",
+    "sourcePage": "https://nileestate.com/ar/blogs/%D9%81%D8%B6%D9%84-%D8%A7%D9%84%D9%85%D9%88%D9%84%D8%A7%D8%AA-%D8%A7%D9%84%D8%AA%D8%B1%D9%81%D9%8A%D9%87%D9%8A%D8%A9-%D9%88-%D8%A7%D9%84%D8%AA%D8%AC%D8%A7%D8%B1%D9%8A%D8%A9-%D9%81%D9%8A-%D8%A7%D9%84%D8%AA%D8%AC%D9%85%D8%B9-%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3-%D9%88-%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9-%D8%A7%D9%84%D8%AC%D8%AF%D9%8A%D8%AF%D8%A9-3578649",
+    "imageUrl": "https://nileestate.com/uploads/seo_images_library/%D9%85%D9%88%D9%84%20%D8%A8%D9%88%D9%8A%D9%86%D8%AA%2090%20%D8%A7%D9%84%D8%AA%D8%AC%D9%85%D8%B9%20%D8%A7%D9%84%D8%AE%D8%A7%D9%85%D8%B3.webp",
+    "file": "point90.jpg",
+    "downloaded": true,
+    "use": "Visual modeling reference only. Original photo pixels are not used in the game textures.",
+    "referenceKey": "point90",
+    "name": "Point 90 Mall",
+    "observedFeatures": "Sweeping faceted blue-glass frontage, concrete end piers, overhanging curved roof and arrival canopy."
+  }
+]

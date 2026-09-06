@@ -3,12 +3,14 @@
     const icons={
         spark:'<path d="M14 2 5 14h7l-2 10 10-14h-7z" fill="currentColor"/>',
         burger:'<path d="M3 11a9 9 0 0 1 18 0z" fill="#efbc70"/><path d="m3 13 4 2 4-2 4 2 6-2" stroke="#9cd18a" stroke-width="3" fill="none"/><rect x="3" y="16" width="18" height="3" rx="1.5" fill="#9b5943"/><path d="M3 20h18q0 4-4 4H7q-4 0-4-4" fill="#efbc70"/><path d="m8 7 1-1m5 0 1 1" stroke="#fff4d7"/>',
-        landmark:'<path d="M3 22h18M6 19h12M9 17V7l3-5 3 5v10z" stroke="currentColor" stroke-width="2" fill="none"/>'
+        landmark:'<path d="M3 22h18M6 19h12M9 17V7l3-5 3 5v10z" stroke="currentColor" stroke-width="2" fill="none"/>',
+        library:'<path d="M12 7Q7 3 2 6v15q5-3 10 1 5-4 10-1V6q-5-3-10 1Z" fill="currentColor" fill-opacity=".18" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v15M5 10l4 1M5 14l4 1m6-4 4-1m-4 5 4-1" fill="none" stroke="currentColor" stroke-width="1.4"/>'
     };
     let map,layer,panel,items=[],cityKey='',lastRender=0;
     let roundKey=null,roundItems=[],challengeClaims=null;
     const claimed=item=>challengeClaims?challengeClaims.has(item.key):!!saved.claimed[item.key];
-    const typeNames={spark:'Street Spark',burger:'Burger stop',landmark:'Landmark'};
+    const typeNames={spark:'Street Spark',burger:'Burger stop',landmark:'Landmark',library:'Library'};
+    const collectionAllowed=phase=>(typeof GameState==='undefined'||GameState.gameMode!=='visualizer')&&['playing','visualizing','results','idle'].includes(phase);
     function beginRound(number,force=false){
         const next=`${cityKey}:${number}`;
         if(!force&&roundKey===next)return;
@@ -31,24 +33,24 @@
         root.append(list);
     }
     const key='pathfindr_discovery_v1';
-    let saved={claimed:{},counts:{spark:0,burger:0,landmark:0}};
+    let saved={claimed:{},counts:{spark:0,burger:0,landmark:0,library:0}};
     try{const data=JSON.parse(localStorage.getItem(key));if(data?.claimed && data?.counts){saved.claimed=data.claimed;for(const type of Object.keys(saved.counts))saved.counts[type]=Math.max(0,Math.floor(Number(data.counts[type])||0));}}catch{}
     function persist(){try{localStorage.setItem(key,JSON.stringify(saved));return true;}catch{return false;}}
     function svg(type){return `<svg viewBox="0 0 24 26" aria-hidden="true">${icons[type]}</svg>`;}
     function renderPanel(){if(!panel)return;panel.replaceChildren();
         const title=document.createElement('strong');title.textContent='City discoveries';panel.append(title);
         const sub=document.createElement('p');sub.textContent='Tap pickups on the map. Routes and scores stay separate. Saved on this device.';panel.append(sub);
-        for(const [type,goal,name] of [['spark',25,'Street Sparks'],['burger',10,'Burger tour'],['landmark',5,'World monuments']]){
+        for(const [type,goal,name] of [['library',5,'Library trail'],['burger',10,'Burger tour'],['landmark',5,'World monuments']]){
             const row=document.createElement('div');row.className='discovery-progress';const label=document.createElement('span');label.textContent=`${name} · ${saved.counts[type]}${type==='spark'?'':` / ${goal}`}`;
             const progress=document.createElement('progress');progress.max=goal;progress.value=Math.min(goal,saved.counts[type]);row.append(label,progress);panel.append(row);
         }
         const close=document.createElement('button');close.type='button';close.textContent='Back to map';close.addEventListener('click',()=>panel.hidden=true);panel.append(close);
-        const badge=document.getElementById('discoveries-btn');if(badge)badge.textContent=`Discoveries · ${Object.values(saved.counts).reduce((a,b)=>a+b,0)}`;
+        const badge=document.getElementById('discoveries-btn');if(badge)badge.textContent=`Discoveries · ${['library','burger','landmark'].reduce((sum,type)=>sum+saved.counts[type],0)}`;
     }
     function sound(type){
         if(typeof SoundEngine==='undefined')return;SoundEngine.init();if(SoundEngine.muted||!SoundEngine.ctx)return;
         const ctx=SoundEngine.ctx,now=ctx.currentTime;
-        const notes=type==='burger'?[330,440,660]:type==='landmark'?[523.25,659.25,783.99,1046.5]:[880,1320];
+        const notes=type==='library'?[659.25,987.77,1318.51]:type==='burger'?[330,440,660]:type==='landmark'?[523.25,659.25,783.99,1046.5]:[880,1320];
         notes.forEach((frequency,i)=>{const osc=ctx.createOscillator(),gain=ctx.createGain(),start=now+i*(type==='landmark'?0.075:0.045);
             osc.type=type==='burger'?'triangle':'sine';osc.frequency.setValueAtTime(frequency,start);osc.frequency.exponentialRampToValueAtTime(frequency*1.012,start+0.16);
             gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(0.075,start+0.008);gain.gain.exponentialRampToValueAtTime(0.0001,start+0.24);
@@ -56,7 +58,7 @@
         });
     }
     function claim(item){
-        if(claimed(item)||!['playing','results','idle'].includes(document.body.dataset.gamePhase))return false;
+        if(claimed(item)||!collectionAllowed(document.body.dataset.gamePhase))return false;
         const collectedAt=Date.now();
         if(challengeClaims)challengeClaims.add(item.key);else{saved.claimed[item.key]=collectedAt;saved.counts[item.type]++;}
         roundItems.push({key:item.key,type:item.type,name:item.name,pos:item.pos?[...item.pos]:null,collectedAt});renderRoundSummary();
@@ -88,11 +90,12 @@
     function update(force=false){
         if(!map||!layer||(!force&&performance.now()-lastRender<65))return;lastRender=performance.now();
         const w=map.getContainer().clientWidth,h=map.getContainer().clientHeight,phase=document.body.dataset.gamePhase;
-        layer.hidden=!['playing','results','idle'].includes(phase);
+        layer.hidden=!collectionAllowed(phase);
+        if(layer.hidden){if(panel)panel.hidden=true;return;}
         let visible=0;const placed=[];
-        const priority={landmark:0,burger:1,spark:2};
+        const priority={landmark:0,library:1,burger:2};
         const endpoints=typeof GameState!=='undefined'?[GameState.startNode,GameState.endNode].map(id=>GameState.nodes.get(id)).filter(Boolean).map(n=>map.project([n.lng,n.lat])):[];
-        for(const item of [...items].sort((a,b)=>priority[a.type]-priority[b.type])){const e=item.element;if(!e||!e.isConnected)continue;const p=map.project(item.pos);
+        for(const item of [...items].sort((a,b)=>priority[a.type]-priority[b.type])){const e=item.element;if(!e||!e.isConnected)continue;const p=window.PathfindrLandmarks?.pickupPoint(map,item)||map.project(item.pos);
             // Keep route markers and controls clear; close zoom reveals POI detail.
             const nearRoute=endpoints.some(n=>Math.hypot(n.x-p.x,n.y-p.y)<46);
             const shown=p.x>30&&p.x<w-30&&p.y>115&&p.y<h-165&&!nearRoute&&visible<12&&!placed.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<60);
@@ -107,17 +110,12 @@
         setCity(location,edges){cityKey=`${location.lat.toFixed(3)},${location.lng.toFixed(3)}`;items=[];
             challengeClaims=null;
             roundKey=null;roundItems=[];renderRoundSummary();
-            const selected=[...edges].sort((a,b)=>Number(a.from)-Number(b.from));
-            const day=new Date().toISOString().slice(0,10);
-            for(let i=0;i<Math.min(9,selected.length);i++){const edge=selected[Math.floor((i+.5)*selected.length/Math.min(9,selected.length))];
-                items.push({key:`spark:${day}:${cityKey}:${edge.from}`,type:'spark',name:'Street Spark',pos:[edge.fromPos.lng,edge.fromPos.lat]});}
-            // Keep at most the latest 3,000 spark claims; permanent POI discoveries remain unique.
-            const sparks=Object.entries(saved.claimed).filter(([k])=>k.startsWith('spark:')).sort((a,b)=>b[1]-a[1]);for(const [k] of sparks.slice(3000))delete saved.claimed[k];
+            // Discoveries now come only from real POIs. Preserve historical claims on disk.
             if(panel)panel.hidden=true;mount();
         },
-        setChallenge(pickups){challengeClaims=new Set();items=pickups.map(p=>({...p,pos:[...p.pos]}));mount();},
+        setChallenge(pickups){challengeClaims=new Set();items=pickups.filter(p=>p.type!=='spark').map(p=>({...p,pos:[...p.pos]}));mount();},
         clearChallenge(){challengeClaims=null;},
-        addPOIs(pois){if(challengeClaims)return;const seen=new Set(items.map(p=>p.key));for(const poi of pois){const key=`${poi.type}:${poi.id}`;
+        addPOIs(pois){if(challengeClaims)return;const seen=new Set(items.map(p=>p.key));for(const poi of pois){if(poi.type==='spark')continue;const key=`${poi.type}:${poi.id}`;
             const duplicate=items.some(item=>item.type===poi.type&&item.name===poi.name&&Math.hypot(item.pos[0]-poi.pos[0],item.pos[1]-poi.pos[1])<0.0002);
             if(!seen.has(key)&&!duplicate){seen.add(key);items.push({...poi,key});}}mount();},
         update,claim,beginRound,renderRoundSummary,

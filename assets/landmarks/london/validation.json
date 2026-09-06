@@ -1,0 +1,245 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "big-ben-diorama.glb",
+      "triangles": 2684,
+      "bytes": 254608,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "big-ben.glb",
+      "triangles": 2392,
+      "bytes": 226028,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "british-museum-diorama.glb",
+      "triangles": 3074,
+      "bytes": 295516,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "british-museum.glb",
+      "triangles": 2782,
+      "bytes": 266932,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "buckingham-palace-diorama.glb",
+      "triangles": 3208,
+      "bytes": 307200,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "buckingham-palace.glb",
+      "triangles": 2916,
+      "bytes": 278604,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "london-eye-diorama.glb",
+      "triangles": 5116,
+      "bytes": 472256,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "london-eye.glb",
+      "triangles": 5028,
+      "bytes": 464080,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "st-pauls-diorama.glb",
+      "triangles": 6038,
+      "bytes": 551304,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "st-pauls.glb",
+      "triangles": 5746,
+      "bytes": 522716,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "the-gherkin-diorama.glb",
+      "triangles": 7648,
+      "bytes": 703684,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "the-gherkin.glb",
+      "triangles": 7356,
+      "bytes": 675136,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "the-shard-diorama.glb",
+      "triangles": 2656,
+      "bytes": 253560,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "the-shard.glb",
+      "triangles": 2364,
+      "bytes": 225012,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "tower-bridge-diorama.glb",
+      "triangles": 2058,
+      "bytes": 201260,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "tower-bridge.glb",
+      "triangles": 1970,
+      "bytes": 193080,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "tower-of-london-diorama.glb",
+      "triangles": 4164,
+      "bytes": 377896,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "tower-of-london.glb",
+      "triangles": 3872,
+      "bytes": 349328,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "westminster-abbey-diorama.glb",
+      "triangles": 2444,
+      "bytes": 240136,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    },
+    {
+      "file": "westminster-abbey.glb",
+      "triangles": 2152,
+      "bytes": 211560,
+      "meshes": 1,
+      "materials": 1,
+      "opaque": true,
+      "embeddedTexture": [
+        320,
+        64
+      ]
+    }
+  ]
+}
