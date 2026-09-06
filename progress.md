@@ -2,6 +2,12 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Classic HUD restoration — September 6, .40
+- Live: dpl_GnYEPU4P714dsUzCJT6yiQAudGRp, https://pathfindralpha-khz5oeidh-pathfindr-apps-projects.vercel.app, www.pathfindr.world. Previous shared deployment: dpl_9e32FZKz5JKutS643PJsKVYWNdfD.
+- Restored original desktop header styling; mobile matches its dark palette and regular typography while retaining the 78px base height and compact two-row layout. Removed amber casing and segmented-number script loading. No gameplay changes.
+- 116 game tests pass; responsive 320px/390px previews and actual desktop Miami gameplay visually inspected. Stock web-game client completed. Public build ID confirmed pathfindr-classic-hud-20260906.40; all eight Printshop release checks pass.
+- Scoped stage /tmp/pathfindr-materials-obS8Dj copied verified .39 source. Only four public game HUD/version files changed; Printshop and API source preserved. No backend migrations or payment changes.
+
 ### Instruments, collectible emblems and audio — September 6, .39
 - Production deployed: dpl_9e32FZKz5JKutS643PJsKVYWNdfD, https://pathfindralpha-msalj1p9k-pathfindr-apps-projects.vercel.app, www.pathfindr.world. Previous shared deployment: dpl_5WuowgbcgyvLvk98qg3bGt48SQu6. Stage /tmp/pathfindr-materials-M7baBd copies verified current source from /tmp/pathfindr-prints-accounts-release; no Printshop source changes, migrations or payment changes.
 - Desktop now shares mobile's opaque amber LCD/material treatment. Dedicated scalable burger/book/monument emblems with bun/page/orbit animations, reduced-motion support, distinct claim motion and tactile SFX layers. Keeps existing phase gates.

@@ -1,72 +1,34 @@
-/* Slim opaque housing. The depth is static CSS, not another rendering loop. */
-.lcd-numerals { display:none; }
-/* One instrument family at every size; mobile keeps its compact two-row layout. */
-@media(min-width:701px){
- #route-identity-legend { top:110px; }
- #gameplay-hud { --lcd:#ffd082; min-height:76px; padding:10px 16px; gap:18px; border:1px solid #657a89; border-radius:14px; background:linear-gradient(130deg,#364351,#172230 16%,#131e2b 85%,#32414e); box-shadow:inset 0 -3px #0b1420,inset 0 -4px #556d7d,0 4px 14px #07101d66; backdrop-filter:none; -webkit-backdrop-filter:none; }
- #gameplay-hud::before,#gameplay-hud::after { display:none; }
- #gameplay-hud .hud-brand { color:#ffd082; border-color:#657a8955; }
- #gameplay-hud .hud-location,#gameplay-hud .hud-stats { min-height:50px; padding:6px 12px; border:1px solid #9c6f3577; border-radius:7px; background:linear-gradient(115deg,#b2833418,transparent 45%),linear-gradient(#31261a,#191e1c 60%,#2d251a); box-shadow:inset 0 2px 4px #090e15,0 0 0 2px #0e1822; }
- #gameplay-hud .hud-location { min-width:100px; max-width:280px; }
- #gameplay-hud .location-display { background:none; border:0; padding:0; min-width:0; gap:8px; }
- #gameplay-hud #current-location { color:var(--lcd); font:500 13px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.01em; }
- #gameplay-hud .location-icon,#gameplay-hud .search-icon { color:#dba962; }
- #gameplay-hud .hud-stats { gap:16px; }
- #gameplay-hud .hud-label { color:#e0b674; font:400 8px 'IBM Plex Mono',monospace; letter-spacing:.12em; }
- #gameplay-hud .hud-stat { position:relative; gap:4px; }
- #gameplay-hud .lcd-source { position:absolute!important; width:1px!important; height:1px!important; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
- #gameplay-hud .lcd-numerals { display:flex; align-items:baseline; height:22px; color:var(--lcd); gap:1px; }
- .lcd-digit { width:12px; height:22px; }.lcd-digit .lit{fill:currentColor}.lcd-digit .unlit{fill:#cfa158;opacity:.09}
- .lcd-dot{width:3px;height:22px}.lcd-slash{width:6px;height:22px;opacity:.65}.lcd-unit{font:9px 'IBM Plex Mono',monospace;color:#d4ac6e}
- #gameplay-hud button.hud-btn,#gameplay-hud #mobile-options { border:1px solid #81909d77; border-radius:8px; background:linear-gradient(#37414e,#192331 65%,#111d2b); color:#ffd38d; box-shadow:inset 0 1px #d1d9d933,inset 0 -2px #0a1520; }
-}
+/* Classic web chrome, retaining the 78px mobile layout and safe-area padding. */
+.lcd-numerals { display:none!important; }
 @media(max-width:700px){
- #gameplay-hud {
-  --lcd:#ffd082; top:0; left:0; right:0; min-height:78px; padding:calc(5px + env(safe-area-inset-top)) 10px 8px 15px;
-  grid-template-columns:minmax(0,1fr) 48px; grid-template-rows:27px 36px; gap:0 16px;
-  background:linear-gradient(130deg,#364351 0%,#172230 14%,#131e2b 85%,#32414e); border:1px solid #657a89; border-top:0; border-radius:0 0 17px 17px;
-  box-shadow:inset 0 -3px #0b1420,inset 0 -4px #556d7d,0 3px 0 #07121c,0 5px 14px #07101d66;
-  isolation:isolate; backdrop-filter:none; -webkit-backdrop-filter:none;
- }
- #gameplay-hud::before {
-  content:''; display:block!important; inset:calc(4px + env(safe-area-inset-top)) 68px 7px 7px; height:auto; z-index:-1;
-  border:1px solid #9c6f35; border-radius:10px;
-  background:linear-gradient(115deg,#b2833420,transparent 42%),linear-gradient(#31261a,#191e1c 55%,#2d251a);
-  box-shadow:inset 0 2px 5px #090e15,inset 0 0 0 2px #171b1b,inset 0 -1px #b5833b88,0 0 0 3px #0e1822,0 0 0 4px #56606a66;
- }
- #gameplay-hud::after { content:''; display:block!important; left:18px; right:18px; bottom:2px; height:3px; background:repeating-linear-gradient(90deg,#b88b4a99 0 1px,transparent 1px 13px); }
- #gameplay-hud .hud-location { align-self:stretch; display:flex; align-items:center; min-width:0; padding-right:4px; }
- #gameplay-hud .location-display { min-height:27px; width:100%; gap:6px; }
- #gameplay-hud .location-icon { display:block; width:14px; height:17px; flex-shrink:0; color:#ffc572; }
- #gameplay-hud #current-location { color:var(--lcd); font:500 13px 'IBM Plex Mono',monospace; letter-spacing:.01em; text-transform:uppercase; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; text-shadow:0 0 5px #eeb65b44; }
- #gameplay-hud .search-icon { width:12px; height:12px; color:#dba962; flex-shrink:0; }
- #gameplay-hud .hud-stats { display:flex!important; align-self:stretch; align-items:center; gap:0; justify-content:space-between; padding:0 5px 0 0; border-top:1px solid #b9905433; }
- #gameplay-hud .hud-stat { position:relative; display:flex!important; flex-direction:column; align-items:flex-start; justify-content:center; gap:3px; padding:0 6px; border-left:1px solid #b9905433; }
- #gameplay-hud .hud-stat:first-child { padding-left:0; border-left:0; }
+ #gameplay-hud { top:0;left:0;right:0;min-height:78px;padding:calc(5px + env(safe-area-inset-top)) 10px 8px 15px;grid-template-columns:minmax(0,1fr) 48px;grid-template-rows:27px 36px;gap:0 16px;background:#12101a;border:1px solid #ff6b9d1f;border-top:0;border-radius:0 0 17px 17px;box-shadow:0 4px 16px #070a1633;backdrop-filter:none;-webkit-backdrop-filter:none; }
+ #gameplay-hud::before,#gameplay-hud::after { display:none!important; }
+ #gameplay-hud .hud-location { align-self:stretch;display:flex;align-items:center;min-width:0;padding-right:4px; }
+ #gameplay-hud .location-display { min-height:27px;width:100%;gap:6px; }
+ #gameplay-hud .location-icon { display:block;width:14px;height:17px;flex-shrink:0;color:#ee789e; }
+ #gameplay-hud #current-location { color:#cec6d8;font:500 13px 'IBM Plex Mono',monospace;letter-spacing:.01em;text-transform:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-shadow:none; }
+ #gameplay-hud .search-icon { width:12px;height:12px;color:#91879f;flex-shrink:0; }
+ #gameplay-hud .hud-stats { display:flex!important;align-self:stretch;align-items:center;gap:0;justify-content:space-between;padding:0 5px 0 0;border-top:1px solid #ffffff0c; }
+ #gameplay-hud .hud-stat { position:relative;display:flex!important;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;padding:0 6px;border-left:1px solid #ffffff0c; }
+ #gameplay-hud .hud-stat:first-child { padding-left:0;border-left:0; }
  #gameplay-hud #stat-distance { display:flex!important; }
- #gameplay-hud .hud-label { color:#e0b674; font:400 7px 'IBM Plex Mono',monospace; letter-spacing:.12em; text-transform:uppercase; }
- #gameplay-hud .lcd-source { position:absolute!important; width:1px!important; height:1px!important; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
- #gameplay-hud .lcd-numerals { display:flex; align-items:baseline; height:20px; color:var(--lcd); gap:1px; }
- .lcd-digit { width:11px; height:20px; overflow:visible; }
- .lcd-digit .lit { fill:currentColor; }
- .lcd-digit .unlit { fill:#cfa158; opacity:.09; }
- .lcd-dot { width:3px; height:20px; }
- .lcd-slash { width:6px; height:20px; opacity:.65; }
- .lcd-unit { font:8px 'IBM Plex Mono',monospace; color:#d4ac6e; }
- #gameplay-hud #mobile-options { position:relative; width:54px; min-width:54px; height:64px; min-height:64px; padding:7px 4px; gap:6px; border:1px solid #81909d; border-radius:10px; background:linear-gradient(#37414e,#192331 65%,#111d2b); color:#ffd38d; box-shadow:inset 0 1px #d1d9d955,inset 0 -3px #0a1520,0 0 0 3px #0d1722; font:9px 'IBM Plex Mono',monospace; letter-spacing:.03em; }
- #gameplay-hud #mobile-options::before { content:''; position:absolute; right:5px; top:5px; width:3px; height:3px; border-radius:50%; background:#8bedf3; box-shadow:0 0 4px #63dbe988; }
- #gameplay-hud #mobile-options svg { width:24px; height:24px; }
- #gameplay-hud #mobile-options:active { transform:translateY(2px); }
+ #gameplay-hud .hud-label { color:#91879f;font:400 7px 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;margin-bottom:0; }
+ #gameplay-hud .hud-value { font:600 18px var(--font-display);line-height:20px;color:#f5f0f6;text-shadow:none; }
+ #gameplay-hud .hud-dim { font:500 13px var(--font-display);color:#92849f; }
+ #gameplay-hud #stat-primary-value,#gameplay-hud .hud-score { color:#ffd474; }
+ #gameplay-hud .hud-unit { font-size:9px; }
+ #gameplay-hud #mobile-options { position:relative;width:48px;min-width:48px;height:54px;min-height:54px;padding:7px 4px;gap:4px;border:1px solid #ffffff18;border-radius:12px;background:#ffffff06;color:#ccc2da;box-shadow:inset 0 1px #ffffff08;font:9px 'IBM Plex Mono',monospace;letter-spacing:.03em;text-transform:none; }
+ #gameplay-hud #mobile-options::before { display:none; }
+ #gameplay-hud #mobile-options svg { width:23px;height:23px; }
+ #gameplay-hud #mobile-options:active { transform:translateY(1px);background:#ffffff10; }
  #route-identity-legend { top:calc(84px + env(safe-area-inset-top)); }
- #gameplay-hud #mobile-options { width:48px; min-width:48px; height:54px; min-height:54px; gap:4px; }
  #gameplay-hud .location-search-inline { width:100%; }
- #gameplay-hud .inline-search-input { min-width:0; width:100%; font-size:14px; color:#ffd083; background:#1b211f; }
+ #gameplay-hud .inline-search-input { min-width:0;width:100%;font-size:14px;color:#eee8f6;background:#1c1928; }
  body.mode-visualizer #gameplay-hud #stat-distance,body.mode-visualizer #gameplay-hud #stat-score { display:none!important; }
 }
 @media(max-width:360px){
- #gameplay-hud { padding-left:14px; gap:0 16px; }
+ #gameplay-hud { padding-left:14px;gap:0 16px; }
  #gameplay-hud #current-location { font-size:11px; }
- #gameplay-hud .hud-stat { padding-right:3px; padding-left:4px; }
- .lcd-digit { width:9px; }
+ #gameplay-hud .hud-stat { padding-right:3px;padding-left:4px; }
  #gameplay-hud .hud-label { font-size:6.5px; }
 }

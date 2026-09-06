@@ -80,7 +80,7 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.1.0-dev',
-    buildId: 'pathfindr-instruments-audio-20260906.39',
+    buildId: 'pathfindr-classic-hud-20260906.40',
   },
 
   // ===========================================

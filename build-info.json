@@ -1,7 +1,7 @@
 {
-  "id": "pathfindr-instruments-audio-20260906.39",
+  "id": "pathfindr-classic-hud-20260906.40",
   "sourceBaseline": "f287c87",
-  "previousDeployment": "https://pathfindralpha-fh2pzi5ae-pathfindr-apps-projects.vercel.app",
+  "previousDeployment": "https://pathfindralpha-msalj1p9k-pathfindr-apps-projects.vercel.app",
   "rollbackWarning": "Preserve current Printshop when rolling back game files. Historical game-only full-site rollbacks are unsafe.",
   "version": "1.1.0-dev",
   "baselineRevision": "a3b0b238e33acf16afd1ad1194a2864b31839bab",
