@@ -80,7 +80,7 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.1.0-dev',
-    buildId: 'pathfindr-classic-hud-20260906.40',
+    buildId: 'pathfindr-lobby-cleanup-20260906.41',
   },
 
   // ===========================================

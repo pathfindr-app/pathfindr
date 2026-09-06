@@ -2,6 +2,11 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Lobby test-city cleanup — September 6, .41
+- Removed dedicated Miami/DC buttons from Choose Your Destination, not just the front-page shortcuts. Preserved city data and normal location modes. Startup regression test now requires both shortcuts to be absent throughout the HTML.
+- 116 game tests pass; stock client screenshot confirms My Location / US Cities / Global only. Existing localhost CORS/optional-resource diagnostics remain outside this HTML-only change.
+- Release stage /tmp/pathfindr-materials-rpXXWH verified against .40 source, preserving 178 files including all Printshop/API files. Only public index/config/build-info changed. Production deployment dpl_J1owMu41cDYpuqRyXuSLn5QKvXhJ.
+
 ### Classic HUD restoration — September 6, .40
 - Live: dpl_GnYEPU4P714dsUzCJT6yiQAudGRp, https://pathfindralpha-khz5oeidh-pathfindr-apps-projects.vercel.app, www.pathfindr.world. Previous shared deployment: dpl_9e32FZKz5JKutS643PJsKVYWNdfD.
 - Restored original desktop header styling; mobile matches its dark palette and regular typography while retaining the 78px base height and compact two-row layout. Removed amber casing and segmented-number script loading. No gameplay changes.

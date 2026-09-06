@@ -1,6 +1,6 @@
 // Preserve the current shared deployment; overlay ONLY this game's materials.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
-const root=path.resolve(__dirname,'..'),cached='/tmp/pathfindr-materials-M7baBd';
+const root=path.resolve(__dirname,'..'),cached='/tmp/pathfindr-materials-obS8Dj';
 const api=p=>JSON.parse(execFileSync('vercel',['api',p,'--scope','pathfindr-apps-projects'],{encoding:'utf8'}));
 const prod=api('/v13/deployments/www.pathfindr.world');
 const tree=api(`/v6/deployments/${prod.id}/files`),files=[];
@@ -11,11 +11,12 @@ for(const f of files)if(hash(fs.readFileSync(path.join(cached,f.path)))!==f.sha)
 const stage=fs.mkdtempSync('/tmp/pathfindr-materials-');
 for(const f of files){const dest=path.join(stage,f.path);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(cached,f.path),dest,fs.constants.COPYFILE_FICLONE);}
 fs.cpSync(path.join(cached,'.vercel'),path.join(stage,'.vercel'),{recursive:true});
-const overlay=['engine/hardware-hud.css'];
+const overlay=[];
 for(const name of overlay)fs.copyFileSync(path.join(root,name),path.join(stage,'public',name));
-const id='pathfindr-classic-hud-20260906.40';
+const id='pathfindr-lobby-cleanup-20260906.41';
 let index=fs.readFileSync(path.join(stage,'public/index.html'),'utf8');
-for(const file of ['config.js',...overlay])index=index.replace(new RegExp(file.replaceAll('.','\\.')+'\\?v=\\d+','g'),file+'?v=40');
+for(const file of ['config.js',...overlay])index=index.replace(new RegExp(file.replaceAll('.','\\.')+'\\?v=\\d+','g'),file+'?v=41');
+index=index.replace(/\s*<button class="location-option" data-mode="(?:miami|washington)">[\s\S]*?<\/button>/g,'');
 index=index.replace(/\s*<script src="engine\/hardware-hud.js\?v=\d+"><\/script>/,'');
 fs.writeFileSync(path.join(stage,'public/index.html'),index);
 const configPath=path.join(stage,'public/config.js');fs.writeFileSync(configPath,fs.readFileSync(configPath,'utf8').replace(/buildId: '[^']+'/,`buildId: '${id}'`));
