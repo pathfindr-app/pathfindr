@@ -1543,7 +1543,7 @@ const WebGLRenderer = {
                 float baseBrightness = 0.48 + heat * 0.3 + flowWave * 0.26 + baseShimmer + echo*0.4;
 
                 // Frontier boost: dramatic increase for wavefront
-                float frontierBoost = 1.0 + frontierStrength * 4.0 + electricNoise * frontierStrength * 3.0;
+                float frontierBoost = 1.0 + frontierStrength * 1.8 + electricNoise * frontierStrength;
 
                 // Pulse
                 float pulse = 1.0 + frontierStrength * u_frontierPulse * 0.3 + plasmaGlow * 0.5;
@@ -1554,7 +1554,7 @@ const WebGLRenderer = {
                 vec3 color = u_roundColor * brightness;
 
                 // Hot white core on frontier
-                color = mix(color, vec3(1.0), frontierStrength * frontierStrength * 0.5);
+                color = mix(color, vec3(1.0), frontierStrength * frontierStrength * 0.22);
 
                 // Energy flow creates subtle color shift
                 vec3 flowColor = vec3(
@@ -1574,7 +1574,10 @@ const WebGLRenderer = {
                 float alpha = (0.5 + heat * 0.35) * (0.8 + frontierStrength * 0.3);
                 alpha += plasmaGlow * 0.15 + flowWave * heat * 0.1;
 
-                gl_FragColor = vec4(color * alpha, alpha * u_afterglow);
+                // Soft-limit emission and preserve premultiplied alpha during cooling.
+                color = color / (vec3(1.0) + color * 0.45);
+                alpha = min(alpha, 0.95) * u_afterglow;
+                gl_FragColor = vec4(color * alpha, alpha);
             }
         `,
 
@@ -1629,7 +1632,8 @@ const WebGLRenderer = {
                 float glow = heat * 0.4 * pulse;
                 glow += frontierStrength * 0.15;
 
-                gl_FragColor = vec4(color * glow, glow * u_afterglow);
+                glow *= u_afterglow;
+                gl_FragColor = vec4(color * glow, glow);
             }
         `,
 
@@ -4418,8 +4422,6 @@ const AmbientViz = {
 
             PathfindrRouteCinema.route(ctx, optimalPoints, CONFIG.color.getOptimalPathColor(), performance.now()*0.001, true);
         }
-        PathfindrRouteCinema.tag(ctx,userPoints,'YOUR ROUTE','#ffb869',.35);
-        PathfindrRouteCinema.tag(ctx,optimalPoints,'A* SHORTEST','#55dfe2',.7);
     },
 
     // Render persisted rounds with electricity effects
@@ -4455,19 +4457,11 @@ const AmbientViz = {
                     }
                     ctx.save();ctx.globalAlpha=effectiveIntensity;
                     PathfindrRouteCinema.route(ctx,optimalPoints,{r:85,g:223,b:226},performance.now()*.001,true,true);
-                    PathfindrRouteCinema.tag(ctx,optimalPoints,`R${round.roundNumber} · A*`,'#55dfe2',.7);ctx.restore();
+                    ctx.restore();
                 }
             }
 
-            // Render user path with distinct electricity (dimmed during active viz)
-            if (round.userPath.length > 1 || round.userPathCoords?.length > 1) {
-                const userPoints = this.projectNodePath(round.userPath, round.userPathCoords);
-                if (userPoints.length > 1) {
-                    // Use stored userPathColor from round theme
-                    ctx.save();ctx.globalAlpha=effectiveIntensity;
-                    PathfindrRouteCinema.tag(ctx,userPoints,`R${round.roundNumber} · YOU`,'#ffb869',.35);ctx.restore();
-                }
-            }
+            // History stays on the map as animated paths; no repeated round badges.
         }
     },
 
@@ -6183,9 +6177,9 @@ const ElectricitySystem = {
         };
 
         // Outer glow
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.2 * effectiveIntensity})`;
-        ctx.lineWidth = isActive ? 14 : 10;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.14 * effectiveIntensity})`;
+        ctx.lineWidth = isActive ? 12 : 8;
 
         ctx.beginPath();
         for (const edge of edges) {
@@ -6200,27 +6194,12 @@ const ElectricitySystem = {
         // Mid glow
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.5 * effectiveIntensity})`;
         ctx.lineWidth = isActive ? 6 : 4;
-        ctx.beginPath();
-        for (const edge of edges) {
-            if (!isValidEdge(edge)) continue;
-            const w1 = this.getWobble(edge.from.x, edge.from.y);
-            const w2 = this.getWobble(edge.to.x, edge.to.y);
-            ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
-            ctx.lineTo(edge.to.x + w2.wx, edge.to.y + w2.wy);
-        }
+        // Reuse the same batched path for all layers: one geometry walk, three strokes.
         ctx.stroke();
 
         // Core
         ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${0.9 * effectiveIntensity})`;
         ctx.lineWidth = isActive ? 2 : 1.5;
-        ctx.beginPath();
-        for (const edge of edges) {
-            if (!isValidEdge(edge)) continue;
-            const w1 = this.getWobble(edge.from.x, edge.from.y);
-            const w2 = this.getWobble(edge.to.x, edge.to.y);
-            ctx.moveTo(edge.from.x + w1.wx, edge.from.y + w1.wy);
-            ctx.lineTo(edge.to.x + w2.wx, edge.to.y + w2.wy);
-        }
         ctx.stroke();
 
         // Random arc sparks for active rounds
@@ -10391,7 +10370,6 @@ function renderVisualization(options = {}) {
     // Ownership remains explicit while the algorithm searches/reveals.
     if(GameState.gameMode!=='visualizer'&&!scene.isResultsPhase){
         const userPoints=AmbientViz.projectNodePath(GameState.userPathNodes);
-        PathfindrRouteCinema.tag(ctx,userPoints,'YOUR ROUTE','#ffb869',.35);
     }
     // Render persistent history FIRST (underneath current visualization)
     // This ensures previous paths stay visible during new visualizations
@@ -10687,12 +10665,15 @@ function renderVisualization(options = {}) {
             if (!pos) continue;
 
             const screen = GameState.map.project([pos.lng, pos.lat]);
-            const size = spriteSize * heat * 0.8;
+            const size = Math.min(42, spriteSize * heat * 0.32);
             const spriteToUse = heat > 0.9 ? AmbientViz.sprites.glowWhite :
                                AmbientViz.sprites.glowCyan;
 
-            ctx.globalAlpha = heat * flicker * 0.8;
+            ctx.globalAlpha = heat * flicker * 0.52;
             ctx.drawImage(spriteToUse, screen.x - size / 2, screen.y - size / 2, size, size);
+            ctx.globalAlpha = heat * 0.85;
+            ctx.fillStyle = '#d9f8f3';
+            ctx.beginPath();ctx.arc(screen.x,screen.y,1.3+heat*.7,0,Math.PI*2);ctx.fill();
             frontierCount++;
         }
     }
@@ -10845,7 +10826,6 @@ function drawOptimalPath(ctx) {
     ctx.stroke();
 
     ctx.setLineDash([]);
-    PathfindrRouteCinema.tag(ctx,points,'A* SHORTEST','#55dfe2',.7);
     window.PathfindrMusicalRoutes?.draw(ctx,points,oc,'optimal');
     ctx.globalCompositeOperation = 'source-over';
 
@@ -12554,6 +12534,8 @@ const DEBUG_BYPASS_PREMIUM = (() => {
 })();
 
 function checkPremiumAccess(mode) {
+    // The ambient showcase is a free entry point; Pro keeps ad removal and exploration.
+    if (mode === 'visualizer') return true;
     // Debug bypass
     if (DEBUG_BYPASS_PREMIUM) return true;
 
@@ -12586,10 +12568,10 @@ async function showPremiumRequired(modeName) {
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
             </div>
-            <h2>Unlock ${modeName} Mode</h2>
+            <h2>Make the world yours.</h2>
             <div class="premium-features-list">
                 <div class="premium-feature"><span class="feature-check">✓</span> Ad-free experience</div>
-                <div class="premium-feature"><span class="feature-check">✓</span> Explorer & Visualizer modes</div>
+                <div class="premium-feature"><span class="feature-check">✓</span> Free-roaming Explorer mode</div>
                 <div class="premium-feature"><span class="feature-check">✓</span> Search any location in Classic</div>
                 <div class="premium-feature"><span class="feature-check">✓</span> One-time payment</div>
             </div>
@@ -14651,13 +14633,14 @@ async function fetchActiveChallenges(limit = 50) {
             if (!dailyResult.error && dailyResult.data && dailyResult.data.length > 0) {
                 return dailyResult.data;
             }
+            if (error || dailyResult.error) throw new Error('Challenges could not be reached. Try again shortly.');
             return [];
         }
 
         return data || [];
     } catch (error) {
         console.error('[Challenge] Fetch active challenges error:', error);
-        return [];
+        throw error;
     }
 }
 
@@ -14729,6 +14712,10 @@ async function fetchUserChallengeEntry(challengeId) {
 /**
  * Show the multi-challenge list modal
  */
+function escapeChallengeText(value) {
+    return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
+
 async function showChallengeList() {
     // Clear any stale activeChallenge reference (SSOT)
     GameState.challengeState.activeChallenge = null;
@@ -14739,6 +14726,7 @@ async function showChallengeList() {
     // If no challenges cached, refetch
     if (!challenges || challenges.length === 0) {
         showToast('No active challenges available');
+        showModeSelector();
         return;
     }
 
@@ -14775,7 +14763,7 @@ async function showChallengeList() {
             return `
                 <div class="challenge-card ${isCompleted ? 'completed' : ''}" data-challenge-index="${index}">
                     <div class="challenge-card-header">
-                        <span class="challenge-card-city">${challenge.city_name}</span>
+                        <span class="challenge-card-city">${escapeChallengeText(challenge.city_name)}</span>
                         <span class="challenge-card-time">${timeRemaining}</span>
                     </div>
                     <div class="challenge-card-info">
@@ -14926,7 +14914,7 @@ async function showChallengeInfoScreen(challenge) {
         <div class="overlay-content challenge-info-panel">
             <div class="challenge-info-header">
                 <div class="challenge-info-badge">${challenge.challenge_type.toUpperCase()} CHALLENGE</div>
-                <div class="challenge-info-city">${challenge.city_name}</div>
+                <div class="challenge-info-city">${escapeChallengeText(challenge.city_name)}</div>
                 <div class="challenge-info-difficulty">${challenge.difficulty || 'Medium'} difficulty</div>
             </div>
 
@@ -14944,7 +14932,7 @@ async function showChallengeInfoScreen(challenge) {
                         ${leaderboard.map((entry, i) => `
                             <div class="leaderboard-preview-row">
                                 <span class="leaderboard-rank ${['gold', 'silver', 'bronze'][i] || ''}">#${entry.rank}</span>
-                                <span class="leaderboard-name">${entry.username}</span>
+                                <span class="leaderboard-name">${escapeChallengeText(entry.username)}</span>
                                 <span class="leaderboard-score">${entry.efficiency}%</span>
                             </div>
                         `).join('')}
@@ -14980,6 +14968,13 @@ async function showChallengeInfoScreen(challenge) {
  */
 async function beginChallengeGame(challenge) {
     window.PathfindrSharedGame?.clear();
+    disableContinuousPlay();
+    CityFacts.stopTicker();
+    clearVisualization();
+    clearUserPath();
+    RoundHistory.clear();
+    GameState.currentRound=1;GameState.totalScore=0;GameState.roundScores=[];
+    GameState.assistedRound=false;
     GameState.gameMode = 'challenge';
     GameState.challengeState.activeChallenge = challenge;
     // Don't set startTime yet - set it on first user click for fair timing
@@ -15015,7 +15010,8 @@ async function beginChallengeGame(challenge) {
     }
 
     // Move map to challenge location and wait for it to settle
-    GameState.map.jumpTo({ center: [location.lng, location.lat], zoom: location.zoom });
+    GameState.map.stop();GameState.map.setMaxBounds(null);
+    GameState.map.jumpTo({ center: [location.lng, location.lat], zoom: location.zoom, pitch:0, bearing:0 });
 
     // Check if we have preloaded data for this challenge
     const preloadedData = GameState.challengeState.preloadCache?.get(challenge.id);
@@ -15044,6 +15040,9 @@ async function beginChallengeGame(challenge) {
 
         if (!startNode || !endNode) {
             throw new Error('Could not find valid route points. Try another challenge.');
+        }
+        if(startNode===endNode||!findShortestPathBetween(startNode,endNode)?.length){
+            throw new Error('These challenge streets are not connected. No attempt was recorded—please choose another challenge.');
         }
 
         GameState.startNode = startNode;
@@ -15174,7 +15173,7 @@ async function showChallengeLeaderboard(challengeId) {
             : todayLeaderboard.map(entry => `
                 <div class="leaderboard-row ${entry.user_id === currentUserId ? 'current-user' : ''}">
                     <span class="rank ${entry.rank <= 3 ? 'top-3' : ''}">#${entry.rank}</span>
-                    <span class="username">${entry.username}</span>
+                    <span class="username">${escapeChallengeText(entry.username)}</span>
                     <span class="efficiency">${entry.efficiency}%</span>
                     <span class="time">${formatDuration(entry.duration_ms)}</span>
                 </div>
@@ -15187,7 +15186,7 @@ async function showChallengeLeaderboard(challengeId) {
             : allTimeLeaderboard.map(entry => `
                 <div class="leaderboard-row ${entry.user_id === currentUserId ? 'current-user' : ''}">
                     <span class="rank ${entry.rank <= 3 ? 'top-3' : ''}">#${entry.rank}</span>
-                    <span class="username">${entry.username}</span>
+                    <span class="username">${escapeChallengeText(entry.username)}</span>
                     <span class="efficiency">${entry.avg_efficiency}%</span>
                     <span class="challenges-count">${entry.challenges_completed} played</span>
                 </div>
@@ -15267,7 +15266,7 @@ async function showChallengeResults(efficiency, rank) {
     overlay.innerHTML = `
         <div class="overlay-content challenge-results-panel">
             <div class="challenge-info-badge">${challenge.challenge_type.toUpperCase()} CHALLENGE</div>
-            <h2>${challenge.city_name}</h2>
+            <h2>${escapeChallengeText(challenge.city_name)}</h2>
 
             <div class="challenge-results-rank">#${rank}</div>
             <div class="challenge-results-rank-label">Current rank</div>

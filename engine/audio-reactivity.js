@@ -41,11 +41,13 @@
             const active = state.enabled && analyser && !muted && !player.paused &&
                 !player.muted && player.volume > 0 && context.state === 'running' &&
                 !document.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (active) analyser.getByteFrequencyData(bins);
             state.active=!!active;
             const clock=Number(player?.currentTime)||0;
             let name='';try{name=decodeURIComponent((player?.currentSrc||player?.src||'').split('/').at(-1));}catch{}
             const analysis=window.PathfindrSoundtrackAnalysis?.tracks[name];
+            // Bundled tracks already have exact-time spectral analysis. Avoid a
+            // redundant FFT readback every frame; retain live analysis for new audio.
+            if (active && !analysis) analyser.getByteFrequencyData(bins);
             if(name!==track||clock<previousTime||clock-previousTime>1){
                 track=name;validAfter=clock;eventIndex=0;state.packets=[];lastAttack=clock;previousBins?.fill(0);fluxMean=0;
                 if(analysis)while(eventIndex<analysis.events.length&&analysis.events[eventIndex][0]<clock)eventIndex++;
@@ -62,7 +64,7 @@
                 for (let i = start; i < end; i++) sum += bins[i] / 255;
                 return Math.min(1, sum / Math.max(1, end - start) * 1.65);
             };
-            const targets = { bass: band(40, 250), mid: band(250, 2200), high: band(2200, 9000) };
+            const targets = active&&analysis ? {bass:0,mid:0,high:0} : { bass: band(40, 250), mid: band(250, 2200), high: band(2200, 9000) };
             if(active&&analysis){
                 const position=Math.max(0,(clock-analysis.offset)/analysis.step),i=Math.min(analysis.bands.length-1,Math.floor(position)),f=position-Math.floor(position);
                 const a=analysis.bands[i],b=analysis.bands[Math.min(i+1,analysis.bands.length-1)];

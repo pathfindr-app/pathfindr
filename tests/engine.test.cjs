@@ -316,16 +316,17 @@ test('A* pickups survive into results, remain unique, and loading cannot collect
     assert.equal(c.state().counts.spark,1);
 });
 
-test('round discoveries reset without changing lifetime totals; results pickups belong to current round',()=>{
+test('round summary freezes discoveries; new rounds preserve lifetime totals',()=>{
     const body={dataset:{gamePhase:'playing'}};
     const {api}=environment('collections.js',{localStorage:{getItem:()=>null,setItem:()=>{}},document:{body,getElementById:id=>id==='discovery-status'?{}:null}});
     const c=api.PathfindrCollections;c.beginRound(1);
     c.claim({key:'landmark:a',type:'landmark',name:'Freedom Tower'});
     c.beginRound(1);assert.equal(c.state().round.items.length,1);
     body.dataset.gamePhase='results';c.claim({key:'spark:a',type:'spark',name:'Street Spark'});
-    assert.equal(c.state().round.items.length,2);
+    assert.equal(c.state().round.items.length,1);
     c.beginRound(2);assert.equal(c.state().round.items.length,0);assert.equal(c.state().counts.landmark,1);
+    body.dataset.gamePhase='playing';
     c.claim({key:'spark:b',type:'spark',name:'Street Spark'});c.beginRound(2,true);
-    assert.equal(c.state().round.items.length,0);assert.equal(c.state().counts.spark,2);
+    assert.equal(c.state().round.items.length,0);assert.equal(c.state().counts.spark,1);
     c.setCity({lat:25,lng:-80},[]);assert.equal(c.state().round.key,null);
 });

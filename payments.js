@@ -91,7 +91,7 @@ const PathfindrPayments = {
       this.products = [{
         id: 'pathfindr_premium',
         title: 'Pathfindr Premium',
-        description: 'Remove ads + unlock Explorer & Visualizer modes',
+        description: 'Remove ads + unlock Explorer and custom locations',
         price: '$2',
         priceId: PathfindrConfig.stripe.priceId,
       }];
@@ -639,7 +639,7 @@ const PathfindrPayments = {
         <p>Sign up to purchase Pro and sync your progress across devices.</p>
         <div class="auth-purchase-benefits">
           <div class="auth-benefit"><span class="benefit-check">✓</span> Remove all ads forever</div>
-          <div class="auth-benefit"><span class="benefit-check">✓</span> Unlock Explorer & Visualizer modes</div>
+          <div class="auth-benefit"><span class="benefit-check">✓</span> Free-roaming Explorer mode</div>
           <div class="auth-benefit"><span class="benefit-check">✓</span> Sync progress across devices</div>
         </div>
         <button id="auth-purchase-signup-btn" class="auth-purchase-cta">
@@ -875,7 +875,7 @@ const PathfindrPayments = {
             </div>
             <div class="stripe-confirm-features">
               <div>Ad-free experience</div>
-              <div>Explorer & Visualizer modes</div>
+              <div>Free-roaming Explorer mode</div>
               <div>Search any location in Classic mode</div>
               <div>One-time payment</div>
             </div>

@@ -1,5 +1,8 @@
 {
-  "id": "pathfindr-amber-instrument-20260905.36",
+  "id": "pathfindr-launch-polish-20260906.37",
+  "sourceBaseline": "f287c87",
+  "previousDeployment": "https://pathfindralpha-o85tgg68x-pathfindr-apps-projects.vercel.app",
+  "productionRollback": "vercel rollback https://pathfindralpha-o85tgg68x-pathfindr-apps-projects.vercel.app --scope pathfindr-apps-projects",
   "version": "1.1.0-dev",
   "baselineRevision": "a3b0b238e33acf16afd1ad1194a2864b31839bab",
   "baselineVersion": "1.0.0",

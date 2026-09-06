@@ -18,17 +18,18 @@
             vec2 current=flow*uHasFlow;
             vec2 p=world-current*uTime*1.8;
             float deep=fbm(world*0.006);
-            p+=vec2(deep*19.0,sin(world.y*0.009)*6.0);
+            // Coherent swell directions; small ripples ride the broad waves.
+            p+=vec2(deep*9.0,sin(world.y*0.009)*3.0);
             vec2 slope=vec2(0.0);float swell=0.0;
             float footprint=max(length(fwidth(world)),0.05);
             for(int i=0;i<6;i++){
-                float fi=float(i),angle=fi*2.399963+0.35;
+                float fi=float(i),angle=0.35+sin(fi*2.399963)*0.65;
                 if(i>=4 && uQuality<0.5)break;
                 vec2 d=vec2(cos(angle),sin(angle));
                 float frequency=0.045*pow(2.05,fi);
                 float phase=dot(p,d)*frequency-uTime*(0.38+fi*0.19);
                 float aa=1.0-smoothstep(0.7,3.0,frequency*footprint);
-                slope+=d*cos(phase)*0.20*pow(0.70,fi)*aa;
+                slope+=d*cos(phase)*0.26*pow(0.60,fi)*aa;
                 swell+=sin(phase)*aa/(2.0+fi);
             }
             vec3 n=normalize(vec3(-slope,1.0));
@@ -43,8 +44,8 @@
             vec3 sky=mix(vec3(0.012,0.027,0.065),vec3(0.17,0.30,0.38),smoothstep(-0.3,0.9,reflected.z));
             // Analytic night environment, not a reflection of scene buildings.
             // Ripple normals break these broad light sources into watery ribbons.
-            float cyanLight=exp(-pow((reflected.x+0.28)/0.16,2.0));
-            float coralLight=exp(-pow((reflected.y-0.35)/0.10,2.0));
+            float cyanLight=exp(-pow((reflected.x+0.28)/0.24,2.0));
+            float coralLight=exp(-pow((reflected.y-0.35)/0.18,2.0));
             sky+=vec3(0.035,0.52,0.62)*cyanLight;
             sky+=vec3(0.42,0.065,0.16)*coralLight*0.55;
             vec3 body=mix(vec3(0.005,0.024,0.046),vec3(0.012,0.075,0.092),deep);
@@ -52,7 +53,7 @@
             float caustic=pow(max(0.0,1.0-abs(filaments)),12.0)*(1.0-smoothstep(3.0,15.0,footprint));
             // Intentional artistic reflectance floor for a top-down game camera.
             vec3 col=mix(body,sky,0.17+fresnel*0.66);
-            col+=vec3(0.02,0.11,0.14)*caustic*(0.15+deep*0.45+uAudio*0.15);
+            col+=vec3(0.02,0.11,0.14)*caustic*(0.07+deep*0.15+uAudio*0.10);
             col+=vec3(0.56,0.79,0.88)*min(ggx*0.014,0.55)*(0.75+uAudio*0.25);
             col+=vec3(0.007,0.025,0.033)*swell;
             col=col/(1.0+col); col=pow(col,vec3(1.0/2.2));

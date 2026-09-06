@@ -1,0 +1,41 @@
+import {chromium} from '/Users/bradleyarakaki/.codex/skills/develop-web-game/node_modules/playwright/index.mjs';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+fs.mkdirSync('output/launch-qa',{recursive:true});
+const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader']});
+const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+try{
+ await page.goto(process.env.QA_URL||'http://localhost:4200',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>typeof GameState!=='undefined'&&GameState.map&&window.PathfindrCollections);
+ await page.locator('#lobby-boot-status').waitFor({state:'hidden',timeout:60000});
+ assert.equal(await page.locator('[data-lobby-city]').count(),0);
+ assert.equal(await page.evaluate(()=>checkPremiumAccess('visualizer')),true);
+ await page.screenshot({path:'output/launch-qa/lobby.png'});
+ await page.evaluate(()=>{selectGameMode('competitive');selectLocationMode('miami');});
+ await page.locator('#instructions-overlay').waitFor({state:'visible',timeout:60000});
+ for(const label of ['Junction 1','Junction 2','Junction 3','End'])await page.getByRole('button',{name:label,exact:true}).click();
+ assert.match(await page.locator('.primer-status').innerText(),/Nice/);
+ await page.screenshot({path:'output/launch-qa/tutorial.png'});
+ await page.getByRole('button',{name:'Start Game',exact:true}).click();
+ await page.waitForFunction(()=>GameController.phase==='playing',null,{timeout:60000});
+ await page.waitForTimeout(1500);
+ const hud=await page.locator('#gameplay-hud').boundingBox();assert.ok(hud.height<=82,JSON.stringify(hud));
+ await page.screenshot({path:'output/launch-qa/gameplay.png'});
+ const collection=await page.evaluate(()=>{
+  const c=PathfindrCollections;const item={key:'library:qa',type:'library',name:'Practice library'};
+  const prior=SoundEngine.muted;SoundEngine.muted=true;
+  document.body.dataset.gamePhase='visualizing';const during=c.claim(item);
+  document.body.dataset.gamePhase='results';const after=c.claim({...item,key:'library:qa2'});
+  document.body.dataset.gamePhase='playing';SoundEngine.muted=prior;
+  return{during,after};
+ });assert.deepEqual(collection,{during:true,after:false});
+ await page.locator('#mobile-options').click();await page.waitForTimeout(350);
+ await page.getByRole('button',{name:'Resume map',exact:true}).click();
+ if(await page.evaluate(()=>!!document.fullscreenElement))await page.evaluate(()=>document.exitFullscreen());
+ await page.setViewportSize({width:320,height:568});await page.waitForTimeout(300);
+ await page.screenshot({path:'output/launch-qa/narrow.png'});
+ assert.deepEqual(errors,[]);
+ fs.writeFileSync('output/launch-qa/state.json',await page.evaluate(()=>render_game_to_text()));
+ console.log('PASS lobby, interactive primer, compact mobile HUD, collection phase gate, free Visualizer, menu resume; no page exceptions');
+}finally{await browser.close();}

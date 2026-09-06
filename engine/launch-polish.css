@@ -1,0 +1,24 @@
+.route-primer { max-width:490px!important; padding:24px!important; text-align:left!important; }
+.route-primer h2 { font-size:26px; margin:0 0 10px; }
+.route-primer p { color:#b7c6d5; line-height:1.5; font-size:14px; }
+.primer-map { display:block; width:100%; max-height:210px; background:#101b29; border:1px solid #405467; border-radius:12px; touch-action:none; }
+.primer-road { stroke:#485766; stroke-width:5; }
+.primer-trail { stroke:#ffc27a; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:16 5 2 5; }
+.primer-hit { fill:transparent; }
+.primer-node { cursor:pointer; outline:none; }
+.primer-node:focus-visible .primer-hit { stroke:#edc58e; stroke-width:1; }
+.primer-dot { fill:#bacbd8; }.primer-start { fill:#91eab0; }.primer-end { fill:#ff86ad; }
+.primer-node text { fill:#132331; font:bold 13px 'IBM Plex Mono',monospace; }
+.primer-status { min-height:63px; margin:12px 0 0; }
+.primer-reset { min-height:44px; padding:4px 12px; border:1px solid #526577; border-radius:6px; background:transparent; color:#f3c991; }
+.route-primer .primer-note { font-size:12px; border-top:1px solid #344757; padding-top:12px; }
+.route-primer #start-game-btn { width:100%; min-height:48px; margin-top:8px; }
+.map-pickup { border-radius:12px 12px 16px 5px; background:linear-gradient(145deg,#223648,#101e2d 70%); box-shadow:inset 0 1px #d8f5ff26,0 3px 7px #070e16aa; }
+.map-pickup.pickup-landmark { border-top:2px solid #d4afff; }
+.map-pickup.pickup-library { border-top:2px solid #8ee4ce; }
+.map-pickup.pickup-burger { border-top:2px solid #f6bf78; }
+.map-pickup.is-collected { background:transparent; border-color:transparent; box-shadow:none; }
+.map-pickup.is-collected .pickup-tooltip { display:none; }
+@keyframes pickup-arrive { from { opacity:0; transform:translateY(5px) scale(.7); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media(prefers-reduced-motion:no-preference){.map-pickup>svg{animation:pickup-arrive 260ms cubic-bezier(.2,.8,.2,1) both;}}
+@media(max-height:600px){.route-primer { padding:16px!important; }.primer-map{max-height:130px;}.route-primer h2{font-size:20px;}.primer-status{min-height:42px;}}

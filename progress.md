@@ -2,6 +2,16 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Relaunch pass, 2026-09-06 (in progress, isolated worktree)
+- Worktree `/Users/bradleyarakaki/Desktop/Pathfindr-launch-20260906`, branch `codex/launch-readiness-20260906`. Original checkout untouched; full recovery archive gzip-verified, baseline snapshot f287c87, production .36 rollback in LAUNCH_READINESS.md.
+- Live challenge scheduler was disabled_inactivity. Enabled existing GitHub workflow and dispatched run34033089970: success; REST confirmed new Amsterdam challenge. Source generator auth now fails closed; not yet deployed.
+- Compact78px amber mobile HUD, earlier eased edge zones, actual-HUD camera padding; removed repeated per-round You/A* tags while keeping animated paths/global legend.
+- Collectibles reject results, retain Classic A* collection, distinct layered synth voices, 420ms claim animation and reduced-motion path. Tutorial is an isolated tap/trace/backtrack practice grid.
+- Water uses more coherent waves/broader reflection lobes/less filament noise. History reuses one geometry batch across3strokes. Bundled audio skips redundant FFT readbacks. Musical branch gain has a visibility floor. A* frontier halos shrink to sharp nodes; premultiplied cooling corrected in both heat shaders.
+- Removed lobby test-city shortcuts; retained city options and saved packs. Visualizer now free; Pro retains ad removal, Explorer and custom locations. Prices/paid entitlements unchanged. Print Studio excluded from game build and lobby release.
+- Hosted share RPC is absent live (PGRST202). Client now tries hosted first and refuses giant fallback links (>1500chars); compact self-contained pack links still work. Scoped migration approval asked asynchronously; Supabase CLI access unresolved. This is NOT yet a completed short-link backend.
+- 112 game tests pass. Browser launch-qa passes lobby/tutorial/mobile HUD/phase gate/menu; reveal-qa passes actual A* sequence and recap. Screenshots inspected. More coverage and deployment still needed; backend gaps documented in BACKEND_LAUNCH_AUDIT.md.
+
 ### Amber instrument HUD / clear menu navigation (.36)
 - Published .36 to https://www.pathfindr.world; deployment dpl_DcM4SSEVfk72qKFTjQxEDcU2fJMJ, immutable URL https://pathfindralpha-o85tgg68x-pathfindr-apps-projects.vercel.app. Final full-suite rerun picked up concurrent Print Studio changes: 126/127 passed, one unrelated prints.test.cjs Hawaiian-diatrics/Maui attribution assertion (UH HMRG / PacIOOS). Print Studio is excluded from this release; do not change its work. Gameplay-only suite rerun separately.
 - Staged browser QA passed 390px/320px and short landscape layouts, original text-to-LCD updates, Sound and Audio motion toggles, More controls, Resume/Escape, drawn-route leave protection before scoring, Keep playing returning directly to map with route intact, and confirmed score reset/lobby exit. No page exceptions; gameplay/menu screenshots inspected. Required stock client ran; existing localhost CORS/optional resource diagnostics only. Full suite 126 tests passed before final one-line Keep playing UX improvement; final suite rerun pending.

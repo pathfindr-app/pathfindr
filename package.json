@@ -6,7 +6,7 @@
   "scripts": {
     "analyze:music": "python3 scripts/analyze-soundtrack.py",
     "test": "node --test tests/*.test.cjs",
-    "rollback": "sh /Users/bradleyarakaki/Desktop/Pathfindr-recovery/restore-baseline.sh",
+    "rollback": "sh scripts/rollback-launch.sh",
     "start": "npx serve .",
     "start:stream": "node scripts/stream-server.js",
     "start:chat": "node scripts/youtube-worker-launcher.js",

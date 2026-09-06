@@ -115,7 +115,7 @@ serve(async (req) => {
     const cronSecretHeader = req.headers.get('X-Cron-Secret')
     const cronSecret = Deno.env.get('CRON_SECRET')
 
-    if (cronSecret && cronSecretHeader !== cronSecret) {
+    if (!cronSecret || cronSecretHeader !== cronSecret) {
       console.log('Unauthorized request - invalid or missing CRON_SECRET')
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),

@@ -1,0 +1,34 @@
+import {chromium} from '/Users/bradleyarakaki/.codex/skills/develop-web-game/node_modules/playwright/index.mjs';
+import assert from 'node:assert/strict';import fs from 'node:fs';
+const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader']});
+const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+await page.goto(process.env.QA_URL||'http://localhost:4200',{waitUntil:'domcontentloaded',timeout:60000});
+await page.locator('#lobby-boot-status').waitFor({state:'hidden',timeout:60000});await page.evaluate(()=>document.fonts.ready);
+await page.evaluate(()=>{selectGameMode('competitive');selectLocationMode('miami');});
+try{await page.getByRole('button',{name:'Start Game',exact:true}).click({timeout:12000});}catch{}
+await page.waitForFunction(()=>document.body.dataset.gamePhase==='playing'&&PathfindrCity.state.buildings>0,null,{timeout:60000});
+await page.evaluate(()=>{
+ GameState.userPathNodes=findShortestPathBetween(GameState.startNode,GameState.endNode);
+ recalculateUserDistance();updateAllDistanceDisplays();redrawUserPath();
+ const end=GameState.nodes.get(GameState.endNode);GameState.map.jumpTo({center:[end.lng,end.lat],zoom:17,pitch:0});
+ window.revealSamples=[];const jump=GameState.map.jumpTo.bind(GameState.map);
+ GameState.map.jumpTo=(opts,...args)=>{const result=jump(opts,...args);revealSamples.push({phase:GameController.phase,viz:GameState.vizState.phase,center:GameState.map.getCenter(),zoom:GameState.map.getZoom()});return result;};
+ submitRoute();
+});
+await page.waitForFunction(()=>document.body.dataset.gamePhase==='visualizing',null,{timeout:60000});
+await page.screenshot({path:'output/reveal-start-mobile.png'});
+await page.waitForFunction(()=>GameState.vizState.phase==='path',null,{timeout:60000});
+await page.screenshot({path:'output/reveal-wide-mobile.png'});
+await page.waitForFunction(()=>document.body.dataset.gamePhase==='results',null,{timeout:60000});await page.waitForTimeout(900);
+await page.screenshot({path:'output/reveal-results-mobile.png'});
+const data=await page.evaluate(()=>({samples:revealSamples,start:GameState.nodes.get(GameState.startNode),end:GameState.nodes.get(GameState.endNode),state:JSON.parse(render_game_to_text())}));
+const returns=data.samples.filter(s=>s.phase==='playing'),pullback=data.samples.filter(s=>s.phase==='visualizing');
+assert.ok(returns.length>2);assert.equal(pullback.length,0);
+const gap=(a,b)=>Math.hypot(a.lng-b.lng,a.lat-b.lat);
+assert.ok(gap(returns[0].center,data.end)<gap(returns.at(-1).center,data.end));
+assert.ok(returns.at(-1).zoom<returns[0].zoom-.5);
+for(let i=1;i<returns.length;i++)assert.ok(returns[i].zoom<=returns[i-1].zoom+.001);
+assert.equal(errors.length,0);
+fs.writeFileSync('output/reveal-state.json',JSON.stringify({errors,...data},null,2));
+console.log('PASS pullback from end before A*, camera settled during search, results, no page exceptions');await browser.close();

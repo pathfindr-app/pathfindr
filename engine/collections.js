@@ -10,7 +10,7 @@
     let roundKey=null,roundItems=[],challengeClaims=null;
     const claimed=item=>challengeClaims?challengeClaims.has(item.key):!!saved.claimed[item.key];
     const typeNames={spark:'Street Spark',burger:'Burger stop',landmark:'Landmark',library:'Library'};
-    const collectionAllowed=phase=>(typeof GameState==='undefined'||GameState.gameMode!=='visualizer')&&['playing','visualizing','results','idle'].includes(phase);
+    const collectionAllowed=phase=>(typeof GameState==='undefined'||GameState.gameMode!=='visualizer')&&['playing','visualizing','idle'].includes(phase);
     function beginRound(number,force=false){
         const next=`${cityKey}:${number}`;
         if(!force&&roundKey===next)return;
@@ -50,12 +50,37 @@
     function sound(type){
         if(typeof SoundEngine==='undefined')return;SoundEngine.init();if(SoundEngine.muted||!SoundEngine.ctx)return;
         const ctx=SoundEngine.ctx,now=ctx.currentTime;
-        const notes=type==='library'?[659.25,987.77,1318.51]:type==='burger'?[330,440,660]:type==='landmark'?[523.25,659.25,783.99,1046.5]:[880,1320];
-        notes.forEach((frequency,i)=>{const osc=ctx.createOscillator(),gain=ctx.createGain(),start=now+i*(type==='landmark'?0.075:0.045);
-            osc.type=type==='burger'?'triangle':'sine';osc.frequency.setValueAtTime(frequency,start);osc.frequency.exponentialRampToValueAtTime(frequency*1.012,start+0.16);
-            gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(0.075,start+0.008);gain.gain.exponentialRampToValueAtTime(0.0001,start+0.24);
-            osc.connect(gain);gain.connect(SoundEngine.masterGain);osc.start(start);osc.stop(start+0.26);osc.onended=()=>{osc.disconnect();gain.disconnect();};
+        // Burger: warm springy pop. Library: plucked glass dyad. Monument: bell fifths.
+        // At most eight short voices, all routed through the existing mute/master bus.
+        const notes=type==='library'?[783.99,1174.66]:type==='burger'?[196,293.66,392]:[392,587.33,783.99];
+        notes.forEach((frequency,i)=>{
+            const duration=type==='landmark'?.72:type==='library'?.42:.22;
+            for(let partial=0;partial<2;partial++){
+                const osc=ctx.createOscillator(),gain=ctx.createGain(),start=now+i*.055;
+                osc.type=type==='burger'?'triangle':'sine';
+                const pitch=frequency*(partial?type==='library'?2.003:2.76:1);
+                osc.frequency.setValueAtTime(pitch*(type==='burger'?1.35:1),start);
+                osc.frequency.exponentialRampToValueAtTime(pitch,start+.065);
+                gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(partial?.018:.055,start+.006);
+                gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
+                osc.connect(gain);gain.connect(SoundEngine.masterGain);osc.start(start);osc.stop(start+duration+.01);
+                osc.onended=()=>{osc.disconnect();gain.disconnect();};
+            }
         });
+    }
+    function celebrate(item){
+        const button=item.element;if(!button)return;
+        button.disabled=true;button.style.pointerEvents='none';
+        const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const glyph=button.querySelector('svg');
+        if(reduced||!glyph?.animate){button.remove();return;}
+        const animation=glyph.animate([
+            {transform:'scale(1)',opacity:1},
+            {transform:'scale(1.3) translateY(-3px)',opacity:1,offset:.25},
+            {transform:'scale(.45) translateY(-42px)',opacity:0}
+        ],{duration:420,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
+        button.classList.add('is-collected');
+        animation.finished.then(()=>button.remove(),()=>button.remove());
     }
     function claim(item){
         if(claimed(item)||!collectionAllowed(document.body.dataset.gamePhase))return false;
@@ -63,7 +88,7 @@
         if(challengeClaims)challengeClaims.add(item.key);else{saved.claimed[item.key]=collectedAt;saved.counts[item.type]++;}
         roundItems.push({key:item.key,type:item.type,name:item.name,pos:item.pos?[...item.pos]:null,collectedAt});renderRoundSummary();
         window.PathfindrArchive?.discoveries(roundItems.filter(p=>p.pos).map(p=>({...p,pos:[...p.pos]})));
-        const stored=challengeClaims?true:persist();sound(item.type);item.element?.remove();renderPanel();
+        const stored=challengeClaims?true:persist();sound(item.type);celebrate(item);renderPanel();
         const toast=document.getElementById('discovery-status');toast.textContent=`${item.name} collected${stored?'':' · storage unavailable; this session only'}`;
         return true;
     }

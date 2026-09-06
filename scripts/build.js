@@ -31,7 +31,6 @@ const FILES = [
 
 // Directories to copy
 const DIRS = [
-    'prints',
     'public',
     'Visual Assets',
     'Music',

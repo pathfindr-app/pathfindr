@@ -4,7 +4,8 @@
 
 - Original checkout and branch remain at `/Users/bradleyarakaki/Desktop/Pathfindr`, `codex/visual-city-v2`, HEAD `1e88ee91a7bc221b4dbe0beee3ae79fdb43c259d`.
 - Isolated worktree: `/Users/bradleyarakaki/Desktop/Pathfindr-launch-20260906`, branch `codex/launch-readiness-20260906`.
-- Full original-workspace archive: `/Users/bradleyarakaki/Desktop/Pathfindr-recovery/prelaunch-workspace-20260906.tar.gz` (verification pending).
+- Full original-workspace archive: `/Users/bradleyarakaki/Desktop/Pathfindr-recovery/prelaunch-workspace-20260906.tar.gz`; `gzip -t` passes; SHA256 `975ed942466309ac85caf36b8b6e42d9d7917d49051bff88d0a181a6c54d3ec3`.
+- Protected source snapshot commit on the new branch: `f287c87`.
 - Live fallback: build `pathfindr-amber-instrument-20260905.36`, deployment `dpl_DcM4SSEVfk72qKFTjQxEDcU2fJMJ`.
 - Production rollback: `vercel rollback https://pathfindralpha-o85tgg68x-pathfindr-apps-projects.vercel.app --scope pathfindr-apps-projects`.
 - No destructive database changes, billing-price changes, or publication of unrelated Print Studio work.

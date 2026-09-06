@@ -1,12 +1,12 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const html=fs.readFileSync('index.html','utf8'),css=fs.readFileSync('styles.css','utf8'),game=fs.readFileSync('game.js','utf8');
-test('lobby tabs each control a named panel and city shortcuts reuse supported modes',()=>{
+test('lobby tabs control named panels; test-city shortcuts are not front-page actions',()=>{
     for(const id of ['lobby-play-panel','lobby-atlas-panel','splash-player-panel']) {
         assert.ok(html.includes(`aria-controls="${id}"`));
         assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1);
     }
     for(const mode of ['miami','washington']) {
-        assert.ok(html.includes(`data-lobby-city="${mode}"`));
+        assert.ok(!html.includes(`data-lobby-city="${mode}"`));
         assert.ok(html.includes(`data-mode="${mode}"`));
     }
     assert.match(html,/tab.tabIndex = active \? 0 : -1/);

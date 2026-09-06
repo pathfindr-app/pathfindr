@@ -1,5 +1,11 @@
 # Living-city rendering research and implementation
 
+## Relaunch polish (.37)
+
+Revisited GPU Gems' analytical wave normals (chapter1 below): coherent swell headings and steeper falloff of fine ripples, broader cyan/coral analytic light lobes, less filament contrast. This still does not reflect real scene buildings. No new render targets or reflection passes.
+
+A* heat and glow now both multiply RGB and alpha by cooling gain (premultiplied output), instead of leaving bright RGB behind while reducing alpha. Frontier emission is soft-limited and node halos capped at42CSSpx. Persistent network paths build geometry once for three strokes instead of recomputing wobble/geometry three times. Known soundtrack analysis avoids redundant FFT readback; live analysis remains for unrecognized tracks. These are bounded cost reductions, not a claim of measured physical-device FPS.
+
 ## Quiet building surfaces (.27)
 
 Follow the existing [MapLibre custom-layer depth contract](https://maplibre.org/maplibre-gl-js/docs/API/interfaces/CustomLayerInterface/) and [Three ShaderMaterial uniforms](https://threejs.org/docs/pages/ShaderMaterial.html). Roof caps are triangulated once and batched; elevated surfaces share the existing context/depth buffer. A second batched wall material is skipped top-down. Both use broad bounded sine sheen rather than dense textures, window grids, particles or extra reflection passes. Initial anti-aliased panel/window prototypes were removed after user feedback about noise. No external texture requests or per-building draw calls. Rooftop colors are decorative, not semantic OSM classification. Ambient road overlays fade out by 25° pitch; active gameplay routes remain deliberate screen overlays, not depth-occluded geometry.

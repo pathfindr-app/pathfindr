@@ -58,7 +58,7 @@
             const node=queue[i],next=children.get(node.id)||[],gain=node.gain/Math.sqrt(Math.max(1,next.length));
             for(const id of next){if(seen.has(id))continue;seen.add(id);const a=nodes.get(node.id),b=nodes.get(id);if(!a||!b)continue;
                 const d=node.d+distance(a.lat,a.lng,b.lat,b.lng);max=Math.max(max,d);
-                segments.push({from:node.id,to:id,a,b,start:node.d,end:d,gain});queue.push({id,d,gain});
+                segments.push({from:node.id,to:id,a,b,start:node.d,end:d,gain:Math.max(.22,gain)});queue.push({id,d,gain});
             }
         }
         // Bound rendering work without affecting the algorithm or its search result.
@@ -77,7 +77,7 @@
         }
         ctx.save();ctx.shadowBlur=0;ctx.globalCompositeOperation='source-over';ctx.setLineDash([]);ctx.lineCap='round';
         const rgb=`${color.r},${color.g},${color.b}`;
-        for(let i=0;i<3;i++)for(const [width,alpha] of [[11,.04],[4,.15],[1,.38]]){
+        for(let i=0;i<3;i++)for(const [width,alpha] of [[12,.07],[4,.24],[1,.60]]){
             if(!groups[i].length)continue;
             ctx.beginPath();for(const {a,b} of groups[i]){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}ctx.lineWidth=width;ctx.strokeStyle=`rgba(${rgb},${alpha*(i+1)/3})`;ctx.stroke();
         }

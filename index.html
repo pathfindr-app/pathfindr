@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="engine/instrument-menu.css?v=36" />
     <link rel="stylesheet" href="engine/hardware-hud.css?v=36" />
     <link rel="stylesheet" href="engine/lobby.css?v=21" />
+    <link rel="stylesheet" href="engine/launch-polish.css?v=37" />
 
     <!-- Google AdSense (for web ads) -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9697527729469740" crossorigin="anonymous"></script>
@@ -295,7 +296,7 @@
                     </div>
 
                     <div class="overlay-content splash-content">
-                        <header class="lobby-masthead"><a class="lobby-wordmark" href="#" aria-label="Pathfindr home">pathfindr<span aria-hidden="true">↗</span></a><a href="prints/" class="lobby-edition" aria-label="Open Pathfindr Print Studio">PRINT STUDIO ↗</a></header>
+                        <header class="lobby-masthead"><a class="lobby-wordmark" href="#" aria-label="Pathfindr home">pathfindr<span aria-hidden="true">↗</span></a><span class="lobby-edition">A GAME OF STREET INSTINCT</span></header>
                         <div class="mobile-lobby-tabs" role="tablist" aria-label="Lobby sections">
                             <button id="lobby-tab-play" class="mobile-lobby-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="lobby-play-panel" data-mobile-panel="overview">Play</button>
                             <button id="lobby-tab-atlas" class="mobile-lobby-tab" type="button" role="tab" aria-selected="false" aria-controls="lobby-atlas-panel" data-mobile-panel="atlas">Atlas</button>
@@ -318,7 +319,6 @@
                                     <figure class="lobby-city-art">
                                         <div class="lobby-map-window"><img src="engine/lobby-map.svg" alt="Two luminous routes through Miami's real street grid" width="720" height="800" fetchpriority="high"><canvas id="lobby-route-motion" aria-hidden="true"></canvas><span class="lobby-map-coordinate">25.77° N<br>80.19° W</span><span class="lobby-map-city">MIAMI<span>DOWNTOWN / BRICKELL</span></span></div>
                                         <figcaption><span><i class="lobby-key-you"></i>Your route</span><span><i class="lobby-key-algo"></i>The algorithm</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a></figcaption>
-                                        <div class="lobby-city-launches"><button type="button" data-lobby-city="miami"><span>01 / CITY PACK</span><strong>Miami ↗</strong></button><button type="button" data-lobby-city="washington"><span>02 / LANDMARK TOUR · LIVE MAP</span><strong>Washington, DC ↗</strong></button></div>
                                         <section id="mapping-progress" aria-labelledby="mapping-goal">
                                             <p class="lobby-eyebrow">YOUR MISSION</p>
                                             <h2 id="mapping-goal">Map the world,<br>one smart route at a time.</h2>
@@ -389,8 +389,7 @@
                                                     <span class="mode-desc">Roam at your own pace</span>
                                                 </div>
                                             </button>
-                                            <button class="mode-btn mode-visualizer premium-mode" data-mode="visualizer">
-                                                <span class="premium-tag">PRO</span>
+                                            <button class="mode-btn mode-visualizer" data-mode="visualizer">
                                                 <div class="mode-bg"></div>
                                                 <div class="mode-content">
                                                     <div class="mode-icon">
@@ -440,7 +439,7 @@
                                         <div class="dashboard-viewport-header">
                                             <div class="dashboard-viewport-heading">
                                                 <span class="dashboard-viewport-eyebrow">Pathfindr Atlas</span>
-                                                <h2>Community Globe</h2>
+                                                <h2>Your world awaits.</h2>
                                             </div>
                                             <div class="dashboard-toggle-group" role="tablist" aria-label="Dashboard viewport">
                                                 <button id="dashboard-show-globe-btn" class="dashboard-toggle-btn is-active" type="button">Globe</button>
@@ -473,7 +472,7 @@
                                     </div>
                                     <div class="splash-visual-caption">
                                         <span class="splash-caption-label">Current brief</span>
-                                        <p>A route-guessing game where city awareness, spatial awareness, and competitive precision all meet to compete for the highest score.</p>
+                                        <p>Our shared mission: map the world. Every short session adds another piece to your atlas. Your saved route coverage is measured on this device.</p>
                                     </div>
                                 </div>
                             <aside class="splash-side-stack">
@@ -789,7 +788,7 @@
                             </button>
                             <button class="location-option" data-mode="washington">
                                 <span class="option-label">Washington, DC</span>
-                                <span class="option-desc">Test city · 10 collectible 3D landmarks · live map</span>
+                                <span class="option-desc">Monuments &amp; museums · live city map</span>
                             </button>
                             <button class="location-option" data-mode="local">
                                 <div class="option-icon">
@@ -1041,8 +1040,7 @@
                                         </svg>
                                         Explorer
                                     </button>
-                                    <button id="profile-mode-visualizer" class="mode-action-btn premium-mode-btn" title="Visualizer Mode (Premium)">
-                                        <span class="mode-premium-badge">PRO</span>
+                                    <button id="profile-mode-visualizer" class="mode-action-btn" title="Visualizer Mode">
                                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
                                             <circle cx="12" cy="12" r="3"/>
@@ -1309,6 +1307,7 @@
     <script src="engine/lobby-map-data.js?v=20"></script>
     <script src="engine/lobby.js?v=20"></script>
     <script src="engine/mapping-progress.js?v=21"></script>
+    <script src="engine/onboarding.js?v=37"></script>
 
     <!-- Initialize monetization modules after DOM ready -->
     <script>

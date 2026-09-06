@@ -8,7 +8,7 @@
         dialog.replaceChildren();const header=el('header'),h=el('h2',title);h.id='route-share-title';header.append(h,button('Close',()=>dialog.close()));content=el('div',null,'route-share-body');status=el('p',null,'route-share-status');status.setAttribute('role','status');dialog.append(header,content,status);if(!dialog.open)dialog.showModal();return content;}
     function publicURL(code,key='pf'){
         const url=new URL(location.protocol==='https:'?location.href:'https://www.pathfindr.world/');
-        url.search='';url.hash=`${key}=${code}`;return url.href.length<=12000?url.href:'';
+        url.search='';url.hash=`${key}=${code}`;return url.href.length<=1500?url.href:'';
     }
     function preview(round){
         const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 600 230');svg.setAttribute('role','img');svg.setAttribute('aria-label','Your route in amber; shortest route in dashed cyan');
@@ -33,13 +33,12 @@
         root.append(el('h3',payload.title),el('p',payload.kind==='challenge'?'Send this link to a friend to play the same challenge.':'Send this link to share your route and results.'));
         message.textContent='Creating link…';
         try{
-            const code=await PathfindrShareData.encode(payload);
-            if(!root.isConnected||!dialog.open)return;
-            let url=publicURL(code);
+            let url;
+            try{const id=await PathfindrShareCloud.publish(payload,crypto.randomUUID());url=publicURL(id,'share');}
+            catch(error){console.warn('[Share] Hosted link unavailable:',error.message);}
             if(!url){
-                if(!PathfindrShareCloud.userId())throw Error('This share needs a shorter link. Sign in and try Share again, or share a single round.');
-                const id=await PathfindrShareCloud.publish(payload,crypto.randomUUID()).catch(()=>{throw Error('Could not create this link. Please try again later.');});
-                url=publicURL(id,'share');
+                const code=await PathfindrShareData.encode(payload);url=publicURL(code);
+                if(!url)throw Error('Hosted challenge links are temporarily unavailable. Your route is saved; try sharing again later.');
             }
             if(!root.isConnected||!dialog.open)return;
             const field=el('input');field.type='url';field.readOnly=true;field.value=url;field.setAttribute('aria-label','Share link');field.addEventListener('click',()=>field.select());root.append(field);

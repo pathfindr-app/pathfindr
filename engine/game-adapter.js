@@ -29,7 +29,9 @@ function getRouteCameraPadding() {
     const bottom = GameController.phase === GamePhase.RESULTS && recap.classList.contains('visible')
         ? Math.min(recap.getBoundingClientRect().height + 24, height * 0.58)
         : Math.min(window.innerWidth <= 700 ? 86 : 135, height * 0.3);
-    return { top: Math.min(window.innerWidth<=700?96:105, height * 0.2), bottom, left: 35, right: 35 };
+    const hud=document.getElementById('gameplay-hud');
+    const hudHeight=hud?.getBoundingClientRect().height || (window.innerWidth<=700?78:85);
+    return { top: Math.min(hudHeight+12, height * 0.25), bottom, left: 35, right: 35 };
 }
 
 function initCityControls() {

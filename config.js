@@ -80,7 +80,7 @@ const PathfindrConfig = {
     name: 'Pathfindr',
     bundleId: 'world.pathfindr.app',
     version: '1.1.0-dev',
-    buildId: 'pathfindr-amber-instrument-20260905.36',
+    buildId: 'pathfindr-launch-polish-20260906.37',
   },
 
   // ===========================================

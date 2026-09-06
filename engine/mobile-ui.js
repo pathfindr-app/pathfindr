@@ -24,7 +24,7 @@
         sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.close();});
         stay.onclick=()=>{resetExit();sheet.close();};
         lobby.onclick=()=>{
-            const hasProgress=typeof GameState!=='undefined'&&GameState.gameMode==='competitive'&&
+            const hasProgress=typeof GameState!=='undefined'&&['competitive','challenge'].includes(GameState.gameMode)&&
                 ((GameState.userPathNodes?.length||0)>1||(GameState.roundScores?.length||0)>0||GameState.totalScore>0);
             if(hasProgress&&warning.hidden){warning.hidden=false;stay.hidden=false;sheet.classList.add('confirming-exit');lobby.querySelector('span').textContent='Leave run';stay.focus();return;}
             sheet.close();document.getElementById('menu-exit').click();

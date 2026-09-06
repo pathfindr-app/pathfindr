@@ -16,7 +16,7 @@ test('camera assistance starts before the old 64px edge band and scales to deskt
  const desktop={left:0,top:0,right:1200,bottom:900};
  assert.ok(velocity({x:1000,y:400},desktop,pad).x>0);
  assert.equal(velocity({x:600,y:400},desktop,pad).x,0);
- const nearStart=velocity({x:285,y:400},rect,pad).x;
+ const nearStart=velocity({x:250,y:400},rect,pad).x;
  assert.ok(nearStart>=0&&nearStart<1);
 });
 test('route patterns move with the clock and freeze for reduced motion',()=>{
