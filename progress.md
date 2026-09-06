@@ -3,6 +3,7 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 ## Standing deployment preference
 
 ### Relaunch pass, 2026-09-06 (in progress, isolated worktree)
+- Published .37: dpl_3j8T1BxyZ8421M7qnAXAs7SWdASo, https://pathfindralpha-d0cdfu4q4-pathfindr-apps-projects.vercel.app; www.pathfindr.world alias.17publicfilebytes match artifact. Production mobile launch QA passes. All112game tests pass. Staged actual A*/recap screenshots inspected. Not full launch sign-off: hosted sharing schema/access and backend validation remain. `npm run rollback` in newworktree restores .36.
 - Worktree `/Users/bradleyarakaki/Desktop/Pathfindr-launch-20260906`, branch `codex/launch-readiness-20260906`. Original checkout untouched; full recovery archive gzip-verified, baseline snapshot f287c87, production .36 rollback in LAUNCH_READINESS.md.
 - Live challenge scheduler was disabled_inactivity. Enabled existing GitHub workflow and dispatched run34033089970: success; REST confirmed new Amsterdam challenge. Source generator auth now fails closed; not yet deployed.
 - Compact78px amber mobile HUD, earlier eased edge zones, actual-HUD camera padding; removed repeated per-round You/A* tags while keeping animated paths/global legend.
