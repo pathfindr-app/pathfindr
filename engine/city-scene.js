@@ -47,6 +47,7 @@
         map.setLight({ anchor: 'viewport', color: '#ffd0b2', intensity: 0.45, position: [1.5, 210, 35] });
         PathfindrWorldRenderer.init(map);
         ready = true;
+        window.PathfindrSurvey?.relief(map);
         applyVisibility();
         updateBuildingEdges();map.on('pitch',updateBuildingEdges);
     }

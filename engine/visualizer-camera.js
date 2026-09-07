@@ -19,7 +19,7 @@
         const bounds=points.reduce((b,p)=>[[Math.min(b[0][0],p.lng),Math.min(b[0][1],p.lat)],
             [Math.max(b[1][0],p.lng),Math.max(b[1][1],p.lat)]],[[Infinity,Infinity],[-Infinity,-Infinity]]);
         const canvas=map.getCanvas(),small=canvas.clientWidth<700;
-        return map.cameraForBounds(bounds,{padding:{top:small?120:110,bottom:small?110:80,left:45,right:45},maxZoom:16});
+        return map.cameraForBounds(bounds,{padding:{top:small?60:50,bottom:small?100:85,left:32,right:32},bearing:map.getBearing(),maxZoom:16.3});
     }
     function follow(map,path,explored,nodes){
         // A stable endpoint composition: never chase individual frontier nodes.
@@ -32,10 +32,10 @@
             shot={map,bearing:map.getBearing()};
             for(const e of gestures)map.on(e,interrupt);
         }
-        Object.assign(shot,{key,points,center:fit.center,zoom:Math.min(fit.zoom-.35,16),needsFrame:true});
+        Object.assign(shot,{key,points,center:fit.center,zoom:Math.min(fit.zoom-.08,16.3),needsFrame:true});
         if(enabled&&!paused&&!PathfindrMotion.reduced()&&map.easeTo){
             shot.intro=true;
-            map.easeTo({center:fit.center,zoom:shot.zoom,pitch:32,duration:550});
+            map.easeTo({center:fit.center,zoom:shot.zoom,pitch:32,duration:1100,easing:t=>t*t*t*(t*(t*6-15)+10)});
         }
         sync();
     }
@@ -54,8 +54,8 @@
         // Only zoom outward; no breathing/pumping as the orbit turns.
         if(map.project){
             const canvas=map.getCanvas(),w=canvas.clientWidth,h=canvas.clientHeight;
-            const marginX=Math.min(52,w*.16),top=Math.min(130,h*.22),bottom=Math.min(110,h*.20);
-            for(let i=0;i<12;i++){
+            const marginX=Math.min(36,w*.12),top=Math.min(64,h*.13),bottom=Math.min(100,h*.19);
+            for(let i=0;i<3;i++){
                 const ratio=Math.max(...shot.points.map(p=>{
                     const q=map.project([p.lng,p.lat]);
                     return Math.max(Math.abs(q.x-w/2)/(w/2-marginX),

@@ -2,6 +2,17 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Survey / Daily scoring / Visualizer refinement — September 7, .42
+- Added independent collectible-point/time ledger. Classic efficiency score unchanged; time stops before camera/reveal, while pickups remain available during search and are disabled in recap. Recap includes collection points and elapsed time.
+- User approved Daily 1000 route + 200 collection + 100 speed weighting and game-only migration019. Applied only019 after inspecting live schema. Transactional SQL QA passed insert, weighted improvement, deduplication and identity-spoof rejection, then rolled back all fixtures. Daily events remain client-reported, not authoritative server replay. No Printshop migration/payment changes.
+- Visualizer hides gameplay chrome, retains facts/legal attribution and tap-revealed exit/Escape. Closer framing retains endpoint bounds; 1100ms quintic camera ease, overlapping route reveal and 650ms frontier fade, longer settling. Reduced-motion handling retained.
+- Zoom-aware optical footprint reduces broad bloom before path cores; high-DPI GL/cache buffers capped to bound memory. Fixed logical-vs-device-pixel resize comparison that repeatedly cleared canvases on Retina screens; regression test added. Browser retest confirms persistent recap paths and crisp Visualizer history.
+- Added faint projected geographic grid with streaming highlights and actual Terrarium DEM hillshade (Mapzen/AWS terrain source). Terrain is web-network dependent, skipped in offline-only mode; it is not an offline city-pack terrain implementation.
+- 121 game tests pass. Unrelated Printshop test cannot run in this checkout due missing sharp module; untouched production shop checked separately. Stock game client executed/screenshots inspected; local backend CORS errors remain on 127.0.0.1. In-app deterministic Miami QA covered collection40 points, stopped timer, recap pickup blocking, assisted finish, and Visualizer. No real-device FPS claim.
+- Stage /tmp/pathfindr-survey-lLW5Ks overlays only scoped game files on verified current production dpl_3KFKrJk1D1rtPeoNTmzezJXFQSjx, preserving 253 other files byte-for-byte. Preview dpl_XBfYbUHsywRnxzoNi1wdz8JYfAkF passed authenticated game/storefront/builder/assets/policies/private-source checks; ordinary checker blocked by preview login. Local output/survey-preview.html is QA only and excluded from deployment.
+- Research: https://maplibre.org/maplibre-gl-js/docs/examples/add-a-hillshade-layer/ ; https://registry.opendata.aws/terrain-tiles/ .
+- Published build pathfindr-survey-score-20260907.42, deployment dpl_BR3z4CckNcnmVkfjTvtU7fhBdLqV, at https://www.pathfindr.world. Previous exact shared-production deployment dpl_3KFKrJk1D1rtPeoNTmzezJXFQSjx retained for emergency recovery; never roll back an older Printshop baseline over newer shared production.
+
 ### Lobby test-city cleanup — September 6, .41
 - Removed dedicated Miami/DC buttons from Choose Your Destination, not just the front-page shortcuts. Preserved city data and normal location modes. Startup regression test now requires both shortcuts to be absent throughout the HTML.
 - 116 game tests pass; stock client screenshot confirms My Location / US Cities / Global only. Existing localhost CORS/optional-resource diagnostics remain outside this HTML-only change.

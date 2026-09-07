@@ -7,15 +7,16 @@
         const charge=audio.enabled ? audio.bass : 0;
         const drive=history?(window.PathfindrMusicalRoutes?.historyEnergy(audio)||0):0;
         const rgb=`${color.r},${color.g},${color.b}`;
+        const optics=window.PathfindrFidelity?.current()||{halo:1,core:1};
         ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
         const stroke=(width,alpha)=>{ctx.lineWidth=width;ctx.strokeStyle=`rgba(${rgb},${alpha})`;drawSmoothPath(ctx,points);ctx.stroke();};
         // Source-over preserves hue at shared streets instead of adding to white.
         ctx.globalCompositeOperation='source-over';
         ctx.strokeStyle='rgba(8,14,24,.85)';ctx.lineWidth=optimal?6:12;drawSmoothPath(ctx,points);ctx.stroke();
-        stroke(24+charge*6+drive*18,.045+drive*.075);stroke(14+drive*6,.11+drive*.10);
+        stroke((24+charge*6+drive*18)*optics.halo,.045+drive*.075);stroke((14+drive*6)*optics.halo,.11+drive*.10);
         ctx.setLineDash(optimal?[8,10]:[20,9,2,9]);
         ctx.lineDashOffset=reduced?0:-(time*(optimal?26:34))%(optimal?18:40);
-        stroke(optimal?4:9,.95);ctx.setLineDash([]);
+        stroke((optimal?4:9)*optics.core,.95);ctx.setLineDash([]);
         // Reserve the brightest filament for real musical charges.
         stroke(1,.22);ctx.setLineDash([]);
         if(!reduced)window.PathfindrMusicalRoutes?.draw(ctx,points,color,`summary:${optimal}:${points.length}:${points[0].x}`,false,history?2:1);

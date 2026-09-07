@@ -253,6 +253,7 @@
                 <canvas id="viz-canvas"></canvas>
                 <canvas id="preview-canvas"></canvas>
                 <div id="marker-container"></div>
+                <div id="round-ledger" aria-label="Round time and collection points"><span><small>Time</small><span id="round-clock">0:00</span></span><span><small>Collected</small><span id="collection-points">0</span> pts</span></div>
                 <div id="collectibles-layer" aria-label="Map collectibles"></div>
                 <section id="discovery-panel" aria-label="City discoveries" hidden></section>
                 <span id="discovery-status" class="sr-only" role="status" aria-live="polite"></span>
@@ -1252,6 +1253,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+    <link rel="stylesheet" href="engine/immersive.css?v=42">
+    <script src="engine/round-metrics.js?v=42"></script>
+    <script src="engine/visual-fidelity.js?v=42"></script>
+    <script src="engine/survey-context.js?v=42"></script>
+    <script src="engine/immersive.js?v=42"></script>
     <script src="config.js?v=41"></script>
     <script src="ads.js"></script>
     <script src="auth.js"></script>

@@ -760,6 +760,7 @@ const GameController = {
         if(GameState.gameMode==='visualizer'&&GameState.visualizerState.active&&![GamePhase.LOADING,GamePhase.MENU].includes(this.phase))window.PathfindrVisualizerCamera?.tick(deltaTime,GameState.vizState);
         else window.PathfindrVisualizerCamera?.stop();
         PathfindrCollections.update();
+        window.PathfindrRoundMetrics?.update();
         this.frameDelta = Math.min(100, deltaTime);
         const audio = PathfindrAudio.update(deltaTime, SoundEngine.muted);
         const audioButton = document.getElementById('audio-motion-btn');
@@ -1135,7 +1136,6 @@ const CityFacts = {
      * Start the facts ticker for Explorer/Visualizer modes
      */
     async startTicker(cityInput) {
-        if(cityInput?.packId){this.stopTicker();return;}
         const tickerEl = document.getElementById('facts-ticker');
         const textEl = document.getElementById('ticker-text');
         if (!tickerEl || !textEl) return;
@@ -1149,8 +1149,7 @@ const CityFacts = {
         this.ticker.cityName = city?.name || null;
         const facts=await this.fetchFacts(city);
         if(version!==this.tickerVersion)return;
-        this.ticker.facts=facts;
-        if(!facts.length)return;
+        this.ticker.facts=facts.length?facts:[`Exploring ${city?.name||'the city'}. Each illuminated connection follows the real street network.`];
         this.ticker.currentIndex = 0;
         this.ticker.active = true;
 
@@ -1930,13 +1929,15 @@ const WebGLRenderer = {
         const height = container.offsetHeight;
 
         // Set canvas size (both CSS and buffer)
-        this.canvas.width = width;
-        this.canvas.height = height;
+        this.cssWidth=width;this.cssHeight=height;
+        const ratio=Math.max(1,Math.min(2,window.devicePixelRatio||1,Math.sqrt(3000000/Math.max(1,width*height))));
+        this.canvas.width = Math.round(width*ratio);
+        this.canvas.height = Math.round(height*ratio);
         this.canvas.style.width = width + 'px';
         this.canvas.style.height = height + 'px';
 
         if (this.gl) {
-            this.gl.viewport(0, 0, width, height);
+            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
         }
 
         this.uniforms.resolution = [width, height];
@@ -2262,8 +2263,8 @@ const WebGLRenderer = {
         if (!this.initialized || !this.gl || !this.canUseWebGL) return;
 
         const gl = this.gl;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        const width = this.cssWidth;
+        const height = this.cssHeight;
 
         // Clear with transparency
         gl.clearColor(0, 0, 0, 0);
@@ -2282,7 +2283,7 @@ const WebGLRenderer = {
 
         // Only draw heat/glow if we have explored edges
         if (this.exploredIndexCount > 0) {
-            const bloom = PathfindrEmission.begin(gl, width, height);
+            const bloom = PathfindrEmission.begin(gl, this.canvas.width, this.canvas.height, window.PathfindrFidelity?.current().bloom ?? 1);
             // Draw heat-mapped edges on top (additive blending) - ONLY explored edges
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE);  // Additive
             this.renderHeatEdges(timeSeconds, width, height);
@@ -2301,8 +2302,8 @@ const WebGLRenderer = {
         if (!this.initialized || !this.gl || !this.canUseWebGL) return;
 
         const gl = this.gl;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        const width = this.cssWidth;
+        const height = this.cssHeight;
 
         // Clear with transparency
         gl.clearColor(0, 0, 0, 0);
@@ -2334,7 +2335,7 @@ const WebGLRenderer = {
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
         const reactiveWidth = PathfindrAudio.state.bass * (GameController.phase === GamePhase.PLAYING ? 2 : 5);
-        gl.uniform1f(program.uniforms.lineWidth, 8.0 + reactiveWidth);
+        gl.uniform1f(program.uniforms.lineWidth, (8.0 + reactiveWidth) * (window.PathfindrFidelity?.current().halo ?? 1));
         gl.uniform2f(program.uniforms.center, width / 2, height / 2);
         if (program.uniforms.opacity) gl.uniform1f(program.uniforms.opacity, this.globalOpacity * visibility);
 
@@ -2400,7 +2401,7 @@ const WebGLRenderer = {
 
         gl.uniform2f(program.uniforms.resolution, width, height);
         gl.uniform1f(program.uniforms.time, time);
-        gl.uniform1f(program.uniforms.lineWidth, 4.0);
+        gl.uniform1f(program.uniforms.lineWidth, 4.0 * (window.PathfindrFidelity?.current().core ?? 1));
         gl.uniform1f(program.uniforms.afterglow, getSearchCoolingGain());
 
         // Keep discovery-age decay stable; the continuous gain owns cooldown.
@@ -5519,10 +5520,13 @@ const VisualizerVibeRenderer = {
         if (this.width !== width || this.height !== height) {
             this.width = width;
             this.height = height;
-            this.coreCanvas.width = width;
-            this.coreCanvas.height = height;
-            this.glowCanvas.width = width;
-            this.glowCanvas.height = height;
+            const ratio=Math.max(1,Math.min(2,window.devicePixelRatio||1,Math.sqrt(3000000/Math.max(1,width*height))));
+            this.coreCanvas.width = Math.round(width*ratio);
+            this.coreCanvas.height = Math.round(height*ratio);
+            this.glowCanvas.width = this.coreCanvas.width;
+            this.glowCanvas.height = this.coreCanvas.height;
+            this.coreCtx.setTransform(ratio,0,0,ratio,0,0);
+            this.glowCtx.setTransform(ratio,0,0,ratio,0,0);
             this.reset();
         }
     },
@@ -5603,6 +5607,7 @@ const VisualizerVibeRenderer = {
 
     appendPath(path, isMoving = false) {
         if (!this.coreCtx || !this.glowCtx || !GameState.map) return;
+        const optics=window.PathfindrFidelity?.current()||{halo:1,core:1};
         const vibe = this.getVibeColor(path.color);
         const maxSegmentLengthSq = 3000 * 3000;
         const edgeCount = path.exploredSegments ? path.exploredSegments.length : 0;
@@ -5639,7 +5644,7 @@ const VisualizerVibeRenderer = {
             glow.lineCap = 'round';
             glow.lineJoin = 'round';
             glow.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.09)`;
-            glow.lineWidth = 12;
+            glow.lineWidth = 12 * optics.halo;
             glow.beginPath();
             for (const seg of segments) {
                 glow.moveTo(seg.from.x, seg.from.y);
@@ -5648,7 +5653,7 @@ const VisualizerVibeRenderer = {
             glow.stroke();
 
             glow.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.15)`;
-            glow.lineWidth = 6;
+            glow.lineWidth = 6 * optics.halo;
             glow.beginPath();
             for (const seg of segments) {
                 glow.moveTo(seg.from.x, seg.from.y);
@@ -5661,7 +5666,7 @@ const VisualizerVibeRenderer = {
             core.lineCap = 'round';
             core.lineJoin = 'round';
             core.strokeStyle = `rgba(${vibe.r}, ${vibe.g}, ${vibe.b}, 0.34)`;
-            core.lineWidth = 1.7;
+            core.lineWidth = Math.max(1.1,1.7 * optics.core);
             core.beginPath();
             for (const seg of segments) {
                 core.moveTo(seg.from.x, seg.from.y);
@@ -5678,7 +5683,7 @@ const VisualizerVibeRenderer = {
                 const glow = this.glowCtx;
                 glow.globalCompositeOperation = 'lighter';
                 glow.strokeStyle = `rgba(${hot.r}, ${hot.g}, ${hot.b}, 0.2)`;
-                glow.lineWidth = 18;
+                glow.lineWidth = 18 * optics.halo;
                 glow.beginPath();
                 glow.moveTo(points[0].x, points[0].y);
                 for (let i = 1; i < points.length; i++) {
@@ -5841,7 +5846,7 @@ const VisualizerVibeRenderer = {
             ? Math.min(1, (GameState.vizState.settleProgress || 0) * 2200 / 1800)
             : Math.min(1, (performance.now() - blend.started) / 1800)) : 1;
         const mix = t * t * (3 - 2 * t);
-        const glowAlpha = (0.66 - 0.14 * Number(isVizActive)) * breathe;
+        const glowAlpha = (0.66 - 0.14 * Number(isVizActive)) * breathe * (window.PathfindrFidelity?.current().bloom ?? 1);
         const coreAlpha = 0.92 - 0.17 * Number(isVizActive);
         if (blend && t < 1) {
             ctx.globalAlpha = glowAlpha * (1 - mix);
@@ -6526,7 +6531,9 @@ function ensureMapPresentationSync() {
         GameState.vizCanvas?.height !== height ||
         GameState.previewCanvas?.width !== width ||
         GameState.previewCanvas?.height !== height ||
-        (webglCanvas && (webglCanvas.width !== width || webglCanvas.height !== height));
+        // WebGL owns a high-DPI backing store; compare logical dimensions.
+        // Comparing device pixels here resized/cleared every overlay every frame.
+        (webglCanvas && (WebGLRenderer.cssWidth !== width || WebGLRenderer.cssHeight !== height));
 
     if (canvasesNeedResize) {
         resizeCanvases();
@@ -6992,6 +6999,7 @@ function initMap() {
 
     PathfindrCity.init(GameState.map);
     PathfindrMapFrame.init(GameState.map);
+    window.PathfindrSurvey?.init(GameState.map);
 
     // Add navigation control (zoom + compass) - hidden on mobile
     if (!isMobile) {
@@ -9256,6 +9264,7 @@ function scheduleSnapPreviewFromClient(clientX, clientY, inputType = 'mouse') {
 
 function commitPathPoint(lat, lng, options = {}) {
     if (!shouldHandlePathInput()) return false;
+    window.PathfindrRoundMetrics?.start();
 
     // Start challenge timer on first click (for fair timing)
     if (GameState.gameMode === 'challenge' && !GameState.challengeState.startTime) {
@@ -10012,6 +10021,7 @@ class MinHeap {
 
 async function submitRoute() {
     if (!shouldHandlePathInput()) return;
+    window.PathfindrRoundMetrics?.stop(); // Never charge for the camera or A* reveal.
     const graphVersion = GameState.roadGraphVersion;
     const round = GameState.currentRound;
     const stillCurrent = () => GameState.roadGraphVersion === graphVersion && GameState.currentRound === round;
@@ -10186,10 +10196,10 @@ async function runEpicVisualization(explored, path, shouldContinue = null, optio
     startRenderLoop(); SoundEngine.scanning();
     const started = performance.now();
     const exploreMs = Math.min(5200, 2300 + explored.length * 1.1) / speed;
-    const pathStart = exploreMs * 0.88, pathMs = 1150 / speed;
+    const pathStart = exploreMs * (GameState.gameMode==='visualizer'?.82:.88), pathMs = (GameState.gameMode==='visualizer'?1450:1150) / speed;
     const settleStart = pathStart + pathMs;
     // Interactive rounds hand off immediately; autonomous visualizer may linger.
-    const settleMs = (GameState.gameMode === 'visualizer' ? 2200 : 120) / speed;
+    const settleMs = (GameState.gameMode === 'visualizer' ? 2600 : 120) / speed;
     viz.shockOrigin = GameState.nodes.get(path[0]);
     viz.shockRadiusLng = explored.reduce((radius,id)=>{
         const p=GameState.nodes.get(id);return p && viz.shockOrigin ? Math.max(radius,Math.hypot(p.lng-viz.shockOrigin.lng,(p.lat-viz.shockOrigin.lat)/Math.cos(p.lat*Math.PI/180))) : radius;
@@ -10698,7 +10708,8 @@ function renderVisualization(options = {}) {
     let frontierCount = 0;
 
     // Only draw during active exploration phase, not during path/complete
-    if (viz.phase === 'exploring') {
+    if (viz.phase === 'exploring' || (viz.phase === 'path' && now-viz.optimalRevealStartTime<650)) {
+        const frontierFade=viz.phase==='path'?1-Math.min(1,(now-viz.optimalRevealStartTime)/650):1;
         for (const [nodeId, heat] of viz.nodeHeat) {
             if (heat < 0.7) continue; // Higher threshold for better performance
             if (frontierCount >= maxFrontierNodes) break;
@@ -10707,13 +10718,13 @@ function renderVisualization(options = {}) {
             if (!pos) continue;
 
             const screen = GameState.map.project([pos.lng, pos.lat]);
-            const size = Math.min(42, spriteSize * heat * 0.32);
+            const size = Math.min(22, spriteSize * heat * 0.2) * (window.PathfindrFidelity?.current().halo ?? 1);
             const spriteToUse = heat > 0.9 ? AmbientViz.sprites.glowWhite :
                                AmbientViz.sprites.glowCyan;
 
-            ctx.globalAlpha = heat * flicker * 0.52;
+            ctx.globalAlpha = heat * flicker * 0.38 * frontierFade;
             ctx.drawImage(spriteToUse, screen.x - size / 2, screen.y - size / 2, size, size);
-            ctx.globalAlpha = heat * 0.85;
+            ctx.globalAlpha = heat * 0.85 * frontierFade;
             ctx.fillStyle = '#d9f8f3';
             ctx.beginPath();ctx.arc(screen.x,screen.y,1.3+heat*.7,0,Math.PI*2);ctx.fill();
             frontierCount++;
@@ -10801,6 +10812,7 @@ function drawSmoothPath(ctx, points) {
 }
 
 function drawOptimalPath(ctx) {
+    const optics=window.PathfindrFidelity?.current()||{halo:1,core:1};
     const path = GameState.optimalPath;
     const progress = GameState.vizState.pathProgress;
     const viz = GameState.vizState;
@@ -10843,7 +10855,7 @@ function drawOptimalPath(ctx) {
 
     // Wide atmospheric bloom
     ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, 0.06)`;
-    ctx.lineWidth = 24;
+    ctx.lineWidth = 24 * optics.halo;
     drawSmoothPath(ctx, points);
     ctx.stroke();
 
@@ -10902,7 +10914,7 @@ function drawOptimalPath(ctx) {
         // Particle sprite on the head if available
         const sprite = AmbientViz.sprites?.glowWhite || AmbientViz.sprites?.glowCyan;
         if (sprite) {
-            const size = 24 + 8 * pulse;
+            const size = (24 + 8 * pulse) * optics.halo;
             ctx.globalAlpha = 0.9;
             ctx.drawImage(sprite, leadPoint.x - size / 2, leadPoint.y - size / 2, size, size);
         }
@@ -10914,7 +10926,7 @@ function drawOptimalPath(ctx) {
             if (idx < 0) break;
             const p = points[idx];
             const fade = 1 - i / (tailCount + 1);
-            const tailSize = 16 + 10 * fade;
+            const tailSize = (16 + 10 * fade) * optics.halo;
             ctx.globalAlpha = 0.55 * fade;
             if (sprite) {
                 ctx.drawImage(sprite, p.x - tailSize / 2, p.y - tailSize / 2, tailSize, tailSize);
@@ -11087,6 +11099,7 @@ function addPointToUserPath(lat, lng) {
 
     // Avoid duplicate consecutive nodes
     if (targetNode === lastNode) return false;
+    window.PathfindrRoundMetrics?.start();
 
     // Start challenge timer on first actual click (not the initial start node)
     if (GameState.gameMode === 'challenge' && GameState.challengeState && !GameState.challengeState.startTime) {
@@ -11441,12 +11454,16 @@ function calculateAndShowScore() {
         efficiency = Math.min(100, (optimalDistance / userDistance) * 100);
     }
 
+    window.PathfindrRoundMetrics?.stop();
+    const roundMetrics=window.PathfindrRoundMetrics?.snapshot()||{};
+    window.PathfindrCollections?.renderRoundSummary();
     const roundScore = GameState.assistedRound ? 0 : Math.round((efficiency / 100) * CONFIG.maxScore);
     GameState.totalScore += roundScore;
 
     // Store round data for game-over summary
     if (!GameState.roundScores) GameState.roundScores = [];
     GameState.roundScores.push({
+        ...roundMetrics,
         round: GameState.currentRound,
         score: roundScore,
         assisted: !!GameState.assistedRound,
@@ -11454,7 +11471,7 @@ function calculateAndShowScore() {
         userDistance: userDistance,
         optimalDistance: optimalDistance
     });
-    window.PathfindrSharedGame?.capture({score:roundScore,userDistance,optimalDistance,assisted:!!GameState.assistedRound});
+    window.PathfindrSharedGame?.capture({...roundMetrics,score:roundScore,userDistance,optimalDistance,assisted:!!GameState.assistedRound});
 
     // Update the round legend in HUD
     updateRoundLegend();
@@ -14896,7 +14913,7 @@ async function fetchChallengeLeaderboard(challengeId, limit = 20) {
 
     try {
         const { data, error } = await PathfindrAuth.client
-            .rpc('get_challenge_leaderboard', {
+            .rpc((GameState.challengeState.activeChallenges||[]).find(c=>c.id===challengeId)?.challenge_type==='daily'?'get_challenge_leaderboard_v2':'get_challenge_leaderboard', {
                 p_challenge_id: challengeId,
                 p_limit: limit
             });
@@ -14975,7 +14992,7 @@ async function showChallengeInfoScreen(challenge) {
                             <div class="leaderboard-preview-row">
                                 <span class="leaderboard-rank ${['gold', 'silver', 'bronze'][i] || ''}">#${entry.rank}</span>
                                 <span class="leaderboard-name">${escapeChallengeText(entry.username)}</span>
-                                <span class="leaderboard-score">${entry.efficiency}%</span>
+                                <span class="leaderboard-score">${entry.total_points!=null?`${entry.total_points} pts`:`${entry.efficiency}%`}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -14983,6 +15000,7 @@ async function showChallengeInfoScreen(challenge) {
             ` : ''}
 
             <div class="challenge-info-warning">
+                ${challenge.challenge_type==='daily'?'Daily points: route 1,000 + discoveries 200 + speed 100. Timer starts on your first route action or pickup; the reveal is not timed.<br>':''}
                 You only get ONE attempt!
             </div>
 
@@ -15144,13 +15162,13 @@ async function submitChallengeEntry(efficiency, pathData) {
     if (!challenge || !PathfindrAuth.currentUser) return null;
 
     // Calculate duration
-    const duration = GameState.challengeState.startTime
-        ? Date.now() - GameState.challengeState.startTime
-        : 0;
+    const metrics=window.PathfindrRoundMetrics?.snapshot();
+    const duration = Math.max(0,Math.round(metrics?.elapsedMs||0));
+    pathData={...pathData,collectibles:metrics?.collectibles||[],collectionPoints:metrics?.collectionPoints||0,scoreVersion:2};
 
     try {
         const { data, error } = await PathfindrAuth.client
-            .rpc('submit_challenge_entry', {
+            .rpc(challenge.challenge_type==='daily'?'submit_challenge_entry_v2':'submit_challenge_entry', {
                 p_challenge_id: challenge.id,
                 p_user_id: PathfindrAuth.currentUser.id,
                 p_username: PathfindrAuth.getUsername() || 'Anonymous',
@@ -15216,7 +15234,7 @@ async function showChallengeLeaderboard(challengeId) {
                 <div class="leaderboard-row ${entry.user_id === currentUserId ? 'current-user' : ''}">
                     <span class="rank ${entry.rank <= 3 ? 'top-3' : ''}">#${entry.rank}</span>
                     <span class="username">${escapeChallengeText(entry.username)}</span>
-                    <span class="efficiency">${entry.efficiency}%</span>
+                    <span class="efficiency">${entry.total_points!=null?`${entry.total_points} pts`:`${entry.efficiency}%`}</span>
                     <span class="time">${formatDuration(entry.duration_ms)}</span>
                 </div>
             `).join('');
@@ -15297,9 +15315,9 @@ async function showChallengeResults(efficiency, rank) {
     if (!challenge) return;
 
     // Calculate time taken
-    const timeTaken = GameState.challengeState.startTime
-        ? formatDuration(Date.now() - GameState.challengeState.startTime)
-        : '-';
+    const metrics=window.PathfindrRoundMetrics.snapshot();
+    const timeTaken = PathfindrRoundMetrics.format(metrics.elapsedMs);
+    const dailyPoints=PathfindrRoundMetrics.score(efficiency,metrics.collectionPoints,metrics.elapsedMs);
 
     // Create results overlay (replaces normal results)
     const overlay = document.createElement('div');
@@ -15312,6 +15330,7 @@ async function showChallengeResults(efficiency, rank) {
 
             <div class="challenge-results-rank">#${rank}</div>
             <div class="challenge-results-rank-label">Current rank</div>
+            ${challenge.challenge_type==='daily'?`<p>${dailyPoints.total} points · Route ${dailyPoints.route} + Collected ${dailyPoints.collection} + Speed ${dailyPoints.speed}</p>`:''}
 
             <div class="challenge-info-stats">
                 <div class="challenge-stat">

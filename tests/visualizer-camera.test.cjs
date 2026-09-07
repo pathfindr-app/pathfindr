@@ -12,7 +12,7 @@ function fixture(reduced=false){
 }
 test('director eases into shallow 3D and bounds per-frame camera motion',()=>{
  const x=fixture();for(let i=0;i<360;i++)x.camera.tick(16,x.viz);
- assert.ok(x.state.pitch>27&&x.state.pitch<33);assert.equal(x.state.zoom,13.65);
+ assert.ok(x.state.pitch>27&&x.state.pitch<33);assert.equal(x.state.zoom,13.92);
  for(let i=1;i<x.calls.length;i++){assert.ok(Math.abs(x.calls[i].pitch-x.calls[i-1].pitch)<.22);assert.ok(Math.abs(x.calls[i].bearing-x.calls[i-1].bearing)<.1);}
  const before=x.calls.at(-1);x.camera.follow(x.map,[2,1,0],[],x.nodes);assert.equal(x.calls.at(-1),before);
 });
@@ -40,7 +40,7 @@ test('reduced motion, hidden document and disabled camera never move the map',()
 });
 test('screen-space guard zooms out for endpoints obscured by HUD or rotation',()=>{
  const x=fixture();x.map.getCanvas=()=>({clientWidth:390,clientHeight:844});
- x.map.project=()=>({x:195,y:x.state.zoom>13?70:300});
+ x.map.project=()=>({x:195,y:422-400*2**(x.state.zoom-13)});
  x.camera.tick(16,x.viz);assert.ok(x.state.zoom<=13);
  const safe=x.state.zoom;x.camera.tick(16,x.viz);assert.equal(x.state.zoom,safe);
 });

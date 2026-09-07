@@ -7,21 +7,22 @@
         library:'<path d="M12 7Q7 3 2 6v15q5-3 10 1 5-4 10-1V6q-5-3-10 1Z" fill="currentColor" fill-opacity=".18" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v15M5 10l4 1M5 14l4 1m6-4 4-1m-4 5 4-1" fill="none" stroke="currentColor" stroke-width="1.4"/>'
     };
     let map,layer,panel,items=[],cityKey='',lastRender=0;
-    let roundKey=null,roundItems=[],challengeClaims=null;
-    const claimed=item=>challengeClaims?challengeClaims.has(item.key):!!saved.claimed[item.key];
+    let roundKey=null,roundItems=[],challengeClaims=null,dailyClaims=null;
+    const claimed=item=>(challengeClaims||dailyClaims)?(challengeClaims||dailyClaims).has(item.key):!!saved.claimed[item.key];
     const typeNames={spark:'Street Spark',burger:'Burger stop',landmark:'Landmark',library:'Library'};
     const collectionAllowed=phase=>(typeof GameState==='undefined'||GameState.gameMode!=='visualizer')&&['playing','visualizing','idle'].includes(phase);
     function beginRound(number,force=false){
         const next=`${cityKey}:${number}`;
         if(!force&&roundKey===next)return;
-        roundKey=next;roundItems=[];renderRoundSummary();
+        roundKey=next;roundItems=[];window.PathfindrRoundMetrics?.begin(`${next}:${force?Date.now():''}`);renderRoundSummary();
         const status=document.getElementById('discovery-status');if(status)status.textContent='';
     }
     function renderRoundSummary(){
         const root=document.getElementById('round-discoveries');if(!root)return;
         root.replaceChildren();
         const heading=document.createElement('span');heading.className='round-discoveries-heading';
-        heading.textContent=`Collected this round · ${roundItems.length}`;root.append(heading);
+        const metrics=window.PathfindrRoundMetrics?.snapshot();
+        heading.textContent=`Collected · ${roundItems.length} · ${metrics?.collectionPoints||0} pts · ${window.PathfindrRoundMetrics?.format(metrics?.elapsedMs||0)||'0:00'}`;root.append(heading);
         const list=document.createElement('div');list.className='round-discoveries-list';
         if(!roundItems.length){const empty=document.createElement('span');empty.className='round-discoveries-empty';empty.textContent='No discoveries yet — tap pickups on the map.';list.append(empty);}
         const groups=new Map();
@@ -101,8 +102,8 @@
     function claim(item){
         if(claimed(item)||!collectionAllowed(document.body.dataset.gamePhase))return false;
         const collectedAt=Date.now();
-        if(challengeClaims)challengeClaims.add(item.key);else{saved.claimed[item.key]=collectedAt;saved.counts[item.type]++;}
-        roundItems.push({key:item.key,type:item.type,name:item.name,pos:item.pos?[...item.pos]:null,collectedAt});renderRoundSummary();
+        if(challengeClaims||dailyClaims)(challengeClaims||dailyClaims).add(item.key);else{saved.claimed[item.key]=collectedAt;saved.counts[item.type]++;}
+        roundItems.push({key:item.key,type:item.type,name:item.name,pos:item.pos?[...item.pos]:null,collectedAt});window.PathfindrRoundMetrics?.claim(item);renderRoundSummary();
         window.PathfindrArchive?.discoveries(roundItems.filter(p=>p.pos).map(p=>({...p,pos:[...p.pos]})));
         const stored=challengeClaims?true:persist();sound(item.type);celebrate(item);renderPanel();
         const toast=document.getElementById('discovery-status');toast.textContent=`${item.name} collected${stored?'':' · storage unavailable; this session only'}`;
@@ -114,7 +115,7 @@
             button.setAttribute('aria-label',`Collect ${item.name}`);
             const tip=document.createElement('span');tip.className='pickup-tooltip';tip.id=`pickup-tip-${items.indexOf(item)}`;tip.setAttribute('role','tooltip');
             const name=document.createElement('strong');name.textContent=item.name;
-            const hint=document.createElement('span');hint.textContent=`${typeNames[item.type]} · Tap to collect`;tip.append(name,hint);button.append(tip);
+            const hint=document.createElement('span');hint.textContent=`${typeNames[item.type]} · +${window.PathfindrRoundMetrics?.values[item.type]||0} pts`;tip.append(name,hint);button.append(tip);
             button.setAttribute('aria-describedby',tip.id);
             button.addEventListener('pointerenter',()=>button.classList.remove('tooltip-dismissed'));
             button.addEventListener('focus',()=>button.classList.remove('tooltip-dismissed'));
@@ -149,8 +150,8 @@
             map.on('move',()=>update(true));renderPanel();mount();
         },
         setCity(location,edges){cityKey=`${location.lat.toFixed(3)},${location.lng.toFixed(3)}`;items=[];
-            challengeClaims=null;
-            roundKey=null;roundItems=[];renderRoundSummary();
+            challengeClaims=null;dailyClaims=typeof GameState!=='undefined'&&GameState.gameMode==='challenge'?new Set():null;
+            roundKey=null;roundItems=[];window.PathfindrRoundMetrics?.clear();renderRoundSummary();
             // Discoveries now come only from real POIs. Preserve historical claims on disk.
             if(panel)panel.hidden=true;mount();
         },
