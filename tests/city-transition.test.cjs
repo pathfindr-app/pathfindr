@@ -25,13 +25,13 @@ test('ready roads enter round one even when optional scenery is still loading',a
 });
 test('loading feedback is immediate; cancellation prevents late reserve from changing map',async()=>{
  const x=transitionFixture();let finish;x.env.GameState.continuousPlay.preloadedData=null;
- x.env.getLobbyCityPreparation=()=>({take:()=>new Promise(r=>finish=r)});
+ x.env.takeReadyCity=()=>new Promise(r=>finish=r);
  const pending=x.env.transitionToNextCity();assert.equal(x.classes.has('hidden'),false);assert.equal(x.env.GameState.currentRound,5);
  x.env.GameState.cityTransitionId++;finish({city:x.next,data:{elements:[]}});await pending;
  assert.equal(x.env.GameState.currentCity,x.city);assert.equal(x.processed(),0);assert.equal(x.classes.has('hidden'),true);
 });
 test('failed preparation preserves score and city for retry',async()=>{
  const x=transitionFixture();x.env.GameState.continuousPlay.preloadedData=null;
- x.env.getLobbyCityPreparation=()=>({take:async()=>{throw Error('offline');}});
+ x.env.takeReadyCity=async()=>{throw Error('offline');};
  await assert.rejects(x.env.transitionToNextCity(),/offline/);assert.equal(x.env.GameState.currentRound,5);assert.equal(x.env.GameState.totalScore,2000);assert.equal(x.env.GameState.continuousPlay.cityScores.length,0);
 });

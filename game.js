@@ -566,7 +566,7 @@ async function getNextVisualizerCity() {
     }
     const mode=Math.random() > 0.5 ? 'global' : 'us';
     if(StreamConfig.enabled)return getRandomCity(mode);
-    const reserve=await getLobbyCityPreparation().take(mode);
+    const reserve=await takeReadyCity(mode);
     if(!reserve.city||!reserve.data||!reserve.scene)throw Error('City service could not prepare a complete scene');
     if(reserve.scene)PathfindrCity.prime(reserve.city,reserve.scene);
     if(reserve.data)preparedLocationRoads.set(reserve.city,reserve.data);
@@ -757,6 +757,7 @@ const GameController = {
     },
 
     _renderFrame(deltaTime) {
+        if(GameState.gameMode==='visualizer'&&GameState.visualizerState.paused)return;
         PathfindrMotion.tick?.(deltaTime);
         if(GameState.gameMode==='visualizer'&&GameState.visualizerState.active&&![GamePhase.LOADING,GamePhase.MENU].includes(this.phase))window.PathfindrVisualizerCamera?.tick(deltaTime,GameState.vizState);
         else window.PathfindrVisualizerCamera?.stop();
@@ -828,6 +829,9 @@ const GameController = {
 
             case GamePhase.MENU:
             case GamePhase.LOADING:
+                if(this.phase===GamePhase.LOADING&&GameState.gameMode==='visualizer'&&VisualizerHistory.getPaths().length){
+                    this._renderAmbientFrame(ctx,width,height,deltaTime);break;
+                }
                 // Minimal rendering during menus/loading
                 ctx.clearRect(0, 0, width, height);
                 if (GameState.useWebGL && WebGLRenderer.canUseWebGL && GameState.edgeList?.length > 0) {
@@ -13541,6 +13545,11 @@ document.addEventListener('keydown',e=>{
     if([GamePhase.PLAYING,GamePhase.VISUALIZING,GamePhase.RESULTS,GamePhase.IDLE].includes(GameController.phase)){e.preventDefault();enterFullscreenMode();}
 });
 
+const VisualizerPreparedRoutes=PathfindrVisualizerPreparation.create({
+    version:()=>GameState.roadGraphVersion,
+    active:()=>GameState.visualizerState.active&&GameState.gameMode==='visualizer',
+    select:()=>createEndpointSelection({applySelection:false})
+});
 const VisualizerTimeline = {
     config: {
         preDropDelayMs: 90,
@@ -13555,6 +13564,7 @@ const VisualizerTimeline = {
     },
 
     invalidateRuns() {
+        VisualizerPreparedRoutes.clear();
         window.PathfindrVisualizerCamera?.stop();
         GameState.visualizerState.runId += 1;
         this.clearHeroState();
@@ -13605,27 +13615,19 @@ const VisualizerTimeline = {
 
     async playHeroIntro(runId) {
         if (!this.isRunActive(runId)) return false;
+        if(!await waitForVisualizerPlayback(runId))return false;
 
         this.clearHeroState();
         const mapContainer = document.getElementById('map-container');
         if (mapContainer) mapContainer.classList.add('visualizer-hero-active');
 
-        // Visualizer-only: keep camera stable during loops to avoid zoom/pan jumpiness.
-        const graph = GameState.roadGraphVersion;
-        const selection = createEndpointSelection({ applySelection: false });
-        let step, sliceStarted = performance.now();
-        do {
-            if (!this.isRunActive(runId) || graph !== GameState.roadGraphVersion) return false;
-            step = selection.next();
-            if (!step.done && performance.now() - sliceStarted >= 4) {
-                await new Promise(resolve => setTimeout(resolve, 0));
-                sliceStarted = performance.now();
-            }
-        } while (!step.done);
-        if (!step.value) return false;
-        selectRandomEndpoints({ preselectedCandidate: step.value, deferMarkerPlacement: false, adjustViewport: false });
+        const candidate=await VisualizerPreparedRoutes.take();
+        if(!candidate||!this.isRunActive(runId))return false;
+        if(!await waitForVisualizerPlayback(runId))return false;
+        selectRandomEndpoints({ preselectedCandidate: candidate, deferMarkerPlacement: false, adjustViewport: false });
+        // Prepare the next endpoints AND A* tree while this route is on screen.
+        void VisualizerPreparedRoutes.warm().catch(error=>console.warn('[Visualizer] Background route preparation:',error));
         window.PathfindrVisualizerCamera?.follow(GameState.map,[GameState.startNode,GameState.endNode],[],GameState.nodes);
-        await this.waitForMapSettle();
         if (!this.isRunActive(runId)) {
             this.clearHeroState();
             return false;
@@ -13640,40 +13642,22 @@ const VisualizerTimeline = {
             return false;
         }
 
-        startEl.classList.add('viz-marker-hidden');
-        endEl.classList.add('viz-marker-hidden');
-
-        await sleep(this.config.preDropDelayMs);
-        if (!this.isRunActive(runId)) {
-            this.clearHeroState();
-            return false;
-        }
-
         startEl.classList.remove('viz-marker-hidden');
         startEl.classList.add('viz-marker-pop');
-        if (SoundEngine.initialized) SoundEngine.hover();
-
-        await sleep(this.config.markerGapMs);
-        if (!this.isRunActive(runId)) {
-            this.clearHeroState();
-            return false;
-        }
-
         endEl.classList.remove('viz-marker-hidden');
         endEl.classList.add('viz-marker-pop');
         if (SoundEngine.initialized) SoundEngine.hover();
-
-        await sleep(this.config.postDropHoldMs);
-        this.clearHeroState();
-
+        // Marker arrival, camera composition and search now overlap.
         return this.isRunActive(runId);
     },
 };
 
 function startVisualizerMode() {
-    window.PathfindrVisualizerCamera?.startSession();
+    window.PathfindrVisualizerCamera?.startSession(GameState.map);
     window.PathfindrSharedGame?.clear();
     GameState.visualizerState.active = true;
+    GameState.visualizerState.paused=false;
+    window.PathfindrVisualizerUI?.paused(false);
     GameState.visualizerState.currentVisualization = 0;
     VisualizerTimeline.invalidateRuns();
     const bootRunId = VisualizerTimeline.createRunId();
@@ -13708,6 +13692,7 @@ function startVisualizerMode() {
         .then(city => {
             if (!city || !VisualizerTimeline.isRunActive(bootRunId)) return null;
             GameState.currentCity = city;
+            window.PathfindrVisualizerUI?.city(city);
 
             // Update location and stats
             const locationEl = document.getElementById('current-location');
@@ -13745,12 +13730,25 @@ function startVisualizerMode() {
 }
 
 function updateVisualizerUI(cityName, count) {
+    window.PathfindrVisualizerUI?.city(GameState.currentCity);
     // Update location in main HUD
     const locationEl = document.getElementById('current-location');
     if (locationEl) locationEl.textContent = cityName;
 
     // Update mode stats counter
     updateModeStats(count, GameState.visualizerState.maxPerCity);
+}
+
+function toggleVisualizerPlayback(){
+    if(!GameState.visualizerState.active)return;
+    const paused=GameState.visualizerState.paused=!GameState.visualizerState.paused;
+    if(paused){GameState.map.stop();SoundEngine.stopScanning();}
+    else if(GameState.vizState.active&&SoundEngine.initialized)SoundEngine.scanning();
+    window.PathfindrVisualizerUI?.paused(paused);
+}
+async function waitForVisualizerPlayback(runId){
+    while(GameState.visualizerState.paused&&VisualizerTimeline.isRunActive(runId))await new Promise(r=>setTimeout(r,50));
+    return VisualizerTimeline.isRunActive(runId);
 }
 
 function showVisualizerLoadFailure(){
@@ -13830,9 +13828,11 @@ async function runVisualizerLoop() {
 
 async function runVisualizerAStar(runId) {
     const graphVersion = GameState.roadGraphVersion;
-    const search = createAStarSearch(GameState.startNode, GameState.endNode);
+    const prepared=GameState.endpointSelection.currentPreparedRoute;
+    const cached=prepared?.graphVersion===graphVersion&&prepared.startNode===GameState.startNode&&prepared.endNode===GameState.endNode?prepared:null;
+    const search = cached?null:createAStarSearch(GameState.startNode, GameState.endNode);
     let step, sliceStarted = performance.now();
-    do {
+    if(search)do {
         if (!VisualizerTimeline.isRunActive(runId) || graphVersion !== GameState.roadGraphVersion) return;
         step = search.next();
         if (!step.done && performance.now() - sliceStarted >= 4) {
@@ -13840,7 +13840,7 @@ async function runVisualizerAStar(runId) {
             sliceStarted = performance.now();
         }
     } while (!step.done);
-    const result = step.value;
+    const result = cached||step.value;
     GameState.visualizerState.themeIndex = VisualizerHistory.pathIndex;
     GameState.visualizerState.searchStartedAt = performance.now();
     VisualizerPhaseBlend.clear();
@@ -13891,6 +13891,7 @@ async function runVisualizerAStar(runId) {
 
         // Fallback commit if callback path was skipped.
         commitToHistory();
+        window.PathfindrVisualizerUI?.scanned(GameState.currentCity);
     } else if (SoundEngine.initialized) {
         await SoundEngine.fadeOutScanning(180);
     }
@@ -13905,6 +13906,9 @@ async function loadNextVisualizerCity(runId) {
     // Leave the cooling scene visible while selecting the next location.
     const city = await getNextVisualizerCity();
     if (!VisualizerTimeline.isRunActive(runId)) return;
+    if(!await waitForVisualizerPlayback(runId))return;
+    await window.PathfindrVisualizerUI?.cover(GameState.map);
+    if(!VisualizerTimeline.isRunActive(runId)){window.PathfindrVisualizerUI?.uncover(true);return;}
 
     // Retire the outgoing director BEFORE moving the map or awaiting network work.
     window.PathfindrVisualizerCamera?.stop();
@@ -13933,15 +13937,10 @@ async function loadNextVisualizerCity(runId) {
     GameState.endMarkerEl = null;
     GameState.currentCity = city;
 
-    updateVisualizerUI(city.name, 1);
     pushStreamState('city_loaded', city);
 
-    // Update facts ticker for new city
-    CityFacts.updateTickerCity(city);
-
-    // Show loading briefly
-    document.getElementById('loading-overlay').classList.remove('hidden');
-    document.getElementById('loading-text').textContent = `Loading ${city.name}...`;
+    // The captured outgoing scene stays visible during assembly. Avoid a
+    // blocking loading flash or naming the new city over the old geography.
 
     // Pan to new city and load road network
     GameState.map.setMaxBounds(null);
@@ -13955,6 +13954,9 @@ async function loadNextVisualizerCity(runId) {
     await PathfindrCity.presented();
     if (!VisualizerTimeline.isRunActive(runId)) return;
     document.getElementById('loading-overlay').classList.add('hidden');
+    updateVisualizerUI(city.name, 1);
+    CityFacts.updateTickerCity(city);
+    window.PathfindrVisualizerUI?.uncover();
 }
 
 function stopVisualizerMode() {
@@ -13962,6 +13964,8 @@ function stopVisualizerMode() {
 
     // Mark visualizer as inactive FIRST (stops loop callbacks)
     GameState.visualizerState.active = false;
+    window.PathfindrVisualizerUI?.uncover(true);
+    window.PathfindrVisualizerCamera?.endSession();
     VisualizerTimeline.invalidateRuns();
 
     // Exit fullscreen if we're in it
@@ -15627,93 +15631,19 @@ function initChallengeCreationUI() {
 // =============================================================================
 
 async function preloadNextCity() {
-    if(!GameState.continuousPlay.enabled||GameState.locationMode==='local'||GameState.currentCity?.packId)return;
-    // Don't preload if already preloading
-    if (GameState.continuousPlay.preloadedCity) return;
-
-    // Pick next city based on location mode
-    const nextCity = getRandomCity(GameState.locationMode);
-    GameState.continuousPlay.preloadedCity = nextCity;
-    GameState.continuousPlay.preloadedData = null;
-    GameState.continuousPlay.preloadRequestId += 1;
-    const requestId = GameState.continuousPlay.preloadRequestId;
-    const prepareDetails=()=>{
-        if(GameState.continuousPlay.preloadRequestId!==requestId)return;
-        GameState.continuousPlay.preloadDetails='loading';
-        PathfindrCity.prepare(nextCity).then(()=>{
-            if(GameState.continuousPlay.preloadRequestId===requestId)GameState.continuousPlay.preloadDetails='ready';
-        }).catch(error=>{
-            if(GameState.continuousPlay.preloadRequestId===requestId)GameState.continuousPlay.preloadDetails='unavailable';
-            console.warn('[City preload] Optional details:',error.message);
-        });
-    };
-    GameState.continuousPlay.preloadDetails='waiting-for-roads';
-
-    // Calculate bounds for the city
-    const zoom = nextCity.zoom || 15;
-    const latOffset = 0.015 * Math.pow(2, 15 - zoom);
-    const lngOffset = 0.02 * Math.pow(2, 15 - zoom);
-
-    const bounds = {
-        south: nextCity.lat - latOffset,
-        north: nextCity.lat + latOffset,
-        west: nextCity.lng - lngOffset,
-        east: nextCity.lng + lngOffset
-    };
-    const cacheKey = RoadNetworkCache.createKey(bounds);
-
-    const cachedData = await RoadNetworkCache.get(cacheKey);
-    if (!GameState.continuousPlay.enabled) return;
-    if (GameState.continuousPlay.preloadRequestId !== requestId) return;
-    if (GameState.continuousPlay.preloadedCity !== nextCity) return;
-    if (cachedData) {
-        GameState.continuousPlay.preloadedData = cachedData;
-        prepareDetails();
-        console.log(`[RoadCache] Prepared ${nextCity.name} from IndexedDB`);
-        return;
-    }
-
-    // Build the query
-    const query = buildRoadNetworkQuery(bounds);
-
-    // Fetch in background
-    const servers = CONFIG.overpassServers;
-    const server = servers[Math.floor(Math.random() * servers.length)];
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-    GameState.continuousPlay.preloadTask = fetch(server, {
-        method: 'POST',
-        body: `data=${encodeURIComponent(query)}`,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        signal: controller.signal,
-    })
-    .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        return response.json();
-    })
-    .then(data => {
-        if (!GameState.continuousPlay.enabled) return;
-        if (GameState.continuousPlay.preloadRequestId !== requestId) return;
-        if (GameState.continuousPlay.preloadedCity !== nextCity) return;
-        if(data.remark||!data.elements?.length)throw Error('Incomplete next-city road data');
-        if (data.elements && data.elements.length > 0) {
-            GameState.continuousPlay.preloadedData = data;
-            prepareDetails();
-            RoadNetworkCache.set(cacheKey, data).catch(() => {});
-            console.log(`Preloaded ${nextCity.name}: ${data.elements.length} elements`);
-        }
-    })
-    .catch(error => {
-        if (!GameState.continuousPlay.enabled) return;
-        if (GameState.continuousPlay.preloadRequestId !== requestId) return;
-        console.warn('City preload failed (will fetch fresh):', error);
-        GameState.continuousPlay.preloadedCity = null;
-        GameState.continuousPlay.preloadedData = null;
-    })
-    .finally(() => {
-        clearTimeout(timeoutId);
+    const state=GameState.continuousPlay;
+    if(!state.enabled||GameState.locationMode==='local'||state.preloadedCity||state.preloadDetails==='loading')return;
+    const requestId=++state.preloadRequestId;
+    state.preloadDetails='loading';
+    state.preloadTask=takeReadyCity(GameState.locationMode==='global'?'global':'us').then(reserve=>{
+        if(!state.enabled||state.preloadRequestId!==requestId)return;
+        state.preloadedCity=reserve.city;state.preloadedData=reserve.data;
+        state.preloadedScene=reserve.scene;state.preloadDetails='ready';
+        if(reserve.scene)PathfindrCity.prime(reserve.city,reserve.scene);
+    }).catch(error=>{
+        if(state.preloadRequestId!==requestId)return;
+        state.preloadDetails='unavailable';
+        console.warn('[City preload] Preparation failed:',error.message);
     });
 }
 
@@ -15861,10 +15791,12 @@ async function transitionToNextCity() {
     // request rather than starting a duplicate fetch for the same city.
     let usedPreloadedCity = GameState.continuousPlay.preloadedCity;
     let usedPreloadedData = GameState.continuousPlay.preloadedData;
+    const usedPreloadedScene = GameState.continuousPlay.preloadedScene;
+    if(usedPreloadedCity&&usedPreloadedScene)PathfindrCity.prime(usedPreloadedCity,usedPreloadedScene);
     if(!usedPreloadedData){
         let timer;
         const reserve=await Promise.race([
-            getLobbyCityPreparation().take(GameState.locationMode==='global'?'global':'us'),
+            takeReadyCity(GameState.locationMode==='global'?'global':'us'),
             new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('City preparation timed out')),12000);})
         ]).catch(error=>{if(!current())return null;throw error;}).finally(()=>clearTimeout(timer));
         if(!current()){if(overlay)overlay.classList.add('hidden');return;}
@@ -15878,6 +15810,7 @@ async function transitionToNextCity() {
     if (usedPreloadedCity) {
         GameState.continuousPlay.preloadedCity = null;
         GameState.continuousPlay.preloadedData = null;
+        GameState.continuousPlay.preloadedScene = null;
         GameState.continuousPlay.preloadRequestId += 1; // Invalidate in-flight preload callbacks
     } else {
         nextCity = getRandomCity(GameState.locationMode);
@@ -16105,7 +16038,7 @@ function selectLocationMode(mode) {
             startGameWithLocation(fallback);
         }
     } else if (mode === 'us' || mode === 'global') {
-        getLobbyCityPreparation().take(mode).then(({city,data,scene})=>{
+        takeReadyCity(mode).then(({city,data,scene})=>{
             if(selectionVersion!==lobbySelectionVersion||GameState.locationMode!==mode)return;
             if(scene)PathfindrCity.prime(city,scene);
             startGameWithLocation(city||getRandomCity(mode),data);
@@ -16240,6 +16173,13 @@ async function reverseGeocode(lat, lng) {
 
 const preparedLocationRoads=new WeakMap();
 let lobbyCityPreparation=null,lobbyPreparationTimer=null,lobbySelectionVersion=0;
+async function takeReadyCity(mode){
+    const preparation=getLobbyCityPreparation(),state=preparation.state()[mode];
+    if(state?.roads==='ready'&&state.details==='ready')return preparation.take(mode);
+    // Live preparation continues, but an unavailable public API never blocks Play.
+    if(navigator.onLine!==false)preparation.warm();
+    return PathfindrFallbackCities.take(mode,GameState.currentCity?.name);
+}
 function getLobbyCityPreparation(){
     if(!lobbyCityPreparation)lobbyCityPreparation=PathfindrLobbyPreload.create({
         async restore(mode){const saved=await RoadNetworkCache.get(`lobby-reserve-v3:${mode}`);if(!saved?.scene||saved.city?.packId)return null;return {city:saved.city,data:{elements:saved.elements},scene:saved.scene};},
@@ -16268,6 +16208,7 @@ function getLobbyCityPreparation(){
     return lobbyCityPreparation;
 }
 function scheduleLobbyCityPreparation(){
+    window.PathfindrFallbackCities?.warm();
     if(lobbyPreparationTimer||StreamConfig.enabled)return;
     lobbyPreparationTimer=setTimeout(()=>{
         lobbyPreparationTimer=null;

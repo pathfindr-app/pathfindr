@@ -13,15 +13,17 @@ function nudgeRouteHeadIntoView(){
     const map=GameState.map,node=GameState.nodes.get(getActivePathAnchorNode());if(!node)return;
     const rect=map.getCanvas().getBoundingClientRect(),tip=map.project([node.lng,node.lat]);
     const pad=getRouteCameraPadding();
-    const zone=PathfindrEdgePan.zones(rect,{top:pad.top,bottom:pad.bottom});
-    const x=Math.max(zone.x,Math.min(rect.width-zone.x,tip.x));
-    const y=Math.max(pad.top+zone.y,Math.min(rect.height-pad.bottom-zone.y,tip.y));
+    const mobile=matchMedia('(pointer: coarse)').matches||rect.width<=700;
+    const zone=PathfindrEdgePan.zones(rect,{top:pad.top,bottom:pad.bottom},mobile);
+    let x=Math.max(zone.x,Math.min(rect.width-zone.x,tip.x));
+    let y=Math.max(pad.top+zone.y,Math.min(rect.height-pad.bottom-zone.y,tip.y));
     if(Math.hypot(tip.x-x,tip.y-y)<1)return;
+    if(mobile){x=rect.width/2;y=(pad.top+rect.height-pad.bottom)/2;}
     const center=map.project(map.getCenter());
     const distance=Math.hypot(tip.x-x,tip.y-y);
     map.easeTo({center:map.unproject([center.x+tip.x-x,center.y+tip.y-y]),
-        duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:Math.min(600,320+distance*1.2),
-        easing:t=>t*t*(3-2*t)});
+        duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:Math.min(mobile?480:600,280+distance*.8),
+        easing:t=>1-Math.pow(1-t,3)});
 }
 function getRouteCameraPadding() {
     const height = GameState.map.getContainer().clientHeight;
@@ -59,7 +61,7 @@ function initCityControls() {
         return { x: p.x - rect.left, y: p.y - rect.top };
     };
     let panWasEnabled = true;
-    let edgeVelocity={x:0,y:0},edgeTravel=0,traceReport=null;
+    let edgeVelocity={x:0,y:0},edgeTravel=0,traceReport=null,panPointer=null,pointerVelocity={x:0,y:0};
     PathfindrTrace.init({
         surface, canDraw: shouldHandlePathInput,
         nearTip(p, radius) {
@@ -88,7 +90,7 @@ function initCityControls() {
         },
         begin() {
             traceReport={build:PathfindrConfig.app.buildId,city:GameState.currentCity?.name,mode:GameState.gameMode,pointer:PathfindrTrace.pointerType,zoom:map.getZoom(),pitch:map.getPitch(),viewport:[innerWidth,innerHeight],attempts:0,accepted:0,rejected:0,resumed:false,lastMismatch:null};
-            edgeVelocity={x:0,y:0};edgeTravel=0;
+            edgeVelocity={x:0,y:0};edgeTravel=0;panPointer=null;pointerVelocity={x:0,y:0};
             panWasEnabled = map.dragPan.isEnabled(); map.dragPan.disable(); map.stop(); clearSnapPreview();
             GameState.suppressNextMapClickUntil = Date.now() + 1000;
             if (GameState.gameMode === 'challenge' && !GameState.challengeState.startTime) GameState.challengeState.startTime = Date.now();
@@ -100,11 +102,18 @@ function initCityControls() {
             const node=GameState.nodes.get(getActivePathAnchorNode());
             if(!node)return false;
             const tip=map.project([node.lng,node.lat]);
-            if(Math.hypot(p.x-rect.left-tip.x,p.y-rect.top-tip.y)>120){edgeVelocity={x:0,y:0};return false;}
+            const mobile=PathfindrTrace.pointerType==='touch'||rect.width<=700;
+            if(!mobile&&Math.hypot(p.x-rect.left-tip.x,p.y-rect.top-tip.y)>120){edgeVelocity={x:0,y:0};return false;}
+            const blendMotion=1-Math.exp(-dt/.09);
+            const vx=panPointer?(p.x-panPointer.x)/Math.max(.008,dt):0,vy=panPointer?(p.y-panPointer.y)/Math.max(.008,dt):0;
+            pointerVelocity.x+=(vx-pointerVelocity.x)*blendMotion;pointerVelocity.y+=(vy-pointerVelocity.y)*blendMotion;panPointer={...p};
             const padding=getRouteCameraPadding();padding.left=0;padding.right=0;
-            const target=PathfindrEdgePan.velocity(p,rect,padding);
+            const focus=mobile?PathfindrEdgePan.focus(p,{x:tip.x+rect.left,y:tip.y+rect.top},pointerVelocity):p;
+            if(p.x<rect.left||p.x>rect.right||p.y<rect.top||p.y>rect.bottom)return false;
+            focus.x=Math.max(rect.left+.01,Math.min(rect.right-.01,focus.x));focus.y=Math.max(rect.top+.01,Math.min(rect.bottom-.01,focus.y));
+            const target=PathfindrEdgePan.velocity(focus,rect,padding,undefined,{mobile});
             const stopping=!target.x&&!target.y;
-            const blend=1-Math.exp(-dt/(stopping?0.18:0.16));
+            const blend=1-Math.exp(-dt/(stopping?.12:mobile?.09:.16));
             edgeVelocity.x+=(target.x-edgeVelocity.x)*blend;edgeVelocity.y+=(target.y-edgeVelocity.y)*blend;
             const dx=edgeVelocity.x*dt,dy=edgeVelocity.y*dt;
             if(Math.hypot(dx,dy)<.05)return false;

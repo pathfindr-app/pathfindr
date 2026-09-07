@@ -2,7 +2,7 @@
 (() => {
     const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
     const mix=(a,b,t)=>a+(b-a)*t;
-    let shot=null,enabled=true,paused=false,clock=0;
+    let shot=null,enabled=true,paused=false,clock=0,lockedMap=null,priorMaxPitch=null;
     const gestures=['dragstart','zoomstart','rotatestart','pitchstart','wheel'];
     function sync(){
         const button=document.getElementById('camera-motion-btn');
@@ -35,7 +35,7 @@
         Object.assign(shot,{key,points,center:fit.center,zoom:Math.min(fit.zoom-.08,16.3),needsFrame:true});
         if(enabled&&!paused&&!PathfindrMotion.reduced()&&map.easeTo){
             shot.intro=true;
-            map.easeTo({center:fit.center,zoom:shot.zoom,pitch:32,duration:1100,easing:t=>t*t*t*(t*(t*6-15)+10)});
+            map.easeTo({center:fit.center,zoom:shot.zoom,pitch:0,duration:900,easing:t=>t*t*t*(t*(t*6-15)+10)});
         }
         sync();
     }
@@ -48,7 +48,7 @@
         const attitude=1-Math.exp(-dt/2800);
         map.jumpTo({center:[center.lng,center.lat],
             zoom:shot.needsFrame?zoom:Math.min(map.getZoom(),zoom),
-            pitch:mix(map.getPitch(),32,attitude),bearing:map.getBearing()+dt*.0015});
+            pitch:0,bearing:map.getBearing()+dt*.00065});
         shot.needsFrame=false;
         // Screen-space guard includes perspective, rotation and responsive HUD space.
         // Only zoom outward; no breathing/pumping as the orbit turns.
@@ -66,6 +66,9 @@
             }
         }
     }
-    window.PathfindrVisualizerCamera={follow,tick,stop,startSession(){stop();enabled=true;paused=false;clock=0;sync();},hold(){if(shot){paused=true;sync();}},toggle(){if(paused){paused=false;enabled=true;}else enabled=!enabled;sync();},
+    window.PathfindrVisualizerCamera={follow,tick,stop,startSession(map){stop();enabled=true;paused=false;clock=0;
+        if(map&&lockedMap!==map){lockedMap=map;priorMaxPitch=map.getMaxPitch?.()??60;map.setMaxPitch?.(0);map.jumpTo({pitch:0});}sync();},
+        endSession(){stop();if(lockedMap)lockedMap.setMaxPitch?.(priorMaxPitch);lockedMap=null;priorMaxPitch=null;},
+        hold(){if(shot){paused=true;sync();}},toggle(){if(paused){paused=false;enabled=true;}else enabled=!enabled;sync();},
         state:()=>({active:!!shot,enabled,paused,framing:!!shot?.intro,clock,targetZoom:shot?.zoom??null})};
 })();

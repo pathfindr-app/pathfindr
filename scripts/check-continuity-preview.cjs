@@ -1,0 +1,6 @@
+const {execFileSync}=require('node:child_process'),assert=require('node:assert/strict');
+const deployment=process.argv[2];if(!deployment)throw Error('Preview URL required');
+function get(path){return execFileSync('vercel',['curl',path,'--deployment',deployment,'--scope','pathfindr-apps-projects','--','-sS','-w','\n%{http_code}'],{encoding:'utf8',maxBuffer:64*1024*1024});}
+const checks=[['/prints/',s=>s.includes('Pathfindr Prints')],['/prints/builder',s=>s.includes('maui-builder.js')],['/prints/shop.css',s=>s.includes('.hero')],['/prints/maui-builder.js',s=>s.includes('PrintRenderer')],['/prints/data/maui.json',s=>JSON.parse(s).id==='maui'],['/prints/policies',s=>s.includes('privacy')],['/',s=>s.includes('engine/fallback-cities.js?v=45')&&s.includes('engine/immersive.js?v=45')],['/engine/immersive.js?v=45',s=>s.includes('Places visited')],['/data/cities/fallback/manifest.json',s=>JSON.parse(s).cities.length===36],['/data/cities/fallback/new-cairo.json',s=>JSON.parse(s).stats.largestComponent>30000]];
+for(const [path,valid]of checks){const raw=get(path),i=raw.lastIndexOf('\n');assert.equal(raw.slice(i+1),'200',path);assert.ok(valid(raw.slice(0,i)),path);console.log('PASS '+path);}
+for(const path of ['/prints/server/runtime.cjs','/prints/server/.env.example']){const raw=get(path);assert.ok(/\n(403|404)$/.test(raw),path);console.log('PASS private '+path);}

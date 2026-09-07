@@ -44,7 +44,7 @@
                 if(!slot.pending&&slots.get(mode)===slot){slots.delete(mode);ensure(mode);}
                 return result;
             },
-            state:()=>Object.fromEntries([...slots].map(([mode,s])=>[mode,{city:s.city?.name||null,roads:s.data?'ready':s.roads,details:s.details,replenishing:s.pending}]))
+            state:()=>Object.fromEntries([...slots].map(([mode,s])=>[mode,{city:s.city?.name||null,roads:s.data?'ready':s.roads,details:s.scene?'ready':s.details,replenishing:s.pending}]))
         };
     }
     window.PathfindrLobbyPreload={create};

@@ -2,6 +2,13 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Active Visualizer continuity goal — September 7, unreleased
+- Protected c4c220a/.44 in separate worktree; current branch codex/visualizer-continuity-20260907. Full acceptance scope is GOAL-OVERNIGHT.md; multiplayer, persistence audit and 100-achievement catalog remain required after main release.
+- Added top-down lock, overlapping route look-ahead, explicit pause/play, city identity, scene transition cover, and stronger mobile head-follow. Real fallback-city acquisition running via public OSM mirror; 34 complete so far. Must regenerate fallback catalog/starter after acquisition and finish all-mode integration before release.
+- Latest request: physical-instrument Places visited dropdown with inset counter, numbered city rows, coordinates and completed scan counts. Device-local persistence bounded to 100 cities; malformed storage/coordinates rejected, storage denial harmless. No historical scans invented.
+- Browser verified Paris/London/Washington completed scans, persistence after reload, desktop and 390x844 drawer layout, pause, Escape closes drawer without exiting. Corrected HUD stacking above route canvases. 136 existing tests and 3 travel-log tests pass. Stock game client rerun is in progress; main release and Printshop verification NOT done yet.
+- Follow-up: 139 tests pass after removing paused reduced-motion ticking and refreshing the corresponding assertion. Stock client attempts did not reach gameplay (selector then navigation timeout; captured lobby and existing localhost Supabase CORS failures); in-app browser actual gameplay checks above are the successful UI evidence. Viewport override reset. Acquisition reached 35 cities, New Cairo still aborts at the app's 22s timeout; use longer BUILD-ONLY timeout to acquire that required large pack next. Main release remains pending.
+
 ### Lobby reserves, scene readiness and tablet budget — September 7, .44
 - Fixed early Play/disk-restore race; single-use persisted US/Global reserves can satisfy an already waiting click. Fresh roads and scenery prepare together through one deduplicated Overpass response; retain shared OSM node IDs. Scenery coverage scales with city zoom instead of fixed 1600m radius. City-selection timeout now 2.5s before existing curated random fallback (not Miami).
 - Visualizer awaits scene assembly and bounded GeoJSON source presentation before starting. Reject incomplete prepared cities and failed road/scenery loads rather than visualizing an old/partial graph; explicit retry UI. Classic can still fall back to roads if scenery provider is unavailable.

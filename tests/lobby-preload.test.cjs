@@ -71,7 +71,7 @@ test('mode entry paths use the shared scene loader and visualizer consumes reser
     const src=fs.readFileSync('game.js','utf8');
     assert.match(src,/PathfindrCity\.load\(GameState.currentCity, GameState.edgeList, data\)/);
     const visualizer=src.slice(src.indexOf('async function getNextVisualizerCity()'),src.indexOf('const GamePhase ='));
-    assert.match(visualizer,/getLobbyCityPreparation\(\)\.take\(mode\)/);
+    assert.match(visualizer,/takeReadyCity\(mode\)/);
     assert.match(visualizer,/preparedLocationRoads\.set/);
-    assert.match(src,/getLobbyCityPreparation\(\)\.take\(mode\)\.then\(\(\{city,data,scene\}\)/);
+    assert.match(src,/takeReadyCity\(mode\)\.then\(\(\{city,data,scene\}\)/);
 });

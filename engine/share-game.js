@@ -3,6 +3,7 @@
     let active=null,index=0;
     async function start(payload){
         const checked=PathfindrShareData.validate(payload);
+        for(const map of checked.maps)if(map.packId?.startsWith('fallback-'))await PathfindrFallbackCities.load(map.packId);
         const resolved=checked.rounds.map(r=>PathfindrShareData.resolve(checked.maps[r.map],r));
         active={payload:checked,resolved};index=0;await load();
     }

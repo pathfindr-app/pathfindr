@@ -19,6 +19,25 @@ test('camera assistance starts before the old 64px edge band and scales to deskt
  const nearStart=velocity({x:250,y:400},rect,pad).x;
  assert.ok(nearStart>=0&&nearStart<1);
 });
+test('mobile follows close to the center and is strong halfway toward the edge',()=>{
+ const mobile=p=>velocity(p,rect,pad,undefined,{mobile:true});
+ assert.equal(mobile({x:195,y:427}).x,0);
+ assert.ok(mobile({x:240,y:427}).x>12);
+ assert.ok(mobile({x:292,y:427}).x>140);
+ assert.ok(Math.hypot(...Object.values(mobile({x:389,y:843})))<=420.001);
+});
+test('fast connected finger motion leads the camera; a disconnected finger cannot drag it away',()=>{
+ const focus=window.PathfindrEdgePan.focus,head={x:195,y:427};
+ assert.ok(focus({x:240,y:427},head,{x:500,y:0}).x>focus({x:240,y:427},head).x);
+ const stopped=focus({x:389,y:427},head,{x:900,y:0});assert.equal(stopped.x,195);
+ assert.equal(velocity(stopped,rect,pad,undefined,{mobile:true}).x,0);
+});
+test('mobile tracking converges into central padding without overshoot at different frame rates',()=>{
+ for(const hz of [30,60,120]){let x=340;
+  for(let i=0;i<hz*4;i++){const v=velocity({x,y:427},rect,pad,undefined,{mobile:true});x-=v.x/hz;assert.ok(x>=195);}
+  assert.ok(x<230,`head at ${x} for ${hz}Hz`);
+ }
+});
 test('route patterns move with the clock and freeze for reduced motion',()=>{
  let reduced=false;const calls=[];
  const ctx={save(){},restore(){},setLineDash(v){calls.push([...v]);},stroke(){}};

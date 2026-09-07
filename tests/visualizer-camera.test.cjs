@@ -10,9 +10,9 @@ function fixture(reduced=false){
  const viz={active:true,phase:'exploring',exploredSet:new Set([0,1]),pathProgress:0};
  return {camera,map,nodes,viz,calls,listeners,state,document};
 }
-test('director eases into shallow 3D and bounds per-frame camera motion',()=>{
+test('director remains top-down throughout every frame and rotates gently',()=>{
  const x=fixture();for(let i=0;i<360;i++)x.camera.tick(16,x.viz);
- assert.ok(x.state.pitch>27&&x.state.pitch<33);assert.equal(x.state.zoom,13.92);
+ assert.equal(x.state.pitch,0);assert.equal(x.state.zoom,13.92);
  for(let i=1;i<x.calls.length;i++){assert.ok(Math.abs(x.calls[i].pitch-x.calls[i-1].pitch)<.22);assert.ok(Math.abs(x.calls[i].bearing-x.calls[i-1].bearing)<.1);}
  const before=x.calls.at(-1);x.camera.follow(x.map,[2,1,0],[],x.nodes);assert.equal(x.calls.at(-1),before);
 });
