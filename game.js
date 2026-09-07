@@ -15182,9 +15182,10 @@ async function beginChallengeGame(challenge) {
         console.error('[Challenge] Failed to start:', error);
         if (GameState.currentCity !== location || GameState.gameMode !== 'challenge' || GameState.challengeState.activeChallenge !== challenge) return;
         GameState.challengeState.activeChallenge = null;
+        GameState.gameMode = 'competitive';
         hideLoading();
+        exitToMenu();
         showToast(error.message || 'Failed to load challenge. Try another one.');
-        showModeSelector();
     }
 }
 

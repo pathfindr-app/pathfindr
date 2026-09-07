@@ -238,6 +238,7 @@
     }
     function build(data,location,edges=[],buildings=null) {
         data=window.PathfindrLandmarks?.enrich(data,location)||data;
+        data=PathfindrWorldData.clip(data,location,edges);
         latest={data,location,edges,buildings};if(!state.ready)return;
         const buildStarted=performance.now();
         dispose();group=new THREE.Group();scene.add(group);

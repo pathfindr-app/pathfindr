@@ -8,7 +8,7 @@
         const entry=catalog().find(c=>c.id===id||c.packId===id);if(!entry)return Promise.reject(Error('Unknown offline city'));
         if(registered()[entry.packId])return Promise.resolve(registered()[entry.packId]);
         if(pending.has(entry.id))return pending.get(entry.id);
-        const task=fetch(`data/cities/fallback/${entry.id}.json?v=${entry.roadsSha256.slice(0,12)}`,{signal:AbortSignal.timeout(6000)})
+        const task=fetch(`data/cities/fallback/${entry.id}.json?v=${entry.roadsSha256.slice(0,12)}&scene=${entry.sceneVersion||0}`,{signal:AbortSignal.timeout(6000)})
             .then(r=>{if(!r.ok)throw Error('City pack unavailable');return r.json();})
             .then(pack=>{if(pack.roadsSha256!==entry.roadsSha256||!pack.roads?.elements?.length||!pack.world||!pack.buildings)throw Error('Invalid city pack');
                 registered()[entry.packId]=pack;
