@@ -18,6 +18,8 @@ First to finish all five wins; a 25-second grace window lets the rest finish. Th
 
 ## Authority and transport boundary
 
+Keyboard steering now follows gentle bends on the current road, buffers early turns within 600 ms / 65 screen pixels, and eases at junctions. A new direction overrides road following; releasing stops immediately. This is local intent assistance, not automatic shortest-path completion. See [keyboard UX rationale](../docs/circuit-input-ux.md) for research, heuristics and limitations.
+
 `core.js` is a dependency-free deterministic authority using fixed 50 ms timer/bot ticks and synchronous local input dispatch. Original OSM node IDs remain intact; synthetic subdivision IDs name their original edge and never join geometric crossings. Distances use a local meter projection. Commands carry player ID and monotonically increasing sequence. Duplicate commands are ignored. The authority owns route edits, validation, resource spending, pickups, expiry, scoring and finish order. Renderer input is never trusted as route distance or earned currency. Snapshot rule version is 2; old vehicle-movement snapshots are incompatible.
 
 `localTransport` is the replaceable client adapter. `app.js` translates gestures into commands and draws state; it does not set scores, positions or credits. Snapshot version, graph hash, PRNG state and simulation clock support deterministic restore/replay. Tests cover pause, replay, duplicate pickup commands, rejection without charges, barrier reachability/expiry, repair protection, shortcut limits and full bot matches.

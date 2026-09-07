@@ -16,7 +16,12 @@ function PathfindrArenaPresentation({ctx,graph,view,screen,colors}){
  function route(ids,player,time,optimal=false,history=false){
   const origin=screen({x:0,y:0}),key=`${origin.x}:${origin.y}:${view.scale}`;if(signature!==key){signature=key;version++;}
   let saved=projected.get(ids);if(!saved||saved.version!==version||saved.length!==ids.length||saved.tail!==ids.at(-1)){saved={version,length:ids.length,tail:ids.at(-1),points:ids.map(id=>screen(graph().nodes.get(id)))};projected.set(ids,saved);}
-  PathfindrRouteCinema.route(ctx,saved.points,rgb[player],time,optimal,history);
+  // Same Classic stroke recipe; only archived player routes use a finer pen.
+  if(history&&!optimal){
+   const c=rgb[player],optics=PathfindrFidelity.current(),stroke=(width,alpha)=>{ctx.lineWidth=width;ctx.strokeStyle=`rgba(${c.r},${c.g},${c.b},${alpha})`;drawSmoothPath(ctx,saved.points);ctx.stroke();};
+   ctx.save();ctx.lineCap='round';ctx.lineJoin='round';stroke(12*optics.halo,.035);stroke(7*optics.halo,.08);
+   ctx.setLineDash([14,7,2,7]);ctx.lineDashOffset=PathfindrMotion.reduced()?0:-(time*26)%30;stroke(4.2*optics.core,.72);ctx.setLineDash([]);stroke(.7,.18);ctx.restore();
+  }else PathfindrRouteCinema.route(ctx,saved.points,rgb[player],time,optimal,history);
  }
  function search(analysis,archive,player,time){
   let batches=cache.get(analysis);if(!batches){

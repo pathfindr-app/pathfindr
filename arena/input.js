@@ -3,7 +3,7 @@
 function PathfindrArenaInput(api){
  'use strict';
  const T=window.PathfindrTrace,A=window.PathfindrArena,keys=new Set();
- let checkpointGoal=0,edgeVelocity={x:0,y:0},keyBudget=0;
+ let checkpointGoal=0,edgeVelocity={x:0,y:0},keyBudget=0,heading=null,steeredKey=null,turnMs=0,keySpeed=0,keyStroke=false,keyBlocked=false,road=null,turnTravel=0;
  const player=()=>api.match()?.state.players[0];
  const canDraw=()=>api.ready()&&api.match()?.state.status==='playing'&&player().assignment!==null&&!(player().revealUntil>api.match().state.time)&&player().finishedAt===null;
  const project=id=>api.screen(api.graph().nodes.get(id));
@@ -53,22 +53,30 @@ function PathfindrArenaInput(api){
  });
  const directions={ArrowUp:[0,-1],KeyW:[0,-1],ArrowDown:[0,1],KeyS:[0,1],ArrowLeft:[-1,0],KeyA:[-1,0],ArrowRight:[1,0],KeyD:[1,0]};
  document.addEventListener('keydown',e=>{
-  if(!directions[e.code]||!canDraw()||e.target.closest('input,textarea,select,dialog'))return;
-  e.preventDefault();if(!keys.size)keyBudget=12;keys.add(e.code);
+  if(!directions[e.code]||e.ctrlKey||e.metaKey||e.altKey||!canDraw()||e.target.closest('input,textarea,select,dialog'))return;
+  e.preventDefault();if(keys.has(e.code))return; // OS repeat never changes turn priority.
+  if(!keys.size){keyBudget=4;keySpeed=70;const p=player(),g=api.graph(),a=g.nodes.get(p.path.at(-2)),b=g.nodes.get(p.node);
+   if(a){const length=Math.hypot(b.x-a.x,b.y-a.y)||1;heading={x:(b.x-a.x)/length,y:(b.y-a.y)/length};road=g.adj.get(a.id)?.find(edge=>edge.id===b.id)?.road||null;const d=directions[e.code];if(d[0]*heading.x+d[1]*heading.y>.55)steeredKey=e.code;}
+   api.send('beginStroke');keyStroke=true;}
+  keys.add(e.code);turnMs=600;turnTravel=0;keyBlocked=false;
  });
- document.addEventListener('keyup',e=>{if(directions[e.code]){keys.delete(e.code);e.preventDefault();}});
- const clear=()=>{keys.clear();keyBudget=0;};window.addEventListener('blur',clear);document.addEventListener('visibilitychange',clear);
+ function endKeyboard(){if(keyStroke){api.send('endStroke');keyStroke=false;}}
+ document.addEventListener('keyup',e=>{if(directions[e.code]){keys.delete(e.code);e.preventDefault();if(!keys.size){endKeyboard();keyBudget=0;keySpeed=0;heading=null;steeredKey=null;turnMs=0;}}});
+ const clear=()=>{endKeyboard();keys.clear();keyBudget=0;keySpeed=0;heading=null;steeredKey=null;turnMs=0;};window.addEventListener('blur',clear);document.addEventListener('visibilitychange',clear);
  return {tick(dt){
   if(!canDraw()){clear();return;}if(!keys.size||T.active)return;
-  let x=0,y=0;for(const key of keys){x+=directions[key][0];y+=directions[key][1];}const norm=Math.hypot(x,y);if(!norm)return;x/=norm;y/=norm;
-  keyBudget=Math.min(36,keyBudget+dt*.24);const p=player(),graph=api.graph(),goal=p.goal;
+  const key=[...keys].at(-1),[x,y]=directions[key];
+  const nearJunction=(api.graph().adj.get(player().node)||[]).length>2,targetSpeed=nearJunction?110:170;
+  keySpeed+=(targetSpeed-keySpeed)*(1-Math.exp(-dt/90));keyBudget=Math.min(16,keyBudget+dt*keySpeed/1000);turnMs=Math.max(0,turnMs-dt);
+  const p=player(),graph=api.graph(),goal=p.goal;
   for(let count=0;count<16&&keyBudget>0;count++){
-   const at=graph.nodes.get(p.node);let best=null,alignment=.45;
-   for(const e of graph.adj.get(p.node)||[]){const n=graph.nodes.get(e.id),dot=((n.x-at.x)*x+(n.y-at.y)*y)/e.meters;if(dot>alignment){alignment=dot;best=e;}}
-   if(!best){keyBudget=0;break;}
+   const at=graph.nodes.get(p.node),previous=p.path.at(-2),target=graph.nodes.get(api.match().target(p)),following=steeredKey===key;
+   let choice=PathfindrKeyboard.choose(graph,p.node,previous,{x,y},heading,api.view.scale,{followRoad:following,road,target}),buffered=false;
+   if(!choice&&heading&&steeredKey!==key&&turnMs>0&&turnTravel<65){choice=PathfindrKeyboard.choose(graph,p.node,previous,heading,heading,api.view.scale,{followRoad:true,road,target});buffered=!!choice;}
+   if(!choice){keyBudget=0;if(!keyBlocked){api.message('No clear turn — change direction or tap a street.');keyBlocked=true;}break;}keyBlocked=false;const best=choice.edge;
    if(p.path.at(-2)===best.id)api.send('rewind',{length:p.path.length-1});else api.send('plan',{node:best.id});
-   if(p.node===at.id){keyBudget=0;break;}keyBudget-=best.meters*api.view.scale;
+   if(p.node===at.id){keyBudget=0;break;}const pixels=best.meters*api.view.scale;keyBudget-=pixels;heading=choice.vector;road=best.road||null;if(!buffered)steeredKey=key;else turnTravel+=pixels;
    if(p.goal!==goal){clear();break;}
   }
- }};
+ },direction:()=>keys.size?{vector:directions[[...keys].at(-1)],buffered:steeredKey!==[...keys].at(-1)&&turnMs>0}:null};
 }

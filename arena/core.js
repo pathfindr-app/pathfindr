@@ -14,13 +14,13 @@
    const meters=distance(nodes.get(a),nodes.get(b));if(!meters)continue;
    // Subdivide only existing edges: finger precision without inventing junctions
    // at bridge crossings. Original OSM IDs remain intact.
-   const count=Math.ceil(meters/12),from=nodes.get(a),to=nodes.get(b);let previous=a;
+   const count=Math.ceil(meters/12),from=nodes.get(a),to=nodes.get(b),road=way.tags?.name?`name:${way.tags.name}`:way.id!==undefined?`way:${way.id}`:null;let previous=a;
    for(let j=1;j<=count;j++){
     const next=j===count?b:`edge/${key}/${j}`,t=j/count;
     if(j<count)nodes.set(next,{id:next,x:from.x+(to.x-from.x)*t,y:from.y+(to.y-from.y)*t,lng:from.lng+(to.lng-from.lng)*t,lat:from.lat+(to.lat-from.lat)*t});
     const length=meters/count,k=edgeKey(previous,next);edges.push({a:previous,b:next,meters:length,key:k});
     if(!adj.has(previous))adj.set(previous,[]);if(!adj.has(next))adj.set(next,[]);
-    adj.get(previous).push({id:next,meters:length,key:k});adj.get(next).push({id:previous,meters:length,key:k});previous=next;
+    adj.get(previous).push({id:next,meters:length,key:k,road});adj.get(next).push({id:previous,meters:length,key:k,road});previous=next;
    }
   }
   const visited=new Set();let component=[];for(const id of adj.keys()){if(visited.has(id))continue;const list=[id];visited.add(id);for(let i=0;i<list.length;i++)for(const e of adj.get(list[i]))if(!visited.has(e.id)){visited.add(e.id);list.push(e.id);}if(list.length>component.length)component=list;}
@@ -50,7 +50,7 @@
  function create(graph,{seed=731,course=makeCourse(graph),bots=true}={}){
   let randomSeed=seed>>>0;const random=()=>{randomSeed=(Math.imul(randomSeed,1664525)+1013904223)>>>0;return randomSeed/4294967296;};
   const routes=course.routes??course.goals.map((end,i)=>({start:course.starts[i%4],end}));
-  const analyses=routes.map(pair=>{const explored=[],optimal=route(graph,pair.start,pair.end,new Set(),explored);if(!optimal)throw Error('Disconnected route pair');return {...optimal,explored};});
+  const analyses=routes.map(pair=>{const explored=[],optimal=route(graph,pair.start,pair.end,new Set(),explored);if(!optimal)throw Error('Disconnected route pair');return {...optimal,explored,indices:new Map(optimal.path.map((id,i)=>[id,i]))};});
   const state={version:2,graphHash:graph.hash,seed,time:0,status:'ready',goals:routes.map(r=>r.end),routes,players:routes.slice(0,4).map(({start:node},i)=>({id:i,name:['YOU','KITE','REED','FLINT'][i],bot:i>0&&bots,node,start:node,legStart:node,goal:0,completed:[],assignment:i,archives:[],legIndex:0,path:[node],undo:[],travel:0,meters:0,legMeters:0,score:0,credits:3,queue:[],repair:null,finishedAt:null,thinkAt:2500+i*1700,protectedUntil:0,shortcut:null,lastSeq:0})),barriers:[],pickups:[],events:[],firstFinish:null,winner:null};
   let commands=[],blocked=new Set(),eventId=0;
   const emit=(type,player,message)=>{state.events.push({id:++eventId,time:state.time,type,player,message});if(state.events.length>40)state.events.shift();};
@@ -142,7 +142,8 @@
    // Bots share the same command boundary and prices, with modest reaction delays.
    const item=state.pickups.find(i=>i.claimedBy===null&&distance(position(p),graph.nodes.get(i.node))<RULES.collectRadius);
    if(item)apply({player:p.id,seq:p.lastSeq+1,type:'collect',item:item.id});
-   const r=route(graph,p.node,target(p),blocked);if(r){let m=0,index=1;for(;index<r.path.length;index++){m+=distance(graph.nodes.get(r.path[index-1]),graph.nodes.get(r.path[index]));if(m>100)break;}apply({player:p.id,seq:p.lastSeq+1,type:'plan',node:r.path[Math.max(1,Math.min(index-1,r.path.length-1))]??p.node});}
+   const analysis=analyses[p.assignment],offset=analysis.indices.get(p.node),r=!p.repair&&!blocked.size&&offset!==undefined?{path:analysis.path.slice(offset)}:route(graph,p.node,target(p),blocked);
+   if(r){let m=0,index=1;for(;index<r.path.length;index++){m+=distance(graph.nodes.get(r.path[index-1]),graph.nodes.get(r.path[index]));if(m>100)break;}apply({player:p.id,seq:p.lastSeq+1,type:'plan',node:r.path[Math.max(1,Math.min(index-1,r.path.length-1))]??p.node});}
    if(p.credits>=RULES.cutCost&&random()<.07){const choices=state.players.filter(v=>v.id!==p.id&&v.finishedAt===null&&v.goal>=p.goal);if(choices.length)apply({player:p.id,seq:p.lastSeq+1,type:'cut',victim:choices[Math.floor(random()*choices.length)].id});}
    p.thinkAt=state.time+900+random()*1200;
   }

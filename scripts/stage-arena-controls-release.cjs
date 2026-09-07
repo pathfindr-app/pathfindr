@@ -12,7 +12,7 @@ for(const file of shared)if(!fs.readFileSync(path.join(root,'engine',file+'.js')
 const stage=fs.mkdtempSync('/tmp/pathfindr-arena-controls-');
 for(const f of files){const dest=path.join(stage,f.path);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(cache,f.path),dest);}
 fs.cpSync(path.join(cache,'.vercel'),path.join(stage,'.vercel'),{recursive:true});
-const changed=['index.html','arena.css','core.js','input.js','presentation.js','app.js'];
+const changed=['index.html','arena.css','core.js','keyboard.js','input.js','presentation.js','app.js'];
 for(const file of changed)fs.copyFileSync(path.join(root,'arena',file),path.join(stage,'public/arena',file));
 for(const f of files)if(!changed.some(file=>f.path==='public/arena/'+file)&&!fs.readFileSync(path.join(stage,f.path)).equals(fs.readFileSync(path.join(cache,f.path))))throw Error('Unrelated production change: '+f.path);
 console.log(JSON.stringify({stage,previousId:prod.id,previousDeployment:prod.url,changed,preserved:files.filter(f=>!f.path.startsWith('public/arena/')).length}));
