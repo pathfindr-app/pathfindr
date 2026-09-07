@@ -1,5 +1,10 @@
 Original prompt: Critically inspect Pathfindr for architectural problems, with particular attention to performance, route precomputation/background work, and a collectible or long-term retention loop. Report findings and recommendations before implementation.
 
+## September 7 — isolated Circuit production release
+- Added only four arena files to exact current .45 deployment; 308 existing source hashes verified/preserved. Live https://www.pathfindr.world/arena/, deployment dpl_4tzafERn3FcMpy4qAMgJ2YYapAS3, stage /tmp/pathfindr-arena-release-afdb7y. RELEASE-ARENA.md records the exact prior shared rollback.
+- 152 tests pass; preview authenticated main/Printshop checks pass, all arena bytes match preview and public production. Main public index unchanged. All eight post-production Printshop checks pass; no database/payment/Printshop mutations.
+- Mobile main Classic loaded Washington scenery in browser, but subsequent CDP input/focus commands timed out. Camera runtime verification is incomplete, not a passed test. Full goal remains active; GOAL-OVERNIGHT.md distinguishes proven deliverables from remaining all-mode/runtime checks.
+
 ## Standing deployment preference
 
 ### New Cairo Circuit prototype — September 7, local / not deployed
