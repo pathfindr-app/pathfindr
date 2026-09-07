@@ -1,5 +1,11 @@
 Original prompt: Critically inspect Pathfindr for architectural problems, with particular attention to performance, route precomputation/background work, and a collectible or long-term retention loop. Report findings and recommendations before implementation.
 
+## September 7 — startup isolation and challenge identity guard (not released)
+- Added local scripts/startup-qa.cjs gate between normal reserve selection and installation. Normal US selection returned real fallback Washington (8,970 road elements, 1,693 buildings); gated installation succeeded. Earlier immediate startup crashes remain unexplained; timing/resource pressure is a hypothesis, not a diagnosed cause.
+- Found concrete ranked-challenge risk: loadRoadNetwork resolves after exhausted retries, so beginChallengeGame could continue using stale graph nodes. Added exact loadedRoadCity identity check and late-session cancellation guard, clearing active challenge on current-session load failure. No alternate city is silently substituted and no backend mutation is involved.
+- 165 tests pass: three new actual challenge-function tests prove failed-load endpoint lookup is blocked, cancelled load leaves newer session untouched, exact loaded city proceeds; five loader tests prove all four modes consume exact packaged roads without external fetch and reserve consumption is one-shot.
+- These new game.js guards are committed separately but not yet deployed. Need rendered challenge-failure verification, startup crash root-cause work, final all-mode UI/Visualizer acceptance, then safe shared-source release from current .46 baseline /tmp/pathfindr-camera-settle-afq8GE. Do not reuse older staging scripts against newer prod without updating exact baseline checks.
+
 ## September 7 — .46 mobile camera verification/fix
 - Real tap and trace checks at 390×844 passed in controlled Washington. Found short strokes ended before following caught up; added normal-release mobile settle, cancellation untouched. Five adapter callback tests plus full suite: 157 pass. Source 89cfc86.
 - Live build pathfindr-camera-settle-20260907.46, dpl_HftYU5dtYSYEfFmEShwzcvM6mgr3; exact stage /tmp/pathfindr-camera-settle-afq8GE. RELEASE-CAMERA-SETTLE.md records preview/public verification and exact rollback retaining Circuit/Printshop. All public checks and changed-byte comparisons pass.

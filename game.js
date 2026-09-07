@@ -15113,6 +15113,11 @@ async function beginChallengeGame(challenge) {
             ScreenCoordCache.invalidate();
         } else {
             await loadRoadNetwork(location);
+            // The shared loader renders a retry UI instead of throwing after
+            // exhausted providers. Never interpret its resolved promise as a
+            // successful challenge load, or reuse the previous city's graph.
+            if (GameState.currentCity !== location || GameState.gameMode !== 'challenge' || GameState.challengeState.activeChallenge !== challenge) return;
+            if (GameState.loadedRoadCity !== location) throw new Error('This challenge map is unavailable. No attempt was recorded. Please retry when the map service is available.');
         }
 
         // Find nearest nodes to challenge start/end coordinates
@@ -15175,6 +15180,8 @@ async function beginChallengeGame(challenge) {
 
     } catch (error) {
         console.error('[Challenge] Failed to start:', error);
+        if (GameState.currentCity !== location || GameState.gameMode !== 'challenge' || GameState.challengeState.activeChallenge !== challenge) return;
+        GameState.challengeState.activeChallenge = null;
         hideLoading();
         showToast(error.message || 'Failed to load challenge. Try another one.');
         showModeSelector();
