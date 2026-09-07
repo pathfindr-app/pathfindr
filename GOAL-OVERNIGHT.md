@@ -17,7 +17,7 @@ User clarified that these notes, not the later camera addendum, are the primary 
 - [ ] Continuous pleasing animation across route preparation, endpoint placement and city transitions; no blank waiting scene, robust to disconnect/rate limits/slow frames.
 - [x] 30–50 distinct real OSM city fallback packs, validated connected playable networks; real scenery/labels where available, provenance/attribution and bounded asset sizes. 36 verified by fallback-cities.test.cjs; main .45 release includes all packs.
 - [ ] Fallback integration covers Classic, Explorer, Visualizer and challenge paths without silently substituting a different city for location-specific/shared/daily challenges.
-- [ ] Stronger mobile tap/trace head-follow near central padding, faster directional response, smooth damping; no route geometry changes or runaway dead-end panning.
+- [x] Stronger mobile tap/trace head-follow near central padding, faster directional response, smooth damping; no route geometry changes or runaway dead-end panning. Actual 390×844 Washington tap grew route to 0.08km and centered at (195,424). Trace test found short-stroke follow had not settled on lift; 89cfc86 adds normal-release settling, verified actual 0.09km stroke/8 nodes ending at (195,424). Five adapter tests exercise real callbacks, including cancelled gestures, controls and disconnected-finger convergence; earlier pure-math tests cover 30/60/120Hz.
 - [x] Main release tested and deployed; public game and Printshop checks pass; rollback baseline recorded. RELEASE-CONTINUITY.md records .45 and exact prior shared deployment.
 - [x] Separate New Cairo bot-mode branch with a substantial real map area. codex/new-cairo-arena-20260907, created after main release; 32,587-node connected component.
 - [x] Four-player local match (human plus three modest bots), five shared route objectives with distinct player starts and a defined fair scoring/win condition. arena/core.js, README and full human/bot course tests.
@@ -32,6 +32,8 @@ User clarified that these notes, not the later camera addendum, are the primary 
 ## September 7 completion-audit status
 
 152 tests pass. Main .45 source and deployment evidence re-read; all four prototype preview assets match source bytes. Remaining unchecked main-runtime requirements still need scope-matched verification, especially actual mobile tap/trace camera behavior and all-mode disconnected routing. A mobile Classic browser test loaded Washington with real scenery, then browser CDP commands timed out; that is not a passed camera test. Keep the goal active. The Places visited drawer is now live (the older 'not yet deployed' line above is superseded).
+
+Follow-up: 157 tests now pass, and the camera interaction checks above supersede the earlier incomplete camera evidence. Normal US startup crashed the in-app page twice; controlled Washington startup with map APIs disconnected succeeds. Root cause remains unproven (live reserve/city-dependent startup versus host browser resource issue), so robustness/all-mode completion is still open. Stock headless diagnostic also hit navigation timeout; no headless success is claimed.
 
 ## Verification discipline
 Test coherent implementation batches, then systematically verify every requirement. Unit tests alone do not establish UI quality or device FPS. Record actual screenshots, network failure simulations, city-pack validation and release checks. Do not mark the overarching goal complete after only the main release; bot mode, audit and achievement catalog remain in scope.

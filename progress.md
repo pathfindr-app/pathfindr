@@ -1,5 +1,11 @@
 Original prompt: Critically inspect Pathfindr for architectural problems, with particular attention to performance, route precomputation/background work, and a collectible or long-term retention loop. Report findings and recommendations before implementation.
 
+## September 7 — .46 mobile camera verification/fix
+- Real tap and trace checks at 390×844 passed in controlled Washington. Found short strokes ended before following caught up; added normal-release mobile settle, cancellation untouched. Five adapter callback tests plus full suite: 157 pass. Source 89cfc86.
+- Live build pathfindr-camera-settle-20260907.46, dpl_HftYU5dtYSYEfFmEShwzcvM6mgr3; exact stage /tmp/pathfindr-camera-settle-afq8GE. RELEASE-CAMERA-SETTLE.md records preview/public verification and exact rollback retaining Circuit/Printshop. All public checks and changed-byte comparisons pass.
+- Reproducible browser issue remains: normal US selection twice crashed page; deterministic Washington with provider fetch failures works. Do not dismiss as host slowness or claim fixed. scripts/camera-qa.cjs reproduces controlled path, telemetry does not block controls. Stock client navigation timed out; actual in-app visual checks are the valid evidence. Viewport reset afterward.
+- Continue with normal startup crash isolation and all-mode fallback/runtime acceptance; overarching goal not complete.
+
 ## September 7 — isolated Circuit production release
 - Added only four arena files to exact current .45 deployment; 308 existing source hashes verified/preserved. Live https://www.pathfindr.world/arena/, deployment dpl_4tzafERn3FcMpy4qAMgJ2YYapAS3, stage /tmp/pathfindr-arena-release-afdb7y. RELEASE-ARENA.md records the exact prior shared rollback.
 - 152 tests pass; preview authenticated main/Printshop checks pass, all arena bytes match preview and public production. Main public index unchanged. All eight post-production Printshop checks pass; no database/payment/Printshop mutations.
