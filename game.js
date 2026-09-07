@@ -1931,10 +1931,11 @@ const WebGLRenderer = {
         // Set canvas size (both CSS and buffer)
         this.cssWidth=width;this.cssHeight=height;
         const ratio=Math.max(1,Math.min(2,window.devicePixelRatio||1,Math.sqrt(3000000/Math.max(1,width*height))));
-        this.canvas.width = Math.round(width*ratio);
-        this.canvas.height = Math.round(height*ratio);
-        this.canvas.style.width = width + 'px';
-        this.canvas.style.height = height + 'px';
+        const bufferWidth=Math.round(width*ratio),bufferHeight=Math.round(height*ratio);
+        if(this.canvas.width!==bufferWidth)this.canvas.width=bufferWidth;
+        if(this.canvas.height!==bufferHeight)this.canvas.height=bufferHeight;
+        if(this.canvas.style.width!==width+'px')this.canvas.style.width=width+'px';
+        if(this.canvas.style.height!==height+'px')this.canvas.style.height=height+'px';
 
         if (this.gl) {
             this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -6167,23 +6168,11 @@ const ElectricitySystem = {
         this.arcs = [];
     },
 
-    // Get flicker multiplier for organic pulsing - enhanced with more natural variation
+    // Deterministic low-frequency breathing: repeated paints at one simulation
+    // time must agree, even when the recap camera triggers MapLibre renders.
     getFlicker() {
         const t = this.time;
-        // Slow breathing rhythm
-        const breath = Math.sin(t * 4.5) * 0.06;
-        // Primary electrical pulse
-        const pulse = Math.sin(t * 17) * 0.04;
-        // Fast high-frequency shimmer
-        const shimmer = Math.sin(t * 53) * 0.025;
-        // Very fast micro-flicker
-        const micro = Math.sin(t * 97) * 0.015;
-        // Organic randomness
-        const random = (Math.random() - 0.5) * CONFIG.electricity.flickerIntensity * 0.8;
-        // Occasional intensity spike
-        const spike = Math.max(0, Math.sin(t * 2.3) - 0.85) * 0.3;
-
-        return 1 + breath + pulse + shimmer + micro + random + spike;
+        return 1 + Math.sin(t * 1.2) * 0.035 + Math.sin(t * 2.1 + 0.7) * 0.015;
     },
 
     // Get wobble offset for a point
@@ -7120,12 +7109,12 @@ function resizeCanvases() {
     const height = container.offsetHeight;
     if (!width || !height) return;
 
-    GameState.drawCanvas.width = width;
-    GameState.drawCanvas.height = height;
-    GameState.vizCanvas.width = width;
-    GameState.vizCanvas.height = height;
-    GameState.previewCanvas.width = width;
-    GameState.previewCanvas.height = height;
+    // Assigning even an unchanged canvas dimension clears its pixels/state.
+    // Browser chrome and viewport events can fire during the recap transition.
+    for(const canvas of [GameState.drawCanvas,GameState.vizCanvas,GameState.previewCanvas]){
+        if(canvas.width!==width)canvas.width=width;
+        if(canvas.height!==height)canvas.height=height;
+    }
 
     // Resize WebGL canvas
     if (GameState.useWebGL && WebGLRenderer.canUseWebGL) {

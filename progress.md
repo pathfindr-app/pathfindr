@@ -2,6 +2,11 @@ Original prompt: Critically inspect Pathfindr for architectural problems, with p
 
 ## Standing deployment preference
 
+### Recap flicker hardening — September 7, .43
+- User reported recap flicker and slow machine. Code inspection found per-paint random electricity brightness and high-frequency shimmer, plus unconditional canvas dimension writes on viewport resize notifications. Replaced history flicker with bounded deterministic slow breathing; unchanged 2D/GL dimensions no longer clear framebuffers. Musical pulses and route motion retained. These are concrete instability sources, not proof that all reported device slowdown is explained.
+- 123 game tests pass (including repeat-paint brightness and same-size resize regression tests). Two Classic assisted-finish recaps tested through local browser UI and visually inspected with routes retained; no render-loop diagnostics. Required stock game client ran but timed out clicking Visualizer and captured lobby; existing local CORS/optional-resource errors remain. No real-device performance claim.
+- Release staging scripts/stage-recap.cjs verifies exact current .42 production source before applying game.js-only diff and version metadata; all Printshop files/functions retained. Stage /tmp/pathfindr-recap-VKHB8z, previous dpl_BR3z4CckNcnmVkfjTvtU7fhBdLqV.
+
 ### Survey / Daily scoring / Visualizer refinement — September 7, .42
 - Added independent collectible-point/time ledger. Classic efficiency score unchanged; time stops before camera/reveal, while pickups remain available during search and are disabled in recap. Recap includes collection points and elapsed time.
 - User approved Daily 1000 route + 200 collection + 100 speed weighting and game-only migration019. Applied only019 after inspecting live schema. Transactional SQL QA passed insert, weighted improvement, deduplication and identity-spoof rejection, then rolled back all fixtures. Daily events remain client-reported, not authoritative server replay. No Printshop migration/payment changes.
