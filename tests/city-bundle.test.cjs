@@ -12,6 +12,7 @@ test('ads are disabled at configuration and SDK entry points',()=>{
     assert.match(config,/enabled: false/);assert.match(ads,/ads\?\.enabled\s*===\s*false/);
     assert.doesNotMatch(html,/pagead2\.googlesyndication\.com/);
     assert.doesNotMatch(html,/pathfindr<span>↗/);
+    assert.doesNotMatch(config.split('PathfindrConfig.isAdFree =')[1].split('// Helper to check if current')[0],/ads.enabled/);
 });
 test('Visualizer waits for scenery and its worker presentation before starting',()=>{
     const game=fs.readFileSync('game.js','utf8');

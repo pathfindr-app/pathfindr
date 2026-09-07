@@ -93,7 +93,7 @@ const PathfindrAds = {
    */
   async showBanner(position = 'bottom') {
     // Don't show if user purchased ad-free
-    if (PathfindrConfig.isAdFree()) {
+    if (PathfindrConfig.ads?.enabled === false || PathfindrConfig.isAdFree()) {
       console.log('[Ads] User is ad-free, skipping banner');
       return;
     }
@@ -169,7 +169,7 @@ const PathfindrAds = {
    */
   async showInterstitial() {
     // Don't show if user purchased ad-free
-    if (PathfindrConfig.isAdFree()) {
+    if (PathfindrConfig.ads?.enabled === false || PathfindrConfig.isAdFree()) {
       console.log('[Ads] User is ad-free, skipping interstitial');
       return false;
     }
@@ -600,7 +600,7 @@ const PathfindrAds = {
    */
   async showWebInterstitial() {
     // Don't show if user is ad-free
-    if (PathfindrConfig.isAdFree()) {
+    if (PathfindrConfig.ads?.enabled === false || PathfindrConfig.isAdFree()) {
       return false;
     }
 
@@ -795,7 +795,7 @@ const PathfindrAds = {
   showPlaceholderAd() {
     return new Promise((resolve) => {
       // Don't show if user purchased ad-free
-      if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
+      if (typeof PathfindrConfig !== 'undefined' && (PathfindrConfig.ads?.enabled === false || PathfindrConfig.isAdFree())) {
         console.log('[Ads] User is ad-free, skipping placeholder ad');
         resolve();
         return;
@@ -1280,7 +1280,7 @@ const PathfindrAds = {
    */
   async showInlineInterstitial() {
     // Don't show if user is ad-free
-    if (typeof PathfindrConfig !== 'undefined' && PathfindrConfig.isAdFree()) {
+    if (typeof PathfindrConfig !== 'undefined' && (PathfindrConfig.ads?.enabled === false || PathfindrConfig.isAdFree())) {
       console.log('[Ads] User is ad-free, skipping inline interstitial');
       return;
     }
