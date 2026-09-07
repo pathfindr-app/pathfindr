@@ -174,6 +174,11 @@ function initCityControls() {
             if (GameState.userPathNodes.length >= CONFIG.minRoutePoints && GameState.userPathNodes.at(-1) === GameState.endNode) {
                 GameHaptics.pathComplete();
                 if (GameState.gameMode === 'explorer') showExplorerComparison(); else submitRoute();
+            } else if (PathfindrTrace.pointerType === 'touch' || map.getCanvas().getBoundingClientRect().width <= 700) {
+                // A short stroke may end before velocity-based follow catches up.
+                // Settle only a normally released stroke; cancellation belongs to
+                // pinch/pan and must never steal the player's camera back.
+                nudgeRouteHeadIntoView();
             }
         },
         progressKey:()=>`${GameState.userPathNodes.length}:${getActivePathAnchorNode()}:${GameState.userDistance}`,
