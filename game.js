@@ -12523,6 +12523,8 @@ function initSplashScreen() {
 
 function showModeSelector() {
     lobbySelectionVersion++;
+    // A cancelled city request must not reopen loading or launch Classic later.
+    GameState.roadLoadRequestId=(GameState.roadLoadRequestId||0)+1;
     scheduleLobbyCityPreparation();
     if (StreamConfig.enabled) return;
     document.getElementById('loading-overlay').classList.add('hidden');

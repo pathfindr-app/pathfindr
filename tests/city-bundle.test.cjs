@@ -17,6 +17,8 @@ test('Visualizer waits for scenery and its worker presentation before starting',
     const game=fs.readFileSync('game.js','utf8');
     assert.equal((game.match(/await GameState.citySceneTask/g)||[]).length,2);
     assert.equal((game.match(/await PathfindrCity.presented\(\)/g)||[]).length,2);
+    const lobby=game.slice(game.indexOf('function showModeSelector()'),game.indexOf('function showModeSelector()')+400);
+    assert.match(lobby,/roadLoadRequestId=.*\+1/);
 });
 test('terrain feathering marks the polygon perimeter, not internal triangulation seams',()=>{
     const src=fs.readFileSync('engine/world-renderer.js','utf8');
