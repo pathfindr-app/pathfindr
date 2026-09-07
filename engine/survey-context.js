@@ -5,16 +5,37 @@
     function init(map){
         const svg=document.createElementNS(NS,'svg');svg.id='survey-context';svg.setAttribute('aria-hidden','true');map.getContainer().append(svg);
         const grid=document.createElementNS(NS,'path'),pulse=document.createElementNS(NS,'path');grid.classList.add('survey-grid');pulse.classList.add('survey-flow');svg.append(grid,pulse);
-        let previous='';
+        const defs=document.createElementNS(NS,'defs'),mask=document.createElementNS(NS,'clipPath'),exclude=document.createElementNS(NS,'path');
+        mask.id='survey-clear-network';mask.setAttribute('clipPathUnits','userSpaceOnUse');exclude.setAttribute('clip-rule','evenodd');mask.append(exclude);defs.append(mask);svg.prepend(defs);
+        const traffic=document.createElementNS(NS,'g');traffic.classList.add('survey-coordinates');svg.append(traffic);
+        for(const layer of [grid,pulse,traffic])layer.setAttribute('clip-path','url(#survey-clear-network)');
+        const travelers=Array.from({length:8},(_,i)=>{const text=document.createElementNS(NS,'text'),motion=document.createElementNS(NS,'animateMotion');
+            motion.setAttribute('dur',`${19+(i*7)%17}s`);motion.setAttribute('begin',`${-i*3}s`);motion.setAttribute('repeatCount','indefinite');text.append(motion);traffic.append(text);return {text,motion};});
+        let previous='',graphVersion=-1,network=null;
         function update(){
             if(document.hidden)return;
             const bounds=map.getBounds(),w=map.getContainer().clientWidth,h=map.getContainer().clientHeight;
             const west=bounds.getWest(),east=bounds.getEast(),south=Math.max(-85,bounds.getSouth()),north=Math.min(85,bounds.getNorth());
             if(![west,east,south,north].every(Number.isFinite)||east-west>180)return;
-            const dx=spacing(east-west),dy=spacing(north-south);let d='';
-            function line(a,b){for(let k=0;k<=16;k++){const t=k/16,p=map.project([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);if(Number.isFinite(p.x)&&Number.isFinite(p.y))d+=`${k?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`;}}
-            for(let x=Math.ceil(west/dx)*dx,i=0;x<=east&&i<12;x+=dx,i++)line([x,south],[x,north]);
-            for(let y=Math.ceil(south/dy)*dy,i=0;y<=north&&i<12;y+=dy,i++)line([west,y],[east,y]);
+            const dx=spacing(east-west),dy=spacing(north-south),lines=[];let d='';
+            function line(a,b,label){let path='';for(let k=0;k<=16;k++){const t=k/16,p=map.project([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);if(Number.isFinite(p.x)&&Number.isFinite(p.y))path+=`${k?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`;}d+=path;lines.push({path,label});}
+            for(let x=Math.ceil(west/dx)*dx,i=0;x<=east&&i<12;x+=dx,i++)line([x,south],[x,north],`${Math.abs(x).toFixed(3)}°${x<0?'W':'E'}`);
+            for(let y=Math.ceil(south/dy)*dy,i=0;y<=north&&i<12;y+=dy,i++)line([west,y],[east,y],`${Math.abs(y).toFixed(3)}°${y<0?'S':'N'}`);
+            if(typeof GameState!=='undefined'&&graphVersion!==GameState.roadGraphVersion){
+                graphVersion=GameState.roadGraphVersion;network=null;
+                for(const edge of GameState.edgeList||[])for(const p of [edge.fromPos,edge.toPos]){
+                    if(!network)network={w:p.lng,e:p.lng,s:p.lat,n:p.lat};else{network.w=Math.min(network.w,p.lng);network.e=Math.max(network.e,p.lng);network.s=Math.min(network.s,p.lat);network.n=Math.max(network.n,p.lat);}
+                }
+            }
+            // A geometric cutout avoids a full-viewport alpha-mask render target.
+            let cutout='';
+            if(network){const padX=(network.e-network.w)*.035,padY=(network.n-network.s)*.035;
+                cutout=[[network.w-padX,network.s-padY],[network.e+padX,network.s-padY],[network.e+padX,network.n+padY],[network.w-padX,network.n+padY]].map((p,i)=>{const q=map.project(p);return `${i?'L':'M'}${q.x},${q.y}`}).join('')+'Z';}
+            exclude.setAttribute('d',`M0,0H${w}V${h}H0Z${cutout}`);
+            travelers.forEach(({text,motion},i)=>{const route=lines[(i*3)%lines.length];if(!route)return;
+                let label=text.firstChild;if(label?.nodeType!==3){label=document.createTextNode('');text.prepend(label);}const value=`${route.label} ${'·'.repeat(3+i%5)}`;
+                if(label.nodeValue!==value)label.nodeValue=value;motion.setAttribute('path',route.path);
+            });
             svg.setAttribute('viewBox',`0 0 ${w} ${h}`);if(d!==previous){grid.setAttribute('d',d);pulse.setAttribute('d',d);previous=d;}
         }
         map.on('move',update);map.on('resize',update);update();

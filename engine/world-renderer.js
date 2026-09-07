@@ -5,14 +5,18 @@
     const materials=[], landmarks=[];
     const state={ready:false,surfaces:0,trees:0,landmarks:0,flowingWater:0,error:null,quality:'high',frameMs:16.7};
     let lastStats=0;
-    const vertex=`varying vec2 world; void main(){ world=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+    const vertex=`attribute vec3 aBary; attribute vec3 aBoundary; varying vec3 bary; varying vec3 boundary;
+        varying vec2 world; void main(){ bary=aBary;boundary=aBoundary;world=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
     const common=`precision highp float;
         varying vec2 world; uniform float uTime; uniform float uAudio; uniform vec3 uView;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
         float fbm(vec2 p){float v=0.0,a=0.5;for(int i=0;i<4;i++){v+=a*noise(p);p=mat2(1.6,-1.2,1.2,1.6)*p+7.3;a*=0.5;}return v;}
     `;
-    const water=`${common}
+    const edgeCoverage=`varying vec3 bary; varying vec3 boundary;
+        float coverage(){vec3 aa=smoothstep(vec3(0.0),max(fwidth(bary)*1.15,vec3(.00001)),bary);
+            aa=mix(vec3(1.0),aa,boundary);return min(aa.x,min(aa.y,aa.z));}`;
+    const water=`${common}${edgeCoverage}
         varying vec2 flow; uniform float uHasFlow; uniform float uQuality;
         void main(){
             vec2 current=flow*uHasFlow;
@@ -62,9 +66,9 @@
             col+=vec3(0.40,0.74,0.82)*min(ggx*0.004,0.17)*(0.75+uAudio*0.25);
             col+=vec3(0.007,0.025,0.033)*swell;
             col=col/(1.0+col); col=pow(col,vec3(1.0/2.2));
-            gl_FragColor=vec4(col,1.0);
+            gl_FragColor=vec4(col,coverage());
         }`;
-    const park=`${common}
+    const park=`${common}${edgeCoverage}
         uniform float uForest;
         void main(){
             float footprint=max(length(fwidth(world)),0.1);
@@ -80,7 +84,7 @@
             col+=vec3(0.025,0.045,0.022)*blade*(0.25+wind*.35)*(1.0-uForest*.7);
             float sweep=smoothstep(.65,.95,wind);
             col+=vec3(.009,.026,.017)*sweep*(.55+patchiness*.45);
-            gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(1.0/2.2)),1.0);
+            gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(1.0/2.2)),coverage());
         }`;
     // Opaque, elevated roof caps; one batch rather than a material per building.
     // Broad sheen only: intentionally no grid, window noise or fine texture.
@@ -167,11 +171,18 @@
         materials.push(material);return material;
     }
     function triangles(rings,z=0.3){
-        const flat=[],holes=[];let count=0;
-        rings.forEach((ring,i)=>{if(i)holes.push(count);for(const p of ring.slice(0,-1)){flat.push(...local(p));count++;}});
-        const indices=earcut(flat,holes,2),positions=[];
-        for(const index of indices)positions.push(flat[index*2],flat[index*2+1],z);
+        const flat=[],holes=[],boundaryEdges=new Set();let count=0;
+        rings.forEach((ring,i)=>{if(i)holes.push(count);const first=count;
+            for(const p of ring.slice(0,-1)){flat.push(...local(p));count++;}
+            for(let j=first;j<count;j++){const k=j+1<count?j+1:first;boundaryEdges.add(`${Math.min(j,k)}:${Math.max(j,k)}`);}
+        });
+        const indices=earcut(flat,holes,2),positions=[],bary=[],boundary=[];
+        for(let i=0;i<indices.length;i+=3){const tri=indices.slice(i,i+3);
+            const flags=tri.map((_,j)=>{const a=tri[(j+1)%3],b=tri[(j+2)%3];return boundaryEdges.has(`${Math.min(a,b)}:${Math.max(a,b)}`)?1:0;});
+            tri.forEach((index,j)=>{positions.push(flat[index*2],flat[index*2+1],z);bary.push(j===0?1:0,j===1?1:0,j===2?1:0);boundary.push(...flags);});
+        }
         const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+        geometry.setAttribute('aBary',new THREE.Float32BufferAttribute(bary,3));geometry.setAttribute('aBoundary',new THREE.Float32BufferAttribute(boundary,3));
         geometry.computeVertexNormals();return geometry;
     }
     function pointIn(p,rings){return PathfindrWorldData.contains(p,rings[0])&&!rings.slice(1).some(r=>PathfindrWorldData.contains(p,r));}
@@ -265,14 +276,17 @@
                     if(pointIn([geo.lng,geo.lat],surface.rings))treePositions.push({p,seed,conifer:surface.tags.leaf_type==='needleleaved'});
                 }
             }
-            if(!batches.has(batchKey))batches.set(batchKey,{material,positions:[],flows:[]});
+            if(!batches.has(batchKey)){material.transparent=true;material.depthWrite=false;batches.set(batchKey,{material,positions:[],flows:[],bary:[],boundary:[]});}
             const batch=batches.get(batchKey);
             for(const value of geometry.attributes.position.array)batch.positions.push(value);
+            for(const value of geometry.attributes.aBary.array)batch.bary.push(value);
+            for(const value of geometry.attributes.aBoundary.array)batch.boundary.push(value);
             if(geometry.attributes.aFlow)for(const value of geometry.attributes.aFlow.array)batch.flows.push(value);
             geometry.dispose();state.surfaces++;
         }
         for(const batch of batches.values()){
             const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(batch.positions,3));
+            geometry.setAttribute('aBary',new THREE.Float32BufferAttribute(batch.bary,3));geometry.setAttribute('aBoundary',new THREE.Float32BufferAttribute(batch.boundary,3));
             if(batch.flows.length)geometry.setAttribute('aFlow',new THREE.Float32BufferAttribute(batch.flows,2));
             group.add(new THREE.Mesh(geometry,batch.material));
         }

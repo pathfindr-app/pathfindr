@@ -13,8 +13,25 @@ test('unseeded early click joins the complete city request',async()=>{
     assert.equal((await request).data,data);assert.equal(calls,2);
 });
 test('failed or incomplete preload preserves city for normal loading fallback',async()=>{
-    const p=create({city:async()=>({name:'Paris'}),roads:async()=>({remark:'timeout',elements:[]}),details:async()=>assert.fail('must not prepare failed roads')});
+    const p=create({city:async()=>({name:'Paris'}),roads:async()=>({remark:'timeout',elements:[]}),details:async()=>null});
     const result=await p.take('global');assert.equal(result.city.name,'Paris');assert.equal(result.data,null);
+});
+test('click before disk restoration completes uses reserve without waiting for network',async()=>{
+    let restore;
+    const p=create({restore:()=>new Promise(r=>restore=r),city:()=>new Promise(()=>{}),roads:async()=>data,details:async()=>null});
+    const request=p.take('us');await new Promise(setImmediate);
+    restore({city:{name:'Seattle'},data});
+    const result=await request;assert.equal(result.city.name,'Seattle');
+    let repeated=false;p.take('us').then(()=>repeated=true);
+    await new Promise(setImmediate);assert.equal(repeated,false);
+});
+test('roads and scenery start concurrently, complete bundle publishes only after both',async()=>{
+    let finishRoads,finishDetails;
+    const p=create({city:async()=>({name:'Paris'}),roads:()=>new Promise(r=>finishRoads=r),details:()=>new Promise(r=>finishDetails=r)});
+    let done=false;const request=p.take('global').then(v=>{done=true;return v;});await new Promise(setImmediate);
+    assert.equal(typeof finishRoads,'function');assert.equal(typeof finishDetails,'function');
+    finishRoads(data);await new Promise(setImmediate);assert.equal(done,false);
+    finishDetails({buildings:[]});assert.ok((await request).scene);
 });
 test('consumed city is replenished immediately without a lobby visit, unused city is retained',async()=>{
     let calls=0;const p=create({city:async mode=>({name:mode+(++calls)}),roads:async()=>data,details:async()=>{}});

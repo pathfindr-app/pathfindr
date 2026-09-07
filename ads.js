@@ -17,6 +17,7 @@ const PathfindrAds = {
    * Call this once on app startup, after user interaction (for audio policy compliance)
    */
   async init() {
+    if (PathfindrConfig.ads?.enabled === false) return;
     if (this.initialized) return;
 
     const platform = PathfindrConfig.platform;
@@ -146,6 +147,7 @@ const PathfindrAds = {
    * Prepare interstitial ad (preload)
    */
   async prepareInterstitial() {
+    if (PathfindrConfig.ads?.enabled === false) return;
     if (PathfindrConfig.platform === 'web') return;
     if (!this.initialized || !this.AdMob) return;
 
@@ -195,6 +197,7 @@ const PathfindrAds = {
    * Prepare rewarded ad (preload)
    */
   async prepareRewarded() {
+    if (PathfindrConfig.ads?.enabled === false) return;
     if (!PathfindrConfig.features.rewardedAds) return;
     if (PathfindrConfig.platform === 'web') return;
     if (!this.initialized || !this.AdMob) return;
@@ -216,6 +219,7 @@ const PathfindrAds = {
    * @returns {Promise<boolean>} - true if user earned reward
    */
   async showRewarded() {
+    if (PathfindrConfig.ads?.enabled === false) return false;
     if (PathfindrConfig.platform === 'web') {
       return false;
     }
@@ -276,6 +280,7 @@ const PathfindrAds = {
    * Load AdSense script if not already loaded
    */
   async loadAdSense() {
+    if (PathfindrConfig.ads?.enabled === false) return;
     if (this.adsenseLoaded) return;
 
     // Check if AdSense already loaded (from index.html script tag)
@@ -340,6 +345,7 @@ const PathfindrAds = {
    * Show web banner ad - tries AdSense first, falls back to Go Pro if not filled
    */
   async showWebBanner() {
+    if (PathfindrConfig.ads?.enabled === false) return;
     const banner = document.getElementById('adsense-banner');
     if (!banner) return;
 

@@ -101,10 +101,11 @@ const PathfindrConfig = {
   // AD PLACEMENT SETTINGS
   // ===========================================
   ads: {
+    enabled: false,                    // Game ads paused across web and native
     showInlineBetweenRounds: false,   // Keep the route recap and Next Round unobstructed
     showBannerOnMenu: false,           // No banner on main menu
-    showBannerBetweenRounds: true,     // Show banner during round recaps
-    interstitialAfterRounds: [3],      // First ad after round 3
+    showBannerBetweenRounds: false,
+    interstitialAfterRounds: [],
     bannerPosition: 'top',             // Top of screen during round recaps
   },
 
@@ -114,7 +115,7 @@ const PathfindrConfig = {
   features: {
     leaderboards: true,
     playerJourney: true,
-    rewardedAds: true,
+    rewardedAds: false,
   },
 
   // ===========================================
@@ -157,6 +158,7 @@ PathfindrConfig.platform = (() => {
 // Helper to check if user has purchased ad-free
 // Uses PathfindrAuth as source of truth to prevent console tampering
 PathfindrConfig.isAdFree = () => {
+  if (PathfindrConfig.ads.enabled === false) return true;
   // Admins are always ad-free
   if (PathfindrConfig.isAdmin()) return true;
   // Check via PathfindrAuth (uses internal currentProfile, not window object)

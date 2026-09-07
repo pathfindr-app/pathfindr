@@ -567,6 +567,7 @@ async function getNextVisualizerCity() {
     const mode=Math.random() > 0.5 ? 'global' : 'us';
     if(StreamConfig.enabled)return getRandomCity(mode);
     const reserve=await getLobbyCityPreparation().take(mode);
+    if(!reserve.city||!reserve.data||!reserve.scene)throw Error('City service could not prepare a complete scene');
     if(reserve.scene)PathfindrCity.prime(reserve.city,reserve.scene);
     if(reserve.data)preparedLocationRoads.set(reserve.city,reserve.data);
     return reserve.city||getRandomCity(mode);
@@ -1255,7 +1256,7 @@ const CityDB = {
 
             const response = await fetch(url, {
                 method: 'GET',
-                signal: AbortSignal.timeout(8000),
+                signal: AbortSignal.timeout(2500),
                 headers: {
                     'Authorization': `Bearer ${PathfindrConfig.supabase.anonKey}`,
                 },
@@ -2116,8 +2117,9 @@ const WebGLRenderer = {
             return;
         }
 
-        const positions = new Float32Array(edges.length * 8);
-        const normals = new Float32Array(edges.length * 8);
+        // Reuse camera-update buffers rather than allocating megabytes per orbit frame.
+        const positions = this.projectedPositions?.length===edges.length*8?this.projectedPositions:(this.projectedPositions=new Float32Array(edges.length*8));
+        const normals = this.projectedNormals?.length===edges.length*8?this.projectedNormals:(this.projectedNormals=new Float32Array(edges.length*8));
         const { width, height } = getPresentationCanvasSize();
 
         for (let i = 0; i < edges.length; i++) {
@@ -6957,6 +6959,10 @@ function initMap() {
 
     // MapLibre GL JS initialization
     GameState.map = new maplibregl.Map({
+        // Keep route/UI canvases crisp; bound the expensive terrain pixel load on tablets.
+        pixelRatio: window.matchMedia?.('(pointer: coarse)').matches
+            ? Math.max(1,Math.min(1.5,window.devicePixelRatio||1,Math.sqrt(2400000/Math.max(1,innerWidth*innerHeight))))
+            : Math.min(2,window.devicePixelRatio||1),
         container: 'map',
         style: {
             version: 8,
@@ -7662,10 +7668,11 @@ const RoadNetworkCache = {
 
 function completeRoadNetworkLoad(data, location, source = 'network') {
     processRoadData(data);
+    GameState.loadedRoadCity=location;
     PathfindrPerformance.graphProcessing.source = source;
 
     document.getElementById('current-location').textContent = location.name;
-    hideLoading();
+    if(GameState.gameMode!=='visualizer')hideLoading();
     if (location?.name && GameState.gameMode !== 'explorer' && GameState.gameMode !== 'visualizer') {
         CityFacts.startTicker(location);
     }
@@ -8040,7 +8047,7 @@ function processRoadData(data) {
         indexedNodeCells: RoadSpatialIndex.nodeCells.size,
         indexedEdgeCells: RoadSpatialIndex.edgeCells.size,
     };
-    if (GameState.currentCity) PathfindrCity.load(GameState.currentCity, GameState.edgeList, data);
+    if (GameState.currentCity) GameState.citySceneTask=PathfindrCity.load(GameState.currentCity, GameState.edgeList, data);
     console.log(
         `[Performance] Processed ${GameState.nodes.size} nodes and ${GameState.edgeList.length} edges in ` +
         `${PathfindrPerformance.graphProcessing.durationMs.toFixed(1)}ms`
@@ -13710,8 +13717,15 @@ function startVisualizerMode() {
             pushStreamState('city_loaded', city);
             return loadRoadNetwork(city).then(() => city);
         })
-        .then(city => {
+        .then(async city => {
             if (!city || !VisualizerTimeline.isRunActive(bootRunId)) return;
+            if(GameState.loadedRoadCity!==city)throw Error('City roads did not finish loading');
+            await GameState.citySceneTask;
+            if (!VisualizerTimeline.isRunActive(bootRunId)) return;
+            if(PathfindrCity.state.error)throw Error(PathfindrCity.state.error);
+            await PathfindrCity.presented();
+            if (!VisualizerTimeline.isRunActive(bootRunId)) return;
+            hideLoading();
             // Start unified animation loop (replaces AmbientViz.start())
             GameController.startLoop();
             // Start facts ticker for visualizer mode
@@ -13723,6 +13737,7 @@ function startVisualizerMode() {
         .catch(error => {
             if (VisualizerTimeline.isRunActive(bootRunId)) {
                 console.error('[Visualizer] Failed to start mode:', error);
+                showVisualizerLoadFailure();
             }
         });
 }
@@ -13734,6 +13749,12 @@ function updateVisualizerUI(cityName, count) {
 
     // Update mode stats counter
     updateModeStats(count, GameState.visualizerState.maxPerCity);
+}
+
+function showVisualizerLoadFailure(){
+    GameController.enterPhase(GamePhase.LOADING);
+    // Never run a new-city search over an old graph or a failed scenery load.
+    showLoading('<div>The city could not finish loading.</div><button class="btn btn-primary" onclick="startVisualizerMode()">Try another city</button>');
 }
 
 async function runVisualizerLoop() {
@@ -13794,6 +13815,11 @@ async function runVisualizerLoop() {
             },
             GameState.visualizerState.delayBetweenRuns
         );
+    } catch(error) {
+        if(VisualizerTimeline.isRunActive(runId)){
+            console.error('[Visualizer] City transition failed:',error);
+            showVisualizerLoadFailure();
+        }
     } finally {
         GameState.visualizerState.loopRunning = false;
         VisualizerTimeline.clearHeroState();
@@ -13919,6 +13945,12 @@ async function loadNextVisualizerCity(runId) {
     GameState.map.setMaxBounds(null);
     GameState.map.jumpTo({ center: [city.lng, city.lat], zoom: city.zoom || 15, pitch: 0, bearing: 0 });
     await loadRoadNetwork(city);
+    if (!VisualizerTimeline.isRunActive(runId)) return;
+    if(GameState.loadedRoadCity!==city)throw Error('City roads did not finish loading');
+    await GameState.citySceneTask;
+    if (!VisualizerTimeline.isRunActive(runId)) return;
+    if(PathfindrCity.state.error)throw Error(PathfindrCity.state.error);
+    await PathfindrCity.presented();
     if (!VisualizerTimeline.isRunActive(runId)) return;
     document.getElementById('loading-overlay').classList.add('hidden');
 }
@@ -16213,6 +16245,11 @@ function getLobbyCityPreparation(){
         city:getRandomCityAsync,
         details:location=>PathfindrCity.prepare(location),
         async roads(location){
+            // One shared Overpass response supplies roads AND the matching scenery.
+            // prepare() deduplicates this with the concurrent details request.
+            try{const bundle=await PathfindrCity.prepare(location);
+                if(bundle.roads?.elements?.some(e=>e.type==='way'))return bundle.roads;
+            }catch{ /* Older cache / unavailable detail service: retain road fallback. */ }
             const scale=Math.pow(2,15-(location.zoom||15));
             const bounds={south:location.lat-.015*scale,north:location.lat+.015*scale,west:location.lng-.02*scale,east:location.lng+.02*scale};
             const key=RoadNetworkCache.createKey(bounds),cached=await RoadNetworkCache.get(key);

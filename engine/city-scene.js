@@ -70,15 +70,25 @@
         })) };
     }
     const pending=new Map();
-    function keyFor(location){return `${location.lat.toFixed(3)},${location.lng.toFixed(3)}`;}
+    function roadsFromGeometry(raw){
+        const nodes=new Map(),ways=[];
+        const playable=/^(motorway|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|service|unclassified|living_street|pedestrian|motorway_link)$/;
+        for(const e of raw.elements||[]){if(e.type!=='way'||!playable.test(e.tags?.highway||'')||!e.nodes||e.geometry?.length!==e.nodes.length||!e.geometry.every(p=>Number.isFinite(p?.lat)&&Number.isFinite(p?.lon)))continue;
+            ways.push({type:'way',id:e.id,nodes:e.nodes,tags:e.tags});
+            e.nodes.forEach((id,i)=>{const p=e.geometry[i];if(Number.isFinite(p.lat)&&Number.isFinite(p.lon))nodes.set(id,{type:'node',id,lat:p.lat,lon:p.lon});});
+        }
+        return {elements:[...nodes.values(),...ways]};
+    }
+    function keyFor(location){return `${location.lat.toFixed(3)},${location.lng.toFixed(3)},${location.zoom||15}`;}
     function prepare(location){
         const pack=window.PathfindrCityPacks?.[location.packId];if(pack)return Promise.resolve(pack);
         const key=keyFor(location);
         if(cache.has(key))return Promise.resolve(cache.get(key));
         if(pending.has(key))return pending.get(key);
         const request=(async()=>{
-            const area=`(around:1600,${location.lat},${location.lng})`;
-            const q = `[out:json][timeout:18];(way["building"]${area};nwr["natural"~"^(water|bay|strait|wood)$"]${area};nwr["landuse"~"^(forest|grass|meadow|reservoir)$"]${area};nwr["leisure"~"^(park|garden|golf_course)$"]${area};way["waterway"~"^(river|stream|canal|riverbank)$"]${area};nwr["amenity"~"^(fast_food|restaurant)$"]["cuisine"~"burger"]${area};nwr["amenity"="library"]${area};nwr["historic"="monument"]${area};nwr["tourism"="attraction"]["name"~"Eiffel|Tower|Monument",i]${area};node["natural"="tree"]${area};node["place"~"^(suburb|neighbourhood|quarter|city_district)$"]${area};way["highway"]["name"]${area};);out geom;`;
+            const radius=Math.min(4800,1800*Math.pow(2,15-(location.zoom||15)));
+            const area=`(around:${radius},${location.lat},${location.lng})`;
+            const q = `[out:json][timeout:18];(way["building"]${area};nwr["natural"~"^(water|bay|strait|wood)$"]${area};nwr["landuse"~"^(forest|grass|meadow|reservoir)$"]${area};nwr["leisure"~"^(park|garden|golf_course)$"]${area};way["waterway"~"^(river|stream|canal|riverbank)$"]${area};nwr["amenity"~"^(fast_food|restaurant)$"]["cuisine"~"burger"]${area};nwr["amenity"="library"]${area};nwr["historic"="monument"]${area};nwr["tourism"="attraction"]["name"~"Eiffel|Tower|Monument",i]${area};node["natural"="tree"]${area};node["place"~"^(suburb|neighbourhood|quarter|city_district)$"]${area};way["highway"]${area};);out geom;`;
             let raw,lastError;
             for(const server of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
                 const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),22000);
@@ -90,14 +100,25 @@
                 }catch(error){lastError=error;}finally{clearTimeout(timeout);}
             }
             if(!raw)throw lastError;
-            const data={buildings:convert(raw),world:PathfindrWorldData.convert(raw),labels:PathfindrPlaceData.labels(raw)};
+            const data={buildings:convert(raw),world:PathfindrWorldData.convert(raw),labels:PathfindrPlaceData.labels(raw),roads:roadsFromGeometry(raw)};
             cache.set(key,data);if(cache.size>5)cache.delete(cache.keys().next().value);
             return data;
         })().finally(()=>{pending.delete(key);});
         pending.set(key,request);return request;
     }
     window.PathfindrCity = {
-        state, convert, prepare,
+        state, convert, prepare, roadsFromGeometry,
+        async presented(){
+            // GeoJSON workers finish asynchronously after setData. Wait for their
+            // actual source readiness, not a guessed cinematic delay.
+            if(!map||!ready)return;
+            const started=performance.now();
+            while(performance.now()-started<2500){
+                if(['city-roads','city-buildings'].every(id=>map.isSourceLoaded(id)))break;
+                map.triggerRepaint();await new Promise(resolve=>setTimeout(resolve,32));
+            }
+            map.triggerRepaint();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        },
         prime(location,data){
             if(data?.buildings&&data?.world&&Array.isArray(data.labels)){
                 cache.set(keyFor(location),data);

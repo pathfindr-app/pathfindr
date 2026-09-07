@@ -14,6 +14,8 @@ body:has(#splash-screen:not(.hidden)) #round-ledger,body:has(#instructions-overl
 #survey-context path {fill:none;vector-effect:non-scaling-stroke;}
 .survey-grid {stroke:#78bcc6;stroke-opacity:.075;stroke-width:.65;}
 .survey-flow {stroke:#a0eff0;stroke-width:1;stroke-opacity:.18;stroke-dasharray:2 18 12 500;animation:survey-stream 28s linear infinite;}
+.survey-coordinates {fill:#9ac8cd;opacity:.17;font:9px var(--font-mono,monospace);letter-spacing:1px;}
+@media(prefers-reduced-motion:reduce){.survey-coordinates{display:none;}}
 @keyframes survey-stream {to{stroke-dashoffset:-532;}}
 #visualizer-exit {display:none;position:absolute;top:calc(16px + env(safe-area-inset-top));right:16px;z-index:30;min-height:44px;padding:8px 16px;border:1px solid #78bbc266;background:#141b2b;color:#c5e9e9;font:12px var(--font-mono,monospace);opacity:0;pointer-events:none;transition:opacity .2s;}
 body.mode-visualizer #visualizer-exit {display:block;}
